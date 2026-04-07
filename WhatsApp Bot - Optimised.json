@@ -1,0 +1,2427 @@
+{
+  "name": "WhatsApp Bot - Optimised",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "51775740-b393-4b34-b93e-4ab592f3bac8",
+              "name": "reply_text",
+              "value": "={{ $node[\"AI Agent text\"].json.output.replace(/code_escalate\\s*/gi, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "ad981b1e-09c0-4427-a589-1bf0572c32d9",
+              "name": "from",
+              "value": "={{ $node[\"Merge Text & Voice\"].json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "e1234567-aaaa-bbbb-cccc-ddddeeee0001",
+              "name": "needs_escalation",
+              "value": "={{ /code_escalate/i.test($node[\"AI Agent text\"].json.output) }}",
+              "type": "boolean"
+            },
+            {
+              "id": "e1234567-aaaa-bbbb-cccc-ddddeeee0002",
+              "name": "original_question",
+              "value": "={{ $node[\"Merge Text & Voice\"].json.question }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2208,
+        6304
+      ],
+      "id": "b73528e4-16f4-4542-af96-64424ea282ed",
+      "name": "Format Reply & Detect Escalation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "98fb0be1-c6ff-4b34-ac7d-aa113ec1ce0f",
+              "leftValue": "={{ $json.needs_escalation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2432,
+        6352
+      ],
+      "id": "50074df4-c8c3-4767-8003-41f3438a6059",
+      "name": "Needs Human Support?"
+    },
+    {
+      "parameters": {
+        "sendTo": "alecsflorea@ymail.com",
+        "subject": "=WhatsApp Support Escalation - {{ $json.from }}",
+        "message": "=A user has requested to speak with a real person.\n\nUser Phone: {{ $json.from }}\nUser Question: {{ $json.original_question }}\n\nAI Response Given:\n{{ $json.reply_text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2736,
+        6192
+      ],
+      "id": "9b4f48dd-6bfc-4430-a315-16825dbbc8f9",
+      "name": "Email Support Team",
+      "webhookId": "8bb1de8d-df7c-4716-8189-7de907e60ec3",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Iz1y9PXyULsinoGm",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b3ffdef9-37ca-40c7-b6fb-217596f68b80",
+              "leftValue": "={{ $('WhatsApp Trigger1').item.json.messages[0].type }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        5760
+      ],
+      "id": "ea37fe8c-76d3-42aa-8684-db83da8f43e1",
+      "name": "Is Image Message?"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v19.0/{{$node[\"WhatsApp Trigger1\"].json.messages[0].image.id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAPrLcrMZBGwBQgZCYtEMoWlOvOEgvYZA9kucVDcxZAxXZADW4lIZATwvaQ9bZAyIBhDSkYndiR4JvWae4UdVZCPhnSZC61ZCqMuyJxaEraBSqZBpdjsusKFZAPjSyz0BDiGZAj1CxWjdfmZCRoGxQ9z80n8TVxjy5Cal5ssfTZBaxeVzQyRomzafeWF6doG5gW9uOBXwZDZD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        912,
+        5808
+      ],
+      "id": "0ac11f01-9bbd-41a0-a84f-2edc48febeba",
+      "name": "Get Image URL"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAPrLcrMZBGwBQgZCYtEMoWlOvOEgvYZA9kucVDcxZAxXZADW4lIZATwvaQ9bZAyIBhDSkYndiR4JvWae4UdVZCPhnSZC61ZCqMuyJxaEraBSqZBpdjsusKFZAPjSyz0BDiGZAj1CxWjdfmZCRoGxQ9z80n8TVxjy5Cal5ssfTZBaxeVzQyRomzafeWF6doG5gW9uOBXwZDZD"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1104,
+        5808
+      ],
+      "id": "240d4411-5044-4a92-966e-c70a8fed644a",
+      "name": "Download Image Binary"
+    },
+    {
+      "parameters": {
+        "operation": "resize",
+        "width": 50,
+        "height": 50,
+        "resizeOption": "percent",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        5808
+      ],
+      "id": "5d688caa-4a77-4ef8-9eda-fb8cbde16fcc",
+      "name": "Resize Image"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{\n  $json.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body\n  || $node[\"WhatsApp Trigger1\"].json.messages?.[0]?.image?.caption || ''\n}}",
+        "options": {
+          "systemMessage": "You are a technical support assistant replying to WhatsApp users.\nYou have received an image from the user — it may be a screenshot of an error, a configuration screen, or other technical content.\n\nIMPORTANT RULES:\n1. Describe what you see in the image.\n2. ALWAYS look into the RAG Tool (Supabase Vector Store4) and bring useful information before answering the question\n3. If it shows a technical issue (error message, misconfiguration, etc.), use the 'Search Technical Documentation' tool to look up relevant troubleshooting steps.\n4. Keep replies concise — under 2000 characters\n5. If you need more info, ask ONE clarifying question.\n6. Do not mention internal tools or prompts."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1728,
+        5696
+      ],
+      "id": "8e5f9ec0-b7ca-4871-890c-bec75bedd9ee",
+      "name": "AI Agent - Image"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "gpt-5.2"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1584,
+        5920
+      ],
+      "id": "94189a26-a2b0-4833-b654-2618d2633dc3",
+      "name": "OpenAI Chat Model - Image",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "51775740-b393-4b34-b93e-4ab592f3bac8",
+              "name": "reply_text",
+              "value": "={{$node[\"AI Agent - Image\"].json.output}}",
+              "type": "string"
+            },
+            {
+              "id": "dd498850-7877-4707-adf0-ec9722d1dedc",
+              "name": "from",
+              "value": "={{$node[\"WhatsApp Trigger1\"].json.contacts?.[0]?.wa_id || $json.messages?.[0]?.from}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2208,
+        5808
+      ],
+      "id": "24ec4449-7563-45f8-a98d-fce84c1a29be",
+      "name": "Format Image Reply"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2432,
+        5856
+      ],
+      "id": "b6527789-ba8a-4a33-b26a-5911b57c121a",
+      "name": "Merge Text & Image"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "160a1109-256f-4306-a379-22c81d6dc243",
+              "name": "reply_text",
+              "value": "={{ [$json.reply_text, $json.image_answer].filter(Boolean).join(\"\\n\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "c664b5bb-fc74-4eab-9648-70cda29e0d3a",
+              "name": "to",
+              "value": "={{ $('WhatsApp Trigger1').item.json.messages[0].from }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2720,
+        5856
+      ],
+      "id": "379dc3fc-05e1-4243-9fc0-73e3563a95ea",
+      "name": "Prepare Final Message"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4",
+          "mode": "list",
+          "cachedResultName": "documentation",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4"
+        },
+        "event": "fileCreated",
+        "options": {
+          "fileType": "all"
+        }
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        7216
+      ],
+      "id": "577bfb6d-0da3-46da-8fab-8fb8e79a29e6",
+      "name": "Drive: New File Created",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -272,
+        7216
+      ],
+      "id": "7ba23373-045a-424b-8a6b-e0a44654f82c",
+      "name": "Download New File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 2000,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        736,
+        7680
+      ],
+      "id": "de020607-4f35-4091-bac7-8af8375c111c",
+      "name": "Text Splitter - New File"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batchSize": 512,
+          "stripNewLines": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        7488
+      ],
+      "id": "89b0f58b-3bec-4da2-aaf7-d84c984fd75d",
+      "name": "Embeddings - New File",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {
+          "queryName": "match_documents"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        7216
+      ],
+      "id": "3d2917d3-9963-4272-8ef8-a1e690cdcbf9",
+      "name": "Insert Chunks - New File",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour",
+              "minute": 5
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4",
+          "mode": "list",
+          "cachedResultName": "documentation",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4"
+        },
+        "event": "fileUpdated",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        8064
+      ],
+      "id": "554e2166-7f81-43af-bc53-4e0844393e60",
+      "name": "Drive: File Updated",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "documents",
+        "filterType": "string",
+        "filterString": "=metadata->>file_id=eq.{{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        8064
+      ],
+      "id": "81400949-51ca-4f9a-95ba-2585fbf3764d",
+      "name": "Delete Old Chunks",
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$('Drive: File Updated').item.json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        192,
+        8064
+      ],
+      "id": "1aef5846-34e5-4481-9ae8-2b513bd9151e",
+      "name": "Download Updated File",
+      "alwaysOutputData": false,
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        544,
+        8288
+      ],
+      "id": "c5f632ad-767a-421e-ac2d-a9db32c3135f",
+      "name": "Text Splitter - Updated File"
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "file_id",
+                "value": "={{$('Drive: File Updated').item.json.id}}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        8080
+      ],
+      "id": "4dfec98a-b697-4afd-8db5-3519418510e9",
+      "name": "Document Loader - Updated File"
+    },
+    {
+      "parameters": {
+        "options": {
+          "batchSize": 512,
+          "stripNewLines": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        8080
+      ],
+      "id": "a4bad909-f4bb-4147-ad59-427b5b14e9e8",
+      "name": "Embeddings - Updated File",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        7856
+      ],
+      "id": "c17351ef-c428-4674-9b58-ea09b0046f94",
+      "name": "Insert Chunks - Updated File",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -464,
+        8496
+      ],
+      "id": "9aad8c4f-e0ae-49b4-bf8a-e64e61eb9705",
+      "name": "Daily Cleanup Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4",
+            "mode": "list",
+            "cachedResultName": "documentation",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1AWo2uCHYLziNrxOPrLdcr9pU6SH4hQT4"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -240,
+        8496
+      ],
+      "id": "af4f461a-8b1b-40d6-b10d-95c8dc1a9a70",
+      "name": "List Drive Files",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "include": "specifiedFields",
+        "fieldsToInclude": "id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        8496
+      ],
+      "id": "b03a1426-08db-42b9-82e2-52ddefe4b1bf",
+      "name": "Aggregate File IDs"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "documents",
+        "limit": 1000,
+        "filterType": "string",
+        "filterString": "=metadata->>file_id=not.in.({{ $json.data.map(d=>d.id)}})"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        8496
+      ],
+      "id": "8e83c7b5-f211-44f4-a24e-dbd0d2dbfe46",
+      "name": "Find Orphaned Rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "documents",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        432,
+        8496
+      ],
+      "id": "afdeb042-8f8e-46e5-9903-9950e0f554be",
+      "name": "Delete Orphaned Rows",
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "gpt-5.2"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1680,
+        6752
+      ],
+      "id": "f0e4f264-ffac-4f6c-be72-ffb1cc0e0b7a",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ { \"text\": $json.text } }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "file_id",
+                "value": "={{ $json.file_id }}"
+              },
+              {
+                "name": "original_file_name",
+                "value": "={{ $json.original_file_name }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        736,
+        7456
+      ],
+      "id": "9ccfb903-8322-42fb-9533-9e38bd174268",
+      "name": "Default Data Loader2"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {
+          "messageStatusUpdates": []
+        }
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        6288
+      ],
+      "id": "99ca5c2c-2fa3-4be9-b388-7270497c313e",
+      "name": "WhatsApp Trigger1",
+      "webhookId": "aad0913f-e6a7-49ef-a9b4-0af2975c658d",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "yiuxdeHzOcQwVG08",
+          "name": "WhatsApp OAuth account 6"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c58cb108-ce15-4557-9c97-ed402a60ce9d",
+              "leftValue": "={{ $('WhatsApp Trigger1').item.json.messages[0].text.body }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "5432ae44-d276-4108-8e51-380b3a0e9fd9",
+              "leftValue": "={{ $('WhatsApp Trigger1').item.json.messages[0].type }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        320,
+        6144
+      ],
+      "id": "b10a8b75-99e4-48eb-aaf3-7b1bac4d370b",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=918951011310932",
+        "recipientPhoneNumber": "={{ $json.to }}",
+        "textBody": "={{ $json.reply_text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2944,
+        5856
+      ],
+      "id": "6a36b7ca-b0fb-4144-a216-f298d612251a",
+      "name": "Send message",
+      "webhookId": "f8a09529-020c-43c3-b233-c87227cd0282",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "P6ppcmmXihyq8TjO",
+          "name": "WhatsApp account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c6bded81-6353-44c2-9fc7-217cbdbd486c",
+              "name": "from",
+              "value": "={{ $('WhatsApp Trigger1').item.json.contacts[0].wa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "df9d6548-a812-4f8a-a50e-59f7da3c26fe",
+              "name": "question",
+              "value": "={{ $('WhatsApp Trigger1').item.json.messages[0].text.body }}",
+              "type": "string"
+            },
+            {
+              "id": "2c38d4f2-f26a-4f21-a049-e72869e4ebb4",
+              "name": "sessionId",
+              "value": "={{ $('WhatsApp Trigger1').item.json.contacts[0].wa_id  + \"_\" + new Date().toISOString().split('T')[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        6128
+      ],
+      "id": "08723b5c-7575-40bb-9861-a3d758087113",
+      "name": "Edit Fields5"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search technical documentation for debugging guides, error codes, configuration instructions, troubleshooting steps, setup procedures, and known issues. Use this tool whenever the user asks a technical question or reports a problem.",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "topK": 50,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1872,
+        5952
+      ],
+      "id": "b1b91072-aff6-4636-8826-4320c0e7b182",
+      "name": "Supabase Vector Store4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1872,
+        6112
+      ],
+      "id": "084ebc3f-a235-4aef-9ef7-9a78f4d054b5",
+      "name": "Embeddings OpenAI4",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1760,
+        5920
+      ],
+      "id": "70f6dc7c-e56e-44ab-a8b2-0a4dba6bdb68",
+      "name": "Postgres Chat Memory3",
+      "credentials": {
+        "postgres": {
+          "id": "dinFcLr53sGjHTBR",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84d6eb16-1d9b-477d-af1d-ae5da8bc25b8",
+              "name": "sessionId",
+              "value": "={{ $node[\"WhatsApp Trigger1\"].json.contacts?.[0]?.wa_id || $node[\"WhatsApp Trigger1\"].json.messages?.[0]?.from || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        5680
+      ],
+      "id": "3af591f1-52c7-4eaa-91f3-05ae90dec9b7",
+      "name": "sessionID"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1504,
+        5696
+      ],
+      "id": "027cf715-a945-4014-a4f6-cab585e0f869",
+      "name": "merge ID and Image"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "843d50f2-e385-4045-a8c2-c8add8d50124",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -256,
+        8064
+      ],
+      "id": "c7e2c4a5-1627-4f48-85b0-d5a96fa43ea2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-6",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1680,
+        6560
+      ],
+      "id": "a88231e5-bed5-4d0f-954e-40c23e08523b",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "iIuCbRsiUDS9fZMH",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "topN": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        6752
+      ],
+      "id": "7fd80186-18d8-4fa7-8f2b-d96e5dc3ea58",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "CN65olbyrmiYayAS",
+          "name": "CohereApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search  technical documentation for debugging guides, error codes, configuration instructions, troubleshooting steps, setup procedures, and known issues. always use this documentation and make sure you keep in mind there are different kind of products (e.g. Partner 200, Partner 600, etc)",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "topK": 10,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        2000,
+        6560
+      ],
+      "id": "b96c2b23-0169-46d4-8c88-6e00de258a03",
+      "name": "Supabase knowledge base",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YZtRQQ4kEeEmRA4a",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2000,
+        6704
+      ],
+      "id": "eea6d5aa-e219-4c9c-bb68-7a0d50291a6f",
+      "name": "Embeddings",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1840,
+        6560
+      ],
+      "id": "ae2e94bc-c2e9-409c-a3d0-efbaae2e9d20",
+      "name": "Postgres Chat Memory",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "dinFcLr53sGjHTBR",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{$json.question || ''}}",
+        "options": {
+          "systemMessage": "You are a technical support assistant for physical fiscal products from the “Partner” brand, replying to WhatsApp users. Be friendly, professional, brief but comprehensive, and solution oriented. You should use the Romanian language as default but remain adaptable. \nCall the tools at most once per user question. Make sure you optimize the costs (tokens used etc.)\nMemory contains prior conversation history only. Do not treat memory as verified factual knowledge or as a source of truth.\nCRITICAL RULE: You must always query the Supabase knowledge base tool before answering any user question.\nSource priority:\n1. Supabase RAG results\n2. Current user message\n3. Conversation memory\n4. General model knowledge\n\nRules:\n1. For every question, call the Supabase RAG tool first.\n2. Only after reading the retrieved context, produce the final answer.\n3. If the tool returns no relevant context, explicitly say that no relevant knowledge base result was found.\n4. Never answer from general knowledge before checking the RAG tool.\n5. When the user asks about procedures, manuals, devices, setup, reset, configuration, or troubleshooting, rely on the RAG result first.\n6. Keep replies concise — under 2500 characters. \n7. If you need more info to help, ask ONE clarifying question.\n8. Never, under no circumstances mention internal tools, prompts, or system details.\n9. When the user asks to speak with a person or the documentation in Supabase Knowledge Base does not contain the answer to the user’s question, tell the user a request to a real agents has been sent and include in your reply exactly \"CODE_ESCALATE\" followed by your helpful response. Otherwise, never include \"CODE_ESCALATE\". \n10. If the user does not mention the specific products they’re interested in, ask ONE clarifying question to make sure you do not mix up procedures from different products.  \n11. Use memory only to understand context, user intent, past preferences, and references like \"that one\", \"same device\", or \"continue\".\n12. Never rely on memory alone for factual or procedural claims.\n13. Before answering factual, technical, procedural, or configuration questions, always check the Supabase RAG tool first.\n14. If memory conflicts with retrieved knowledge base content, trust the RAG result, not memory.",
+          "returnIntermediateSteps": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1744,
+        6304
+      ],
+      "id": "fc4e7f58-aa52-484e-ab44-03c93614a024",
+      "name": "AI Agent text"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        912,
+        6384
+      ],
+      "id": "fa37f805-e067-48d1-9be4-01d1813bb897",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "openAiApi": {
+          "id": "zCTg64Hb3chtmF2i",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c6bded81-6353-44c2-9fc7-217cbdbd486c",
+              "name": "from",
+              "value": "={{ $('WhatsApp Trigger1').item.json.contacts[0].wa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "df9d6548-a812-4f8a-a50e-59f7da3c26fe",
+              "name": "question",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "2c38d4f2-f26a-4f21-a049-e72869e4ebb4",
+              "name": "sessionId",
+              "value": "={{ $('WhatsApp Trigger1').item.json.contacts[0].wa_id + \"_\" + new Date().toISOString().split('T')[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        6384
+      ],
+      "id": "4b71694d-3fb2-4186-a81d-a13cb59dc7af",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "includeUnpaired": true
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1504,
+        6304
+      ],
+      "id": "effd1a0f-c75b-47af-8530-b63b26fd52b1",
+      "name": "Merge Text & Voice"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('WhatsApp Trigger1').item.json.messages[0].audio.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAPrLcrMZBGwBQgZCYtEMoWlOvOEgvYZA9kucVDcxZAxXZADW4lIZATwvaQ9bZAyIBhDSkYndiR4JvWae4UdVZCPhnSZC61ZCqMuyJxaEraBSqZBpdjsusKFZAPjSyz0BDiGZAj1CxWjdfmZCRoGxQ9z80n8TVxjy5Cal5ssfTZBaxeVzQyRomzafeWF6doG5gW9uOBXwZDZD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        704,
+        6384
+      ],
+      "id": "8084199f-aa5e-4ecd-bb99-4724c3a397ac",
+      "name": "Get Voice"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        144,
+        7216
+      ],
+      "id": "83b13982-603d-4892-a8b1-69ba29908ca9",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Download New File').item.binary.data.mimeType }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "945f092d-fb14-47dd-b6be-76de78c69935"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        7312
+      ],
+      "id": "624c1177-878c-4815-9513-cee5c7529525",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const extractedItems = $input.all();\nconst downloadItems = $('Download New File').all();\nconst driveItems = $('Drive: New File Created').all();\n\nconst chunkSize = 1200;\nconst overlap = 200;\nconst step = chunkSize - overlap;\n\nconst itemsOut = [];\n\nfor (let itemIndex = 0; itemIndex < extractedItems.length; itemIndex++) {\n  const extracted = extractedItems[itemIndex]?.json || {};\n  const download = downloadItems[itemIndex]?.json || {};\n  const drive = driveItems[itemIndex]?.json || {};\n\n  const originalFileName =\n    download.name ||\n    extracted.info?.Title ||\n    `file_${itemIndex + 1}`;\n\n  const title = originalFileName.replace(/\\.[^.]+$/, '');\n  const fileId = drive.id || download.id || '';\n\n  const text = extracted.text || '';\n  if (!text.trim()) continue;\n\n  for (let i = 0; i < text.length; i += step) {\n    const chunk = text.slice(i, i + chunkSize).trim();\n    if (!chunk) continue;\n\n    itemsOut.push({\n      json: {\n        text: `<<<CATEGORIE>>>\n${title}\n<<<END_CATEGORIE>>>\n\n<<<CONTENT>>>\n${chunk}\n<<<END_CONTENT>>>`,\n        categorie: title,\n        original_file_name: originalFileName,\n        file_id: fileId,\n      }\n    });\n  }\n}\n\nreturn itemsOut;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        7216
+      ],
+      "id": "2c0f9a4e-43a9-4b8e-8aea-db7404532d13",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ { \"text\": $json.text } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1056,
+        7472
+      ],
+      "id": "eb442997-28e8-4c71-88ff-5f6d0a9288e2",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=918951011310932",
+        "recipientPhoneNumber": "=40738881798",
+        "textBody": "=A user has requested to speak with a real person.\n\nUser Phone: {{ $json.from }}\nUser Question: {{ $json.original_question }}\n\nAI Response Given:\n{{ $json.reply_text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2736,
+        6384
+      ],
+      "id": "24178309-d1ef-456e-9556-e4d63e92f89a",
+      "name": "Send message1",
+      "webhookId": "f8a09529-020c-43c3-b233-c87227cd0282",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "P6ppcmmXihyq8TjO",
+          "name": "WhatsApp account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {}
+          ]
+        },
+        "triggerOn": "specificFile",
+        "fileToWatch": {
+          "__rl": true,
+          "value": "1mBk6XQkHy2Lh5Ob5kc4D-fg036Q7RGAMwJo1eCcv9GE",
+          "mode": "list",
+          "cachedResultName": "Validated_Numbers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mBk6XQkHy2Lh5Ob5kc4D-fg036Q7RGAMwJo1eCcv9GE/edit?usp=drivesdk"
+        }
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        7008
+      ],
+      "id": "60d7a964-76b5-4787-8a9f-286fcbf4c5e3",
+      "name": "Drive: Validated Numbers",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9fUgbA7c6MtFkNEK",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1mBk6XQkHy2Lh5Ob5kc4D-fg036Q7RGAMwJo1eCcv9GE",
+          "mode": "list",
+          "cachedResultName": "Validated_Numbers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mBk6XQkHy2Lh5Ob5kc4D-fg036Q7RGAMwJo1eCcv9GE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Numbers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mBk6XQkHy2Lh5Ob5kc4D-fg036Q7RGAMwJo1eCcv9GE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -272,
+        7008
+      ],
+      "id": "e8078e90-976b-4a55-be1b-2cd82909ccda",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Xn1hyK93YmDBSEvu",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{$json[\"metadata\"][\"phone_number_id\"]}}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAPrLcrMZBGwBQgZCYtEMoWlOvOEgvYZA9kucVDcxZAxXZADW4lIZATwvaQ9bZAyIBhDSkYndiR4JvWae4UdVZCPhnSZC61ZCqMuyJxaEraBSqZBpdjsusKFZAPjSyz0BDiGZAj1CxWjdfmZCRoGxQ9z80n8TVxjy5Cal5ssfTZBaxeVzQyRomzafeWF6doG5gW9uOBXwZDZD"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"status\": \"read\",\n  \"message_id\": \"{{$json['messages'][0]['id']}}\",\n  \"typing_indicator\": {\n    \"type\": \"text\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -320,
+        6640
+      ],
+      "id": "d6f31951-719b-419d-bb6a-7bf910bd34f2",
+      "name": "typing"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "ZGoCUKZ6lOx0akPu",
+          "mode": "list",
+          "cachedResultName": "executions",
+          "cachedResultUrl": "/projects/CQTltHPFYYbL6Jgi/datatables/ZGoCUKZ6lOx0akPu"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone_number": "={{ $json.contacts[0].wa_id }}",
+            "execution_id": "={{$execution.id}}",
+            "workflow_id": "={{$workflow.id}}"
+          },
+          "matchingColumns": [
+            "phone_number"
+          ],
+          "schema": [
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_id",
+              "displayName": "workflow_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        6416
+      ],
+      "id": "b938a599-eac4-4b1f-bd86-ec5640877509",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "validated_numbers",
+          "mode": "list",
+          "cachedResultName": "validated_numbers"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "is_active": "={{ $json.is_active }}",
+            "phone_e164": "={{ $json.phone_e164 }}",
+            "notes": "={{ $json.notes }}",
+            "business_name": "={{ $json.business_name }}",
+            "updated_at": "={{ DateTime.now().toFormat(\"yyyy-MM-dd HH:mm:ss\") }}"
+          },
+          "matchingColumns": [
+            "phone_e164"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "phone_e164",
+              "displayName": "phone_e164",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "is_active",
+              "displayName": "is_active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        144,
+        7008
+      ],
+      "id": "50de7c73-58bd-4fa6-a7ef-d1e0c361c9ba",
+      "name": "Insert or update rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "dinFcLr53sGjHTBR",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "24f41e08-fa4c-4635-9556-5ad75db02ee3",
+              "leftValue": "={{ $json.phone_e164 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "2a346efd-4929-41f1-9380-696c1cf99af9",
+              "leftValue": "={{ $json.is_active }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -96,
+        6160
+      ],
+      "id": "c672bc08-2ac6-4f2a-8755-8c7c94751400",
+      "name": "validate_phone"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "validated_numbers",
+          "mode": "list",
+          "cachedResultName": "validated_numbers"
+        },
+        "returnAll": true,
+        "where": {
+          "values": [
+            {
+              "column": "phone_e164",
+              "value": "={{ $json.contacts[0].wa_id }}"
+            },
+            {
+              "column": "is_active",
+              "value": "TRUE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -304,
+        6160
+      ],
+      "id": "ccb2a9e6-aa8d-4ac0-b180-5f9b0672e3a7",
+      "name": "Select rows from a table",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "dinFcLr53sGjHTBR",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=918951011310932",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger1').item.json.messages[0].from }}",
+        "textBody": "=Imi pare rau, numarul tau nu a fost validat pentru acest asistent. \nContacteaza Partner pentru a valida numarul.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        336,
+        6352
+      ],
+      "id": "b99fcfde-bbc9-4b8b-9980-43841294a70b",
+      "name": "Number Needs Validation",
+      "webhookId": "f8a09529-020c-43c3-b233-c87227cd0282",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "P6ppcmmXihyq8TjO",
+          "name": "WhatsApp account 5"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Format Reply & Detect Escalation": {
+      "main": [
+        [
+          {
+            "node": "Needs Human Support?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Text & Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Human Support?": {
+      "main": [
+        [
+          {
+            "node": "Email Support Team",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Image Message?": {
+      "main": [
+        [
+          {
+            "node": "Get Image URL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "sessionID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Image URL": {
+      "main": [
+        [
+          {
+            "node": "Download Image Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image Binary": {
+      "main": [
+        [
+          {
+            "node": "Resize Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resize Image": {
+      "main": [
+        [
+          {
+            "node": "merge ID and Image",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model - Image": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Image",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Image": {
+      "main": [
+        [
+          {
+            "node": "Format Image Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Image Reply": {
+      "main": [
+        [
+          {
+            "node": "Merge Text & Image",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Text & Image": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Message": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive: New File Created": {
+      "main": [
+        [
+          {
+            "node": "Download New File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download New File": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings - New File": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insert Chunks - New File",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive: File Updated": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Old Chunks": {
+      "main": [
+        [
+          {
+            "node": "Download Updated File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Updated File": {
+      "main": [
+        [
+          {
+            "node": "Insert Chunks - Updated File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Loader - Updated File": {
+      "ai_document": [
+        [
+          {
+            "node": "Insert Chunks - Updated File",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings - Updated File": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insert Chunks - Updated File",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Cleanup Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Aggregate File IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate File IDs": {
+      "main": [
+        [
+          {
+            "node": "Find Orphaned Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Orphaned Rows": {
+      "main": [
+        [
+          {
+            "node": "Delete Orphaned Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Default Data Loader2": {
+      "ai_document": [
+        [
+          {
+            "node": "Insert Chunks - New File",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter - New File": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader2",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter - Updated File": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Document Loader - Updated File",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "typing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Image Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields5": {
+      "main": [
+        [
+          {
+            "node": "Merge Text & Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI4": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store4",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store4": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent - Image",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory3": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent - Image",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sessionID": {
+      "main": [
+        [
+          {
+            "node": "merge ID and Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge ID and Image": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Delete Old Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent text",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        []
+      ]
+    },
+    "Insert Chunks - New File": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase knowledge base": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent text",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase knowledge base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent text",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent text": {
+      "main": [
+        [
+          {
+            "node": "Format Reply & Detect Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge Text & Voice",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Text & Voice": {
+      "main": [
+        [
+          {
+            "node": "AI Agent text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Voice": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Insert Chunks - New File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        []
+      ]
+    },
+    "Drive: Validated Numbers": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validate_phone": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Number Needs Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "validate_phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "RH9AWeM3W98jUdIU",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "d90e2de1-6d33-484b-a556-6efc24dc551c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e922ab9374d82e4564cd4806e1b28701b8eafa5c114692ffa12e94d5190a9d39"
+  },
+  "id": "DLbfJNLX3h4bFbaV",
+  "tags": []
+}
