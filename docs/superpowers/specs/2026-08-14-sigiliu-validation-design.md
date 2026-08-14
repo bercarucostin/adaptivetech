@@ -227,17 +227,23 @@ workflow's generic message is the correct outcome.
 Both Romanian.
 
 - **Ask Sigiliu** — `Salut! Pentru a folosi acest asistent, te rog trimite-mi sigiliul tau de
-  identificare (doua litere urmate de trei cifre). Daca nu il ai, contacteaza Partner.`
+  identificare. Daca nu il ai, contacteaza Partner.`
   Sent on every message from an unvalidated number, so it repeats if they send something else. That
   repetition is what keeps the flow stateless.
 
-  **This message must never contain an example sigiliu, and must not use a concrete-looking
-  placeholder.** Every well-formed `XX 999` string is a potential live credential: an unvalidated
-  stranger receives this message *before* authenticating, so any token printed in it can be echoed
-  straight back to gain access as whoever holds it. `PN 002` would have admitted anyone as PETRISOR
-  MIHAI CRISTIAN. Even a placeholder like `XX 999` is unsafe — `XX` is a real prefix covering eight
-  technicians, so that string is invalid today only by coincidence and would become a working
-  credential the moment someone adds it to the sheet. Describe the shape in words; print no token.
+  **This message must reveal nothing about the sigiliu — no example, no placeholder, and no
+  description of its format.** It is the only thing the bot says *before* knowing who it is talking
+  to, so everything in it is handed to an unauthenticated stranger by definition.
+
+  An example is the worst case: `PN 002` is a live credential that would have admitted anyone as
+  PETRISOR MIHAI CRISTIAN. A concrete-looking placeholder is barely better — `XX 999` is invalid
+  today only by coincidence, since `XX` is a real prefix covering eight technicians, and it becomes a
+  working credential the moment someone adds that row to the sheet. Even a prose description of the
+  shape ("two letters and three digits") narrows the guess space for someone who does not hold a
+  sigiliu at all.
+
+  Legitimate technicians hold their sigiliu physically and can read the format off it, so the message
+  costs them nothing. Any future edit to this string is a security change, not a copy change.
 - **Validated** — `Numar validat. Bun venit, {technician_name} ({service_unit}). Cu ce te pot ajuta?`
 
 The bot confirms and stops; it does not answer the message that carried the sigiliu. Most messages at
