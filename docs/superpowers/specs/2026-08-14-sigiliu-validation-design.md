@@ -279,8 +279,9 @@ Three nodes replace `Drive: Validated Numbers` → `Get row(s) in sheet` →
 ```
 Drive: Technicians (googleDriveTrigger, fileUpdated on the new sheet)
   └─> Get Technicians Sheet   (googleSheets, read all rows)
-        └─> Build Sync Batch  (Code: normalise, guard, emit one JSON array)
-              └─> Sync Technicians (Postgres, one Execute Query)
+        └─> Count Mirror      (Postgres, executeOnce: SELECT count(*) FROM technicians)
+              └─> Build Sync Batch  (Code: normalise, guard, emit one JSON array)
+                    └─> Sync Technicians (Postgres, one Execute Query)
 ```
 
 ### `Build Sync Batch`
@@ -292,14 +293,38 @@ normalisation rule above.
 - Rows whose normalised sigiliu does not match `^[A-Z]{2}\d{3}$` are **kept**, not dropped. The mirror
   mirrors. They are counted and surfaced in the node output so the sheet can be corrected. (`WR001`
   normalises to `WR001` and passes; this catches genuinely malformed values such as `ABC 001`.)
+- Rows whose *normalised* sigiliu is empty are dropped too. A cell holding only punctuation passes the
+  non-blank check on `sigiliu_raw` but normalises to `''`, which would satisfy the `not null` column
+  and sit in the mirror as a sigiliu that matches an empty candidate list.
 - **It throws if the batch is under 100 rows**, counted *after* the blank-row drop — the guard measures
   what is about to be written, not what was read.
+- **It also throws if the batch is under 90% of the rows already in the mirror.**
 
-That floor is the one piece of defensive machinery this design insists on. Without it, a Google API
-hiccup returning an empty sheet does not merely empty the mirror — it cascades into deleting every
-sigiliu-bearing row in `validated_numbers`, locking out all 476 technicians in a single unattended run.
-The floor converts that into a failed execution routed to the existing ingestion error workflow. 100 is
-a knob; the sheet currently has 476.
+Those two floors guard different failures, and the second is the one that matters in practice. An
+absolute floor only catches *total* sheet loss. The realistic failure on a human-edited 476-row sheet
+wired to a trigger that fires on every change is *partial*: someone deletes a block, pastes over a
+filtered view, or sorts badly. A 149-row batch clears a floor of 100 by 49, the sync succeeds, and the
+orphan cleanup deletes roughly 327 validated numbers in one unattended run.
+
+That is expensive because it is asymmetric. Restoring the sheet and re-syncing rebuilds `technicians`
+completely, but `validated_numbers` is never rebuilt from the sheet — it is only ever written by a
+technician sending their sigiliu. Every affected person is locked out until they individually
+re-validate, and their `ai_whisperer` flags and `notes` are gone for good.
+
+The proportional check needs the current mirror size, which is why `Count Mirror` exists. It cannot be
+done in SQL against the pre-wipe `technicians` table inside the sync statement: once a truncated sheet
+has been mirrored, the next run compares against the already-truncated count and proceeds. The check
+has to gate the whole sync.
+
+`mirrorCount` of 0 disables the proportional check, which is what makes the cold start work — on the
+first run the mirror is empty and 476 rows must be allowed to seed it. The glue therefore validates
+that `Count Mirror` returned a finite number and throws otherwise, rather than letting an unreadable
+count fall through to the 0 default and silently disable the guard.
+
+**A legitimately shrinking roster will block.** Dropping from 476 to 400 trips the check on every run,
+and correcting the sheet does not help because the sheet is already correct. The escape is to shrink
+the sheet in steps of under 10% across successive syncs. That friction is deliberate: a 16% drop in
+authorised technicians is exactly the event that should require a human to look at it.
 
 ### `Sync Technicians`
 
@@ -324,6 +349,7 @@ inserted AS (
 orphaned AS (
   DELETE FROM validated_numbers v
   WHERE v.sigiliu IS NOT NULL
+    AND v.is_active
     AND NOT EXISTS (SELECT 1 FROM canon c WHERE c.sigiliu = v.sigiliu)
   RETURNING 1
 ),
@@ -359,6 +385,22 @@ incidental.
 **The cleanup compares against `canon`, not `technicians`.** All CTEs read one snapshot, so
 `technicians` still holds the *old* rows for the duration of this statement. Comparing against the
 incoming batch is both correct and what is actually wanted.
+
+**`AND v.is_active` is what stops the sync from un-revoking a phone.** Without it, the cleanup deletes
+revoked rows as readily as active ones, and deletion is not neutral here: it moves a phone from
+*revoked* to *unknown*. An admin revokes a compromised handset with `is_active = false`; later that
+technician's sigiliu leaves the sheet — a typo correction, a momentarily blank cell during a human
+edit — and the row is deleted. The next message from that phone finds no row, routes to the sigiliu
+branch, and any currently valid sigiliu re-validates it with `is_active` defaulting to true.
+
+That path is the reason this clause exists, and it is worth stating plainly that the agent-side design
+above assumes it: dropping the `is_active` filter from `Get valid numbers` and omitting `is_active`
+from the insert's `ON CONFLICT` are both justified by the claim that no path resurrects a revoked row.
+That claim is only true with this clause present. The guard lives in the *other* workflow from the one
+it protects, which is exactly why it was missed until a whole-branch review.
+
+Keeping the row costs one tombstone per revoked-and-departed technician, and the tombstone is the
+point — it is what keeps the Switch routing that phone to the refusal branch forever.
 
 Rows with `sigiliu IS NULL` are never deleted. That is the escape hatch for hand-granted access — a
 test number, or an `ai_whisperer` who is not a technician — without putting fake rows into a sheet other
