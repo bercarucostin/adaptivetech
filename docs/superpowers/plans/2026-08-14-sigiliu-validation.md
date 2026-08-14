@@ -737,7 +737,7 @@ wf.nodes.push(
     id: 'a1b2c3d4-0002-4000-8000-000000000102',
     name: 'Get Technicians Sheet',
     retryOnFail: true,
-    credentials: { googleSheetsOAuth2Api: { id: 'kkyOP2rNDCT8Uggr', name: 'Google Sheets account' } },
+    credentials: { googleSheetsOAuth2Api: { id: '8vyImy139bSesEaX', name: 'Google Sheets account' } },
   },
   {
     parameters: { jsCode },
@@ -779,7 +779,9 @@ node splice-ingestion.js && rm splice-ingestion.js
 
 Expected output: `ingestion.json rewired`.
 
-**Check the Google Sheets credential ID.** The script reuses `kkyOP2rNDCT8Uggr`. Confirm it matches the existing sheets node in the file before running:
+**Check the Google Sheets credential ID.** The script uses `8vyImy139bSesEaX`, read off the existing
+sheets node. Confirm it still matches before running — an earlier draft of this plan carried a wrong
+ID, and this command is what caught it:
 
 ```bash
 node -e "const w=require('./workflows/ingestion.json');console.log(JSON.stringify(w.nodes.filter(n=>n.type==='n8n-nodes-base.googleSheets').map(n=>n.credentials),null,1))"
