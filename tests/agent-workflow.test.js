@@ -28,6 +28,14 @@ test('the Switch routes active, revoked and unknown separately', () => {
   ]);
 });
 
+// Every message crosses this edge. wf.connections['Get valid numbers'] was
+// assigned wholesale when this workflow was spliced together -- if that
+// assignment were ever lost, the JSON would still parse and every other test
+// would still pass while the bot silently stopped routing anything.
+test('Get valid numbers feeds directly into Route Validation', () => {
+  assert.deepStrictEqual(targets('Get valid numbers'), [['Route Validation']]);
+});
+
 test('Route Validation rules are bound to the correct outputs', () => {
   // Swapping these two rule objects (one drag in the n8n editor) would route every
   // active technician to Send "Not Validated" and invert the revocation semantics --

@@ -112,6 +112,41 @@ test('buildSyncBatch tolerates an empty sheet without wiping anything', () => {
   assert.throws(() => buildSyncBatch([], 100), /only 0 usable rows/);
 });
 
+test('buildSyncBatch throws when the batch clears the absolute floor but is under 90% of the existing mirror', () => {
+  const rows = padTo([], 149); // clears the absolute floor of 100
+  assert.throws(
+    () => buildSyncBatch(rows, 100, 476),
+    /only 149 usable rows.*90%.*476/s
+  );
+});
+
+test('buildSyncBatch accepts a batch at or above 90% of the existing mirror', () => {
+  const rows = padTo([], 429); // 429 / 476 = 90.1%
+  const { batch } = buildSyncBatch(rows, 100, 476);
+  assert.strictEqual(batch.length, 429);
+});
+
+test('mirrorCount omitted or zero (cold start) applies only the absolute floor', () => {
+  const rows = padTo([], 149); // far under 90% of a hypothetical 476-row mirror
+  const omitted = buildSyncBatch(rows, 100);
+  assert.strictEqual(omitted.batch.length, 149);
+  const explicitZero = buildSyncBatch(rows, 100, 0);
+  assert.strictEqual(explicitZero.batch.length, 149);
+});
+
+test('buildSyncBatch drops rows whose normalised sigiliu is empty, even though sigiliu_raw is non-blank', () => {
+  const rows = padTo([
+    sheetRow(1, 'REAL PERSON', 'REAL SRL', 'PN 002'),
+    sheetRow(2, 'PUNCTUATION ONLY', 'REAL SRL', '---'),
+  ], 101);
+  const { batch, malformed } = buildSyncBatch(rows, 100);
+
+  assert.ok(!batch.some((r) => r.technician_name === 'PUNCTUATION ONLY'),
+    'a sigiliu that normalises to empty must not be mirrored');
+  assert.ok(!malformed.includes('---'),
+    'an empty-after-normalisation sigiliu is dropped, not merely flagged as malformed');
+});
+
 // The spec requires one normalisation rule on both sides. n8n Code nodes cannot
 // require(), so the function is duplicated -- this makes the duplication a
 // checked invariant instead of a latent bug.
