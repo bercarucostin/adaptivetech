@@ -14,6 +14,7 @@
 
 - **The Ask Sigiliu message must reveal nothing about the sigiliu** — no example, no placeholder, no description of its format. It is sent pre-authentication. Exact text: `Salut! Pentru a folosi acest asistent, te rog trimite-mi sigiliul tau de identificare. Daca nu il ai, contacteaza Partner.`
 - **Sigiliu matching is strictly three digits.** Never loosen to 1–3 digits with zero-padding: `DE` is a real prefix and `DE 001/002/003/005` all exist, so the ordinary Romanian phrase `de 5 zile` would authenticate a stranger.
+- **A single message may test at most 3 sigiliu candidates.** `Lookup Sigiliu` matches `sigiliu = ANY(...)` over the whole list, so an uncapped list lets one 4096-character message test ~680 codes in one query and exhaust the keyspace in ~1,000 messages. The cap lives in the `Extract Sigiliu` glue, never in `lib/sigiliu.js` — it is workflow policy, not a property of extraction.
 - **One normalisation rule on both sides:** `s.toUpperCase().replace(/[^A-Z0-9]/g, '')`. The agent and the sync must use byte-identical implementations; Task 3 enforces this with a test.
 - **Extraction regex, verbatim:** `/(?<![A-Za-z0-9])([A-Za-z]{2})[ ._-]?(\d{3})(?![0-9])/g`
 - **Phone identity is `contacts[0].wa_id`**, matching the existing `Get valid numbers` lookup — never `messages[0].from`, which is only used as a reply address.

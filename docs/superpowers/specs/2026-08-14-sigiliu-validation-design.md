@@ -34,10 +34,25 @@ migration concern: this is a fresh start, agreed during design.
 
 ### Deliberately out of scope
 
-**Rate-limiting sigiliu guesses.** The space is `XX999` with 476 valid values, so a blind guess lands
-about 0.07% of the time — not something you brute-force one WhatsApp message at a time — and no abuse
-has been observed. This follows the posture of the 2026-08-05 spec, which declined a dedup guard on
-the same grounds: no machinery for problems that have not appeared.
+**Per-number attempt counting and lockout.** Still out, but the original reasoning for it was wrong
+and is corrected here, because the corrected version is what justifies the one guard that *is* in
+scope.
+
+The first draft argued that `XX999` holds 676,000 combinations for 476 valid values, so a blind guess
+lands about 0.07% of the time — "not something you brute-force one WhatsApp message at a time." The
+premise was false. Extraction returns *every* candidate token in a message and `Lookup Sigiliu` matches
+`sigiliu = ANY(...)`, so a message was never one guess: a 4096-character WhatsApp body packs roughly
+680 candidates into a single query, and the reply — confirmation versus prompt — is a clean oracle.
+That exhausts the keyspace in about 1,000 messages, not 676,000.
+
+The fix is to remove the amplifier rather than add machinery: **extraction caps a single message at 3
+candidates.** A technician sends one code, perhaps a mistyped second; three is generous. The cap
+restores the per-message arithmetic the original reasoning assumed, taking exhaustion back to ~225,000
+messages, which is a real barrier over WhatsApp. It costs one constant and no new state.
+
+With the amplifier gone, attempt counting and lockout stay out of scope on the original grounds: they
+need a new column or table and a reset policy, and no abuse has been observed. That is the posture of
+the 2026-08-05 spec, which declined a dedup guard on the same reasoning.
 
 **The 2026-08-05 agent reliability hardening.** Still unimplemented, still its own piece of work. The
 one place the two specs interact is called out explicitly below.
