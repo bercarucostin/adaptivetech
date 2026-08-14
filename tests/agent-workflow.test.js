@@ -28,6 +28,22 @@ test('the Switch routes active, revoked and unknown separately', () => {
   ]);
 });
 
+test('Route Validation rules are bound to the correct outputs', () => {
+  // Swapping these two rule objects (one drag in the n8n editor) would route every
+  // active technician to Send "Not Validated" and invert the revocation semantics --
+  // and since the Switch sends to the first matching output, rule 1 ("revoked") is
+  // only correct because rule 0 ("active") already claimed the active rows first.
+  const rules = byName('Route Validation').parameters.rules.values;
+  assert.strictEqual(rules[0].outputKey, 'active');
+  assert.strictEqual(rules[1].outputKey, 'revoked');
+
+  const conditionFields = (rule) => rule.conditions.conditions.map((c) => c.leftValue);
+  assert.ok(conditionFields(rules[0]).some((v) => /is_active/.test(v)),
+    'rule 0 (active) must require is_active');
+  assert.ok(!conditionFields(rules[1]).some((v) => /is_active/.test(v)),
+    'rule 1 (revoked) must not require is_active -- it relies on rule 0 claiming actives first');
+});
+
 test('Get valid numbers no longer filters on is_active', () => {
   const cols = byName('Get valid numbers').parameters.where.values.map((v) => v.column);
   assert.deepStrictEqual(cols, ['phone_e164'],
@@ -49,6 +65,22 @@ test('Extract Sigiliu embeds lib/sigiliu.js verbatim', () => {
   assert.ok(start !== -1 && end > start, 'SHARED markers missing');
   assert.ok(byName('Extract Sigiliu').parameters.jsCode.includes(src.slice(start, end)),
     'Code node has drifted from lib/sigiliu.js');
+});
+
+test('candidate list is capped against batch brute-force', () => {
+  const code = byName('Extract Sigiliu').parameters.jsCode;
+  const glue = code.slice(code.indexOf('// ---- n8n glue ----'));
+  assert.ok(/MAX_SIGILIU_CANDIDATES\s*=\s*3/.test(glue), 'cap must be a named constant set to 3');
+  assert.ok(/extractSigilii\(body\)\.slice\(0,\s*MAX_SIGILIU_CANDIDATES\)/.test(glue),
+    'candidates must actually be sliced to the cap -- Lookup Sigiliu tests every candidate ' +
+    'with sigiliu = ANY(...), so an uncapped list lets one message brute-force many codes');
+});
+
+test('an empty phone yields no candidates, so nothing is inserted under a blank key', () => {
+  const code = byName('Extract Sigiliu').parameters.jsCode;
+  const glue = code.slice(code.indexOf('// ---- n8n glue ----'));
+  assert.ok(/phone\s*\?\s*extractSigilii\(body\)/.test(glue),
+    'candidates must be gated on a truthy phone, not computed unconditionally');
 });
 
 test('phone identity is wa_id, matching the lookup', () => {
