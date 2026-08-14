@@ -45,6 +45,13 @@ test('Count Mirror counts the pre-wipe mirror and shares the Sync Technicians cr
   );
 });
 
+test('Count Mirror runs once, not once per sheet row', () => {
+  // Get Technicians Sheet emits one item per row (~476); without executeOnce,
+  // Count Mirror -- and the count query it runs -- fires once per item.
+  const node = byName('Count Mirror');
+  assert.strictEqual(node.executeOnce, true);
+});
+
 test('the Drive trigger points at a real configured file', () => {
   const id = byName('Drive: Technicians').parameters.fileToWatch.value;
   assert.match(id, /^[A-Za-z0-9_-]{20,}$/, 'a real Drive file ID must be filled in');
@@ -82,9 +89,25 @@ test('Build Sync Batch embeds lib/sync-batch.js verbatim', () => {
     'Code node has drifted from lib/sync-batch.js');
 });
 
-test('the floor is set to 100 and the mirror count is wired through', () => {
+test('the floor is set to 100 and the mirror count is wired through unambiguously', () => {
   const code = byName('Build Sync Batch').parameters.jsCode;
-  assert.match(code, /buildSyncBatch\(rows,\s*100,\s*\$json\.mirror_count\)/);
+  // $json is undefined in "Run Once for All Items" mode (this node's mode); only
+  // $input.first().json resolves the count unambiguously -- see the sibling
+  // "Extract Sigiliu" glue in workflows/agent.json for the same precedent.
+  assert.match(code, /buildSyncBatch\(rows,\s*100,\s*mirrorCount\)/);
+  assert.ok(code.includes("$input.first().json.mirror_count"),
+    'the mirror count must be read via $input.first().json, not the per-item $json shorthand');
+  assert.ok(!/\$json\.mirror_count/.test(code),
+    'the ambiguous $json.mirror_count form must not reappear');
+});
+
+test('Build Sync Batch fails loudly instead of silently defaulting when mirror_count is unusable', () => {
+  const code = byName('Build Sync Batch').parameters.jsCode;
+  assert.ok(/Number\.isFinite\(mirrorCount\)/.test(code),
+    'an unusable mirror_count must be rejected before reaching buildSyncBatch, ' +
+    'otherwise the library default of 0 silently disables the proportional guard');
+  assert.ok(/throw new Error/.test(code.slice(code.indexOf('mirrorCount'))),
+    'the validation must throw, not fall through');
 });
 
 test('Build Sync Batch reads sheet rows from Get Technicians Sheet, not its direct input', () => {
