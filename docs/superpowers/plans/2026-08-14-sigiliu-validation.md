@@ -153,7 +153,7 @@ git commit -m "feat(db): add technicians mirror, rebuild validated_numbers on si
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `module.exports = { normalizeSigiliu, extractSigilii }`.
-  - `normalizeSigiliu(value: unknown) => string` — uppercase, non-alphanumerics stripped. Non-strings and nullish yield `''`.
+  - `normalizeSigiliu(value: unknown) => string` — uppercase, non-alphanumerics stripped. Nullish yields `''`; any other non-string is coerced with `String()` first, so a numeric spreadsheet cell normalises to its digits rather than vanishing. That matters downstream: `buildSyncBatch` reports a malformed sigiliu, but silently drops an empty one.
   - `extractSigilii(text: unknown) => string[]` — normalised candidates in order of appearance, deduplicated. Non-strings yield `[]`.
   - The file contains a region delimited by `// ---8<--- SHARED START ---8<---` and `// ---8<--- SHARED END ---8<---`, and within it a nested region delimited by `// ---8<--- NORMALIZE START ---8<---` and `// ---8<--- NORMALIZE END ---8<---`. Task 3 and Task 5 read these markers.
 
