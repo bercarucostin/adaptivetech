@@ -2,7 +2,11 @@
 
 const API = '/api/demo';
 const POLL_MS = 5000;
+const POLL_MAX_ATTEMPTS = 60; // 60 x 5s = 5 minutes; extraction is normally 30-90s
+const REQUEST_TIMEOUT_MS = 45000;
 const LANG_KEY = 'adaptive-lang'; // shared with the main site's toggle
+
+let pollAttempts = 0;
 
 const $ = (id) => document.getElementById(id);
 const state = { email: '', turnstile: '', uploadId: null, filename: '' };
@@ -42,6 +46,8 @@ const STRINGS = {
       MESSAGE_LIMIT: 'Ai folosit toate întrebările din acest demo.',
       UNAVAILABLE: 'Demo-ul este temporar indisponibil. Scrie-ne și îți arătăm live.',
       NETWORK: 'Conexiune întreruptă. Încearcă din nou.',
+      TIMEOUT: 'Cererea a durat prea mult. Încearcă din nou.',
+      STALLED: 'Procesarea durează neobișnuit de mult. Încearcă un alt document sau scrie-ne.',
     },
     STAGE_TEXT: {
       pending: 'În așteptare…',
@@ -68,6 +74,8 @@ const STRINGS = {
       MESSAGE_LIMIT: 'You’ve used all the questions in this demo.',
       UNAVAILABLE: 'The demo is temporarily unavailable. Message us and we’ll show you live.',
       NETWORK: 'Connection lost. Try again.',
+      TIMEOUT: 'That request took too long. Try again.',
+      STALLED: 'Processing is taking unusually long. Try a different document or message us.',
     },
     STAGE_TEXT: {
       pending: 'Waiting…',
@@ -109,17 +117,29 @@ try {
 }
 
 // ── Networking ──────────────────────────────────────────────────────────
+// A dead spinner is the one outcome that is not allowed — which covers a
+// request that rejects outright, but just as much a request an n8n webhook
+// accepts and then never answers (a realistic failure when it's waiting on
+// an LLM call). The timeout turns that hang into the same recoverable error
+// state as a dropped connection.
 async function post(path, body, isForm) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let res;
   try {
     res = await fetch(API + path, {
       method: 'POST',
       credentials: 'same-origin',
+      signal: controller.signal,
       headers: isForm ? undefined : { 'Content-Type': 'application/json' },
       body: isForm ? body : JSON.stringify(body),
     });
-  } catch (_) {
-    throw new Error('NETWORK');
+  } catch (err) {
+    // An abort and a refused connection are different causes with the same
+    // remedy for the visitor: the request did not get through, try again.
+    throw new Error(err.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK');
+  } finally {
+    clearTimeout(timer);
   }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty body is fine */ }
@@ -179,6 +199,7 @@ $('upload-form').addEventListener('submit', async (e) => {
     const res = await post('/upload', form, true);
     if (!res.upload_id) throw new Error('UPLOAD_LIMIT');
     state.uploadId = res.upload_id;
+    pollAttempts = 0;
     poll();
   } catch (err) {
     $('progress').hidden = true;
@@ -188,6 +209,13 @@ $('upload-form').addEventListener('submit', async (e) => {
 });
 
 async function poll() {
+  pollAttempts += 1;
+  if (pollAttempts > POLL_MAX_ATTEMPTS) {
+    $('progress').hidden = true;
+    $('upload-submit').disabled = false;
+    return fail('upload-error', explain('STALLED'));
+  }
+
   let res;
   try {
     res = await post('/upload-status', { upload_id: state.uploadId });
@@ -258,9 +286,18 @@ $('chat-form').addEventListener('submit', async (e) => {
   try {
     const res = await post('/chat', { message: question });
     typing.remove();
-    addMessage('assistant', res.answer, res.sources);
-    setRemaining(res.messages_left);
-    if (res.messages_left <= 0) {
+
+    // A 200 with a missing/malformed field is still a failure a visitor
+    // needs to see, not a bubble reading the literal word "undefined" — and
+    // not a limit check that silently never engages because
+    // `undefined <= 0` is false.
+    const answer = typeof res.answer === 'string' ? res.answer : '';
+    if (!answer) throw new Error('UNAVAILABLE');
+    const left = Number.isFinite(res.messages_left) ? res.messages_left : 0;
+
+    addMessage('assistant', answer, res.sources);
+    setRemaining(left);
+    if (left <= 0) {
       $('question').disabled = true;
       $('chat-submit').disabled = true;
       fail('chat-error', explain('MESSAGE_LIMIT'));

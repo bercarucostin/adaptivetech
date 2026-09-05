@@ -366,15 +366,19 @@ button[type="submit"]:disabled {
 }
 .demo__msg p { white-space: pre-wrap; }
 
+/* Matches the main site's own mock of this exact interaction
+   (.demo-q / .demo-a in website/index.html): navy for "your" message, Sand
+   for the assistant's. A visitor sees that mock first, then this page —
+   keeping the same message reads the same colour in both places. */
 .demo__msg--user {
-  background: var(--amber);
-  color: var(--navy); /* 6.68:1 */
+  background: var(--navy);
+  color: var(--cream); /* 10.64:1 */
   margin-left: auto;
   border-bottom-right-radius: 4px;
 }
 .demo__msg--assistant {
-  background: var(--cream-2);
-  color: var(--ink-soft); /* 8.42:1 on Sand, at least as high on Surface */
+  background: var(--cream);
+  color: var(--ink-soft); /* 8.42:1 */
   border: 1px solid var(--line);
   margin-right: auto;
   border-bottom-left-radius: 4px;
