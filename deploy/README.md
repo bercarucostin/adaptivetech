@@ -45,7 +45,10 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
 ## Order of operations
 
 1. Provision the Hetzner VPS, install Docker and the Compose plugin.
-2. Copy this `deploy/` directory to the box (or clone the repo there).
+2. **Clone the repository on the box** — do not copy `deploy/` alone. Caddy
+   serves the site from `../website`, mounted relative to this directory,
+   so `deploy/` and `website/` must stay siblings. Copying only `deploy/`
+   produces a bind-mount error on the first `docker compose up`.
 3. Generate secrets and write `deploy/.env` (Secrets, below).
 4. `docker compose up -d` and confirm all three services are `running`.
 5. Verify `crypto` is available inside n8n's Code nodes (Why
