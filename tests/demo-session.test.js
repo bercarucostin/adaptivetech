@@ -77,9 +77,13 @@ test('a non-string secret is rejected rather than thrown from createHmac', () =>
   }
 });
 
-test('an oversized token is rejected before any crypto work', () => {
-  const huge = 'x'.repeat(600) + '.' + String(SOON) + '.' + 'y'.repeat(43);
-  assert.strictEqual(verifyToken(huge, SECRET, NOW), null);
+test('an oversized token is rejected by the cap, not by a bad signature', () => {
+  // Signed with the real secret, so its MAC is valid. The only thing that can
+  // reject it is the length cap -- which is what makes this test pin the cap
+  // rather than pass by accident on a malformed MAC.
+  const oversized = signToken('x'.repeat(600), SOON, SECRET);
+  assert.ok(oversized.length > 512, 'fixture must actually exceed the cap');
+  assert.strictEqual(verifyToken(oversized, SECRET, NOW), null);
 });
 
 test('a token at the length limit is still processed normally', () => {

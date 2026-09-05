@@ -21,7 +21,14 @@ test('the prompt keeps the rules that make retrieval work', () => {
 });
 
 test('the support-desk framing is gone', () => {
-  const banned = ['suport tehnic', 'technical support', 'WhatsApp', 'sigiliu', 'technician'];
+  // One client-specific lock-seal term from the original prompt is
+  // deliberately absent from this list. tests/branch-contract.test.js scans
+  // every tracked file -- including lib/demo-extraction-prompt.js -- for
+  // that exact term, so asserting it here would duplicate a stronger check
+  // and would trip that scan on this test file's own source, since the
+  // guard matches on raw file content and does not distinguish a leak from
+  // a check that the leak is absent.
+  const banned = ['suport tehnic', 'technical support', 'WhatsApp', 'technician'];
   for (const term of banned) {
     assert.ok(
       !EXTRACTION_PROMPT.toLowerCase().includes(term.toLowerCase()),
