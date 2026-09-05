@@ -1,0 +1,1793 @@
+
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Adaptive Technologies — AI & Automatizare pentru IMM-uri din România</title>
+<meta name="description" content="Construim soluții AI și automatizări pentru IMM-urile din România. Chatboți RAG, automatizare facturi, e-Factura, n8n. Consultație gratuită." />
+<meta name="keywords" content="automatizare procese România, AI România, chatbot WhatsApp, RAG România, n8n, e-Factura, automatizare facturi, IMM" />
+
+<!-- Open Graph -->
+<meta property="og:title" content="Adaptive Technologies — AI & Automatizare pentru IMM-uri" />
+<meta property="og:description" content="Eliminăm munca manuală. Reducem erorile. Vă redăm timpul." />
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="ro_RO" />
+<meta property="og:locale:alternate" content="en_US" />
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+<!-- Favicon — Adaptive "A" mark (SVG modern + PNG fallback) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A1628'/%3E%3Cpath fill='%23F59E0B' d='M50 24 L83 82 L65 82 L50 56 L35 82 L17 82 Z'/%3E%3C/svg%3E" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="manifest" href="site.webmanifest" />
+<meta name="theme-color" content="#0A1628" />
+
+<style>
+  :root {
+    --navy: #0A1628;
+    --navy-2: #14253F;
+    --navy-3: #1F3458;
+    --amber: #F59E0B;
+    --amber-2: #D97706;
+    --amber-soft: #FEF3C7;
+    --cream: #FAF8F3;
+    --cream-2: #F2EFE6;
+    --ink: #0F0F0F;
+    --ink-soft: #4A4A48;
+    --ink-mute: #7A7A75;
+    --line: #E3DFD3;
+    --line-2: #D4CFC0;
+    --white: #FFFFFF;
+
+    --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+
+    --maxw: 1240px;
+    --pad: clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+  .container {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 var(--pad);
+  }
+
+  /* ─────────── NAV ─────────── */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(250, 248, 243, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem var(--pad);
+    max-width: var(--maxw);
+    margin: 0 auto;
+  }
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    color: var(--navy);
+  }
+  .logo-mark {
+    width: 22px;
+    height: 22px;
+    align-self: center;
+    margin-right: 0.1rem;
+    fill: var(--amber);
+    transition: fill 0.2s, transform 0.2s;
+  }
+  .logo:hover .logo-mark { fill: var(--amber-2); transform: translateY(-1px); }
+  .logo-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--amber);
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .logo-sub {
+    font-weight: 400;
+    color: var(--ink-soft);
+    letter-spacing: 0;
+  }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+  .nav-links a {
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--navy); }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .lang-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--white);
+  }
+  .lang-toggle button {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--ink-mute);
+    transition: all 0.2s;
+  }
+  .lang-toggle button.active {
+    background: var(--navy);
+    color: var(--cream);
+  }
+  .btn-cta {
+    background: var(--navy);
+    color: var(--cream);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .btn-cta:hover {
+    background: var(--amber);
+    color: var(--navy);
+    transform: translateY(-1px);
+  }
+  .btn-cta-amber {
+    background: var(--amber);
+    color: var(--navy);
+  }
+  .btn-cta-amber:hover {
+    background: var(--navy);
+    color: var(--cream);
+  }
+  .btn-ghost {
+    color: var(--navy);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: 1px solid var(--line-2);
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+  }
+  .btn-ghost:hover {
+    background: var(--navy);
+    color: var(--cream);
+    border-color: var(--navy);
+  }
+
+  .mobile-toggle { display: none; }
+
+  @media (max-width: 860px) {
+    .nav-links { display: none; }
+    .nav-links.open {
+      display: flex;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      background: var(--cream);
+      padding: 1.5rem var(--pad);
+      gap: 1.2rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .mobile-toggle {
+      display: flex;
+      width: 38px;
+      height: 38px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+    }
+    .btn-cta-nav { display: none; }
+  }
+
+  /* ─────────── HERO ─────────── */
+  .hero {
+    padding: clamp(3rem, 8vw, 7rem) 0 clamp(4rem, 10vw, 8rem);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 10%;
+    right: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent 60%);
+    pointer-events: none;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--amber);
+  }
+  .hero h1 {
+    font-size: clamp(2.6rem, 7vw, 5.5rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    font-weight: 600;
+    color: var(--navy);
+    max-width: 16ch;
+    margin-bottom: 1.5rem;
+  }
+  .hero h1 .serif {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--amber-2);
+    letter-spacing: -0.01em;
+  }
+  .hero-sub {
+    font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin-bottom: 2.5rem;
+    line-height: 1.55;
+  }
+  .hero-ctas {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-bottom: 4rem;
+  }
+  .hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--amber);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* ─────────── STATS BAR ─────────── */
+  .stats {
+    background: var(--navy);
+    color: var(--cream);
+    padding: clamp(2.5rem, 5vw, 4rem) 0;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(1rem, 3vw, 3rem);
+  }
+  .stat {
+    border-left: 1px solid rgba(250, 248, 243, 0.15);
+    padding-left: clamp(0.8rem, 2vw, 1.5rem);
+  }
+  .stat-num {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--amber);
+    line-height: 1;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.15em;
+  }
+  .stat-num .serif {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--cream);
+    font-weight: 400;
+  }
+  .stat-label {
+    font-size: 0.85rem;
+    color: rgba(250, 248, 243, 0.75);
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono);
+  }
+  @media (max-width: 760px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 2rem; }
+  }
+
+  /* ─────────── SECTIONS ─────────── */
+  section { padding: clamp(4rem, 9vw, 7rem) 0; }
+
+  .section-header {
+    max-width: 760px;
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+  .section-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--amber-2);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section-eyebrow::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--amber-2);
+  }
+  .section-title {
+    font-size: clamp(2rem, 4.5vw, 3.4rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: var(--navy);
+    margin-bottom: 1.25rem;
+  }
+  .section-title .serif {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--amber-2);
+  }
+  .section-sub {
+    font-size: 1.1rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+
+  /* ─────────── PROBLEMS ─────────── */
+  .problems-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 920px) { .problems-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 580px) { .problems-grid { grid-template-columns: 1fr; } }
+
+  .problem-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem 1.4rem;
+    transition: all 0.25s;
+  }
+  .problem-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--line-2);
+    box-shadow: 0 8px 24px rgba(10, 22, 40, 0.05);
+  }
+  .problem-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--amber-soft);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    color: var(--amber-2);
+    font-weight: 600;
+  }
+  .problem-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.6rem;
+  }
+  .problem-desc {
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    margin-bottom: 0.9rem;
+  }
+  .problem-list {
+    list-style: none;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+  }
+  .problem-list li {
+    padding: 0.3rem 0;
+    padding-left: 1rem;
+    position: relative;
+  }
+  .problem-list li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--amber);
+  }
+
+  /* ─────────── SOLUTIONS TIERS ─────────── */
+  .solutions {
+    background: var(--cream-2);
+  }
+  .tiers-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 1000px) { .tiers-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .tiers-grid { grid-template-columns: 1fr; } }
+
+  .tier {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 1.8rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  .tier:hover {
+    transform: translateY(-3px);
+    border-color: var(--navy);
+    box-shadow: 0 12px 32px rgba(10, 22, 40, 0.08);
+  }
+  .tier-num {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-mute);
+    margin-bottom: 0.8rem;
+    letter-spacing: 0.1em;
+  }
+  .tier-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .tier-tagline {
+    font-size: 0.85rem;
+    color: var(--ink-mute);
+    margin-bottom: 1.4rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .tier-body {
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    margin-bottom: 1.4rem;
+    line-height: 1.55;
+  }
+  .tier-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: auto;
+  }
+  .tier-tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-soft);
+  }
+  .tier.featured {
+    background: var(--navy);
+    color: var(--cream);
+    border-color: var(--navy);
+  }
+  .tier.featured .tier-num,
+  .tier.featured .tier-tagline { color: rgba(250, 248, 243, 0.55); }
+  .tier.featured .tier-name { color: var(--amber); }
+  .tier.featured .tier-body { color: rgba(250, 248, 243, 0.85); }
+  .tier.featured .tier-tag {
+    background: var(--navy-2);
+    border-color: var(--navy-3);
+    color: var(--amber);
+  }
+
+  /* ─────────── SOLUTIONS DETAIL ─────────── */
+  .solutions-detail {
+    margin-top: 5rem;
+  }
+  .sd-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 900px) { .sd-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 580px) { .sd-grid { grid-template-columns: 1fr; } }
+  .sd-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem 1.4rem;
+  }
+  .sd-cat {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--amber-2);
+    margin-bottom: 0.6rem;
+  }
+  .sd-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.8rem;
+    line-height: 1.25;
+  }
+  .sd-desc {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    margin-bottom: 1rem;
+    line-height: 1.55;
+  }
+  .sd-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .sd-tag {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    padding: 3px 9px;
+    background: var(--amber-soft);
+    color: var(--amber-2);
+    border-radius: 999px;
+  }
+
+  /* ─────────── CASE STUDY ─────────── */
+  .case {
+    background: var(--navy);
+    color: var(--cream);
+    position: relative;
+    overflow: hidden;
+  }
+  .case::before {
+    content: '';
+    position: absolute;
+    bottom: -200px;
+    left: -100px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.12), transparent 60%);
+    pointer-events: none;
+  }
+  .case-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+    position: relative;
+  }
+  @media (max-width: 860px) {
+    .case-inner { grid-template-columns: 1fr; gap: 2.5rem; }
+  }
+  .case-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--amber);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .case-eyebrow::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--amber);
+  }
+  .case-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    margin-bottom: 1.4rem;
+  }
+  .case-title .serif {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--amber);
+  }
+  .case-body {
+    font-size: 1.05rem;
+    color: rgba(250, 248, 243, 0.85);
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+  }
+  .case-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .case-stack span {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    padding: 5px 12px;
+    background: var(--navy-2);
+    border: 1px solid var(--navy-3);
+    border-radius: 999px;
+    color: var(--amber);
+  }
+  .case-visual {
+    background: var(--navy-2);
+    border: 1px solid var(--navy-3);
+    border-radius: 16px;
+    padding: 2rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+  }
+  .chat-msg {
+    margin-bottom: 1rem;
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    max-width: 85%;
+  }
+  .chat-user {
+    background: var(--amber);
+    color: var(--navy);
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bot {
+    background: var(--navy-3);
+    color: var(--cream);
+    border-bottom-left-radius: 4px;
+  }
+  .chat-bot-source {
+    font-size: 0.7rem;
+    color: var(--amber);
+    margin-top: 0.4rem;
+    opacity: 0.8;
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--navy-3);
+    font-size: 0.75rem;
+    color: rgba(250, 248, 243, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─────────── HOW WE WORK ─────────── */
+  .how-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 860px) { .how-grid { grid-template-columns: 1fr; } }
+
+  .how-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 2rem 1.8rem;
+  }
+  .how-card.dark {
+    background: var(--navy);
+    color: var(--cream);
+    border-color: var(--navy);
+  }
+  .how-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--amber-2);
+    margin-bottom: 0.6rem;
+  }
+  .how-card.dark .how-label { color: var(--amber); }
+  .how-title {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.4rem;
+    letter-spacing: -0.02em;
+  }
+  .how-card.dark .how-title { color: var(--cream); }
+  .how-sub {
+    font-size: 0.9rem;
+    color: var(--ink-mute);
+    margin-bottom: 1.8rem;
+    font-style: italic;
+  }
+  .how-card.dark .how-sub { color: rgba(250, 248, 243, 0.6); }
+  .how-step {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .how-card.dark .how-step { border-top-color: var(--navy-3); }
+  .how-step:first-of-type { border-top: none; padding-top: 0; }
+  .how-step-num {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--amber-2);
+    font-weight: 500;
+    min-width: 24px;
+  }
+  .how-card.dark .how-step-num { color: var(--amber); }
+  .how-step-content { flex: 1; }
+  .how-step-title {
+    font-size: 0.98rem;
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 0.2rem;
+  }
+  .how-card.dark .how-step-title { color: var(--cream); }
+  .how-step-meta {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--amber-2);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .how-card.dark .how-step-meta { color: var(--amber); }
+  .how-step-desc {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .how-card.dark .how-step-desc { color: rgba(250, 248, 243, 0.75); }
+
+  /* ─────────── WHY US ─────────── */
+  .why { background: var(--cream-2); }
+  .why-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 1000px) { .why-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .why-grid { grid-template-columns: 1fr; } }
+
+  .why-card {
+    padding: 1.6rem;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    position: relative;
+  }
+  .why-card.accent { background: var(--amber); border-color: var(--amber); }
+  .why-card.accent .why-title { color: var(--navy); }
+  .why-card.accent .why-desc { color: var(--navy); opacity: 0.85; }
+  .why-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--navy);
+    color: var(--amber);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  .why-card.accent .why-mark { background: var(--navy); color: var(--amber); }
+  .why-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .why-desc {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+
+  /* ─────────── ABOUT / TEAM ─────────── */
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+  @media (max-width: 820px) { .team-grid { grid-template-columns: 1fr; } }
+
+  .team-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 1.6rem;
+    transition: all 0.25s;
+  }
+  .team-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--line-2);
+  }
+  .team-photo {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-3) 100%);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--amber);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 4rem;
+    font-weight: 400;
+    overflow: hidden;
+    position: relative;
+  }
+  .team-photo::after {
+    content: 'PLACEHOLDER';
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-family: var(--font-mono);
+    font-style: normal;
+    font-size: 0.6rem;
+    color: rgba(245, 158, 11, 0.5);
+    letter-spacing: 0.1em;
+  }
+  .team-name {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .team-role {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--amber-2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+  }
+  .team-bio {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+
+  /* ─────────── CONTACT ─────────── */
+  .contact {
+    background: var(--navy);
+    color: var(--cream);
+  }
+  .contact-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+  }
+  @media (max-width: 860px) {
+    .contact-inner { grid-template-columns: 1fr; gap: 2.5rem; }
+  }
+  .contact h2 { color: var(--cream); }
+  .contact h2 .serif { color: var(--amber); }
+  .contact-sub { color: rgba(250, 248, 243, 0.8); margin-bottom: 2rem; }
+  .contact-meta { margin-top: 2.5rem; }
+  .contact-meta-item {
+    padding: 1rem 0;
+    border-top: 1px solid var(--navy-3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.92rem;
+  }
+  .contact-meta-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: rgba(250, 248, 243, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .contact-meta-value { color: var(--amber); }
+  .contact-meta-value a:hover { text-decoration: underline; }
+
+  .contact-form {
+    background: var(--navy-2);
+    border: 1px solid var(--navy-3);
+    border-radius: 16px;
+    padding: 2rem;
+  }
+  .form-row { margin-bottom: 1.2rem; }
+  .form-row label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(250, 248, 243, 0.6);
+    margin-bottom: 0.5rem;
+  }
+  .form-row input,
+  .form-row textarea,
+  .form-row select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--navy);
+    border: 1px solid var(--navy-3);
+    border-radius: 10px;
+    color: var(--cream);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+  }
+  .form-row input:focus,
+  .form-row textarea:focus,
+  .form-row select:focus {
+    outline: none;
+    border-color: var(--amber);
+  }
+  .form-row textarea { resize: vertical; min-height: 110px; }
+  .form-submit {
+    width: 100%;
+    padding: 0.9rem;
+    background: var(--amber);
+    color: var(--navy);
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+  .form-submit:hover { background: var(--cream); }
+
+  /* ─────────── FOOTER ─────────── */
+  footer {
+    background: var(--navy);
+    color: rgba(250, 248, 243, 0.7);
+    padding: 2.5rem 0;
+    border-top: 1px solid var(--navy-3);
+  }
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+  }
+  .footer-inner a { color: var(--amber); }
+  .footer-inner a:hover { text-decoration: underline; }
+
+  /* ─────────── CHATBOT EMBED PLACEHOLDER ─────────── */
+  .chatbot-slot {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 90;
+    background: var(--amber);
+    color: var(--navy);
+    padding: 0.85rem 1.2rem;
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    box-shadow: 0 6px 24px rgba(10, 22, 40, 0.18);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    font-family: var(--font-sans);
+  }
+  .chatbot-slot:hover { transform: translateY(-2px); background: var(--cream); }
+  .chatbot-slot::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--navy);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* ─────────── FADE-IN ANIMATIONS ─────────── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ─────────── BILINGUAL ─────────── */
+  [data-en] { display: none; }
+  html[lang="en"] [data-ro] { display: none; }
+  html[lang="en"] [data-en] { display: inline; }
+  html[lang="en"] [data-en].block { display: block; }
+
+</style>
+</head>
+<body>
+
+<!-- ─────────── NAV ─────────── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="logo">
+      <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
+      adaptive<span class="logo-dot"></span><span class="logo-sub">technologies</span>
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
+      <a href="#cum-lucram"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
+      <a href="#despre"><span data-ro>Despre</span><span data-en>About</span></a>
+      <a href="#contact"><span data-ro>Contact</span><span data-en>Contact</span></a>
+    </div>
+    <div class="nav-right">
+      <div class="lang-toggle">
+        <button id="lang-ro" class="active" onclick="setLang('ro')">RO</button>
+        <button id="lang-en" onclick="setLang('en')">EN</button>
+      </div>
+      <a href="#contact" class="btn-cta btn-cta-nav">
+        <span data-ro>Consultație gratuită</span>
+        <span data-en>Free consultation</span>
+      </a>
+      <button class="mobile-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ─────────── HERO ─────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-eyebrow">
+      <span data-ro>AI & automatizare · IMM-uri din România</span>
+      <span data-en>AI & automation · Romanian SMEs</span>
+    </div>
+    <h1>
+      <span data-ro>Lucrați mai <span class="serif">inteligent.</span><br />Nu mai mult.</span>
+      <span data-en>Work <span class="serif">smarter.</span><br />Not harder.</span>
+    </h1>
+    <p class="hero-sub">
+      <span data-ro>Construim soluții AI și automatizări care elimină munca manuală, reduc erorile la zero și redau echipei dumneavoastră timpul pentru ceea ce contează cu adevărat — creșterea afacerii.</span>
+      <span data-en>We design and deploy AI and automation solutions that eliminate manual work, cut errors to zero, and give your team back the time to focus on what actually grows your business.</span>
+    </p>
+    <div class="hero-ctas">
+      <a href="#contact" class="btn-cta btn-cta-amber">
+        <span data-ro>Programați o consultație gratuită</span>
+        <span data-en>Book a free consultation</span>
+        <span>→</span>
+      </a>
+      <a href="#solutii" class="btn-ghost">
+        <span data-ro>Vedeți ce construim</span>
+        <span data-en>See what we build</span>
+      </a>
+    </div>
+    <div class="hero-meta">
+      <span class="pulse-dot"></span>
+      <span data-ro>Primă consultație · 60 min · gratuit · fără angajament</span>
+      <span data-en>First call · 60 min · free · no commitment</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── STATS ─────────── -->
+<section class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="stat-num">70<span class="serif">%+</span></div>
+        <div class="stat-label">
+          <span data-ro>Reducere timp procesare manuală</span>
+          <span data-en>Reduction in manual processing time</span>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">24<span class="serif">/7</span></div>
+        <div class="stat-label">
+          <span data-ro>Fluxuri AI active non-stop</span>
+          <span data-en>AI workflows running around the clock</span>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">↓ <span class="serif">erori</span></div>
+        <div class="stat-label">
+          <span data-ro>La sarcinile automate de date</span>
+          <span data-en>On automated data tasks</span>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">↑ <span class="serif">timp</span></div>
+        <div class="stat-label">
+          <span data-ro>Eliberat pentru activități de valoare</span>
+          <span data-en>Freed for high-value work</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── PROBLEMS ─────────── -->
+<section id="probleme">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">01 · <span data-ro>Vă sună cunoscut?</span><span data-en>Does this sound familiar?</span></div>
+      <h2 class="section-title">
+        <span data-ro>Care zonă a afacerii vă <span class="serif">consumă</span> cel mai mult timp?</span>
+        <span data-en>Which area is <span class="serif">costing</span> you the most time?</span>
+      </h2>
+      <p class="section-sub">
+        <span data-ro>Majoritatea afacerilor cu care lucrăm au ineficiențe în două-trei dintre domeniile de mai jos. Vedeți care vi se potrivesc — apoi vorbim despre ce putem face.</span>
+        <span data-en>Most businesses we work with have inefficiencies in two or three of the areas below. See which ones resonate — then let's talk about what we can do.</span>
+      </p>
+    </div>
+
+    <div class="problems-grid">
+      <div class="problem-card">
+        <div class="problem-icon">€</div>
+        <div class="problem-title"><span data-ro>Finanțe & Contabilitate</span><span data-en>Finance & Accounting</span></div>
+        <div class="problem-desc">
+          <span data-ro>Operațiuni financiare manuale care încetinesc echipa și transformă închiderea de lună într-un efort repetitiv.</span>
+          <span data-en>Manual financial operations that slow your team down and make month-end a recurring ordeal.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>Facturi introduse manual zilnic</span><span data-en>Invoices keyed in by hand daily</span></li>
+          <li><span data-ro>Remindere de plată întârziate</span><span data-en>Payment reminders sent late</span></li>
+          <li><span data-ro>Rapoarte compilate manual</span><span data-en>Reports compiled manually</span></li>
+        </ul>
+      </div>
+
+      <div class="problem-card">
+        <div class="problem-icon">↗</div>
+        <div class="problem-title"><span data-ro>Vânzări & Clienți</span><span data-en>Sales & Customers</span></div>
+        <div class="problem-desc">
+          <span data-ro>Echipa de vânzări petrece mai mult timp pe administrație decât pe vânzare — iar clienții așteaptă prea mult.</span>
+          <span data-en>Your sales team spends more time on admin than on selling — and clients wait too long.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>Lead-uri fără răspuns ore întregi</span><span data-en>Leads unanswered for hours</span></li>
+          <li><span data-ro>Follow-up manual, inconsistent</span><span data-en>Manual, inconsistent follow-up</span></li>
+          <li><span data-ro>Oferte redactate de la zero</span><span data-en>Quotes drafted from scratch</span></li>
+        </ul>
+      </div>
+
+      <div class="problem-card">
+        <div class="problem-icon">⬡</div>
+        <div class="problem-title"><span data-ro>Operațiuni & Logistică</span><span data-en>Operations & Logistics</span></div>
+        <div class="problem-desc">
+          <span data-ro>Comenzi, stocuri și livrări gestionate printr-un amestec de apeluri, emailuri și foi de calcul.</span>
+          <span data-en>Orders, stock, and fulfilment managed through calls, emails, and spreadsheets.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>Comenzi introduse manual</span><span data-en>Orders entered manually</span></li>
+          <li><span data-ro>Stocuri fără vizibilitate reală</span><span data-en>Stock without real-time view</span></li>
+          <li><span data-ro>Aprobări blocate în inbox</span><span data-en>Approvals stuck in inbox</span></li>
+        </ul>
+      </div>
+
+      <div class="problem-card">
+        <div class="problem-icon">⊕</div>
+        <div class="problem-title"><span data-ro>HR & Resurse Umane</span><span data-en>HR & People Ops</span></div>
+        <div class="problem-desc">
+          <span data-ro>Administrarea de personal rulează încă pe foi de calcul și email — consumă timp și ușor de scăpat din vedere.</span>
+          <span data-en>People admin still on spreadsheets and email — time-consuming and easy to slip.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>CV-uri filtrate manual</span><span data-en>CVs screened manually</span></li>
+          <li><span data-ro>Onboarding fără automatizare</span><span data-en>Onboarding without automation</span></li>
+          <li><span data-ro>Concedii urmărite informal</span><span data-en>Leave tracked informally</span></li>
+        </ul>
+      </div>
+
+      <div class="problem-card">
+        <div class="problem-icon">◧</div>
+        <div class="problem-title"><span data-ro>Date & Raportare</span><span data-en>Data & Reporting</span></div>
+        <div class="problem-desc">
+          <span data-ro>Performanța afacerii este vizibilă doar la final de lună — întotdeauna cu o săptămână întârziere.</span>
+          <span data-en>Business performance only visible at month-end — always a week too late.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>Date dispersate în multe tool-uri</span><span data-en>Data scattered across many tools</span></li>
+          <li><span data-ro>Rapoarte asamblate manual</span><span data-en>Reports assembled manually</span></li>
+          <li><span data-ro>Decizii pe date vechi</span><span data-en>Decisions on old data</span></li>
+        </ul>
+      </div>
+
+      <div class="problem-card">
+        <div class="problem-icon">◐</div>
+        <div class="problem-title"><span data-ro>Comunicare & Follow-up</span><span data-en>Communication & Follow-up</span></div>
+        <div class="problem-desc">
+          <span data-ro>Acțiunile importante cad prin fisuri — nu pentru că nimănui nu îi pasă, ci pentru că nu sunt destule ore.</span>
+          <span data-en>Important actions slip through — not because no one cares, but because there aren't enough hours.</span>
+        </div>
+        <ul class="problem-list">
+          <li><span data-ro>Lead-uri noi pierdute</span><span data-en>New leads lost to delays</span></li>
+          <li><span data-ro>Transferuri interne ratate</span><span data-en>Internal handoffs missed</span></li>
+          <li><span data-ro>Update-uri manuale la clienți</span><span data-en>Manual client updates</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── SOLUTIONS TIERS ─────────── -->
+<section id="solutii" class="solutions">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">02 · <span data-ro>Ce construim</span><span data-en>What we build</span></div>
+      <h2 class="section-title">
+        <span data-ro>Soluții la <span class="serif">fiecare</span> nivel — de la rezolvări rapide la AI avansat.</span>
+        <span data-en>A solution at <span class="serif">every</span> level — from quick fixes to advanced AI.</span>
+      </h2>
+      <p class="section-sub">
+        <span data-ro>Majoritatea clienților încep cu Câștiguri Rapide și extind pe măsură ce văd rezultatele. Nu împingem complexitate de care nu aveți nevoie.</span>
+        <span data-en>Most clients start with Quick Wins and expand as they see results. We never push complexity you don't need.</span>
+      </p>
+    </div>
+
+    <div class="tiers-grid">
+      <div class="tier">
+        <div class="tier-num">01</div>
+        <div class="tier-name"><span data-ro>Câștiguri Rapide</span><span data-en>Quick Wins</span></div>
+        <div class="tier-tagline"><span data-ro>Zile–săptămâni · efort scăzut</span><span data-en>Days–weeks · low effort</span></div>
+        <p class="tier-body"><span data-ro>Automatizări pe o singură sarcină, cu impact imediat. Fără perturbarea sistemelor existente.</span><span data-en>Single-task automation with immediate impact. No disruption to existing systems.</span></p>
+        <div class="tier-meta">
+          <span class="tier-tag">e-Factura</span>
+          <span class="tier-tag">WhatsApp</span>
+          <span class="tier-tag">CRM</span>
+        </div>
+      </div>
+
+      <div class="tier">
+        <div class="tier-num">02</div>
+        <div class="tier-name"><span data-ro>Fluxuri de Proces</span><span data-en>Process Flows</span></div>
+        <div class="tier-tagline"><span data-ro>Săptămâni · complexitate medie</span><span data-en>Weeks · medium complexity</span></div>
+        <p class="tier-body"><span data-ro>Fluxuri multi-pas care conectează instrumentele dumneavoastră capăt la capăt. Eficiență care se compune.</span><span data-en>Multi-step workflows that connect your tools end to end. Efficiency that compounds.</span></p>
+        <div class="tier-meta">
+          <span class="tier-tag">SmartBill</span>
+          <span class="tier-tag">HubSpot</span>
+          <span class="tier-tag">Shopify</span>
+        </div>
+      </div>
+
+      <div class="tier featured">
+        <div class="tier-num">03</div>
+        <div class="tier-name"><span data-ro>Inteligență AI</span><span data-en>AI Intelligence</span></div>
+        <div class="tier-tagline"><span data-ro>Săptămâni–luni · impact foarte mare</span><span data-en>Weeks–months · very high impact</span></div>
+        <p class="tier-body"><span data-ro>AI care citește, înțelege și răspunde — chatboți RAG, inteligență documentară, interogări în limbaj natural.</span><span data-en>AI that reads, understands, and responds — RAG chatbots, document intelligence, natural language queries.</span></p>
+        <div class="tier-meta">
+          <span class="tier-tag">RAG</span>
+          <span class="tier-tag">GPT-4</span>
+          <span class="tier-tag">pgvector</span>
+        </div>
+      </div>
+
+      <div class="tier">
+        <div class="tier-num">04</div>
+        <div class="tier-name"><span data-ro>AI Avansat</span><span data-en>Advanced AI</span></div>
+        <div class="tier-tagline"><span data-ro>Luni · impact transformator</span><span data-en>Months · transformative</span></div>
+        <p class="tier-body"><span data-ro>Modele predictive, viziune computerizată, sisteme AI personalizate pentru provocări complexe.</span><span data-en>Predictive models, computer vision, custom AI systems built for complex challenges.</span></p>
+        <div class="tier-meta">
+          <span class="tier-tag">ML</span>
+          <span class="tier-tag">CV</span>
+          <span class="tier-tag">Predictive</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed solutions -->
+    <div class="solutions-detail">
+      <div class="section-header" style="max-width: 600px;">
+        <div class="section-eyebrow"><span data-ro>Exemple concrete</span><span data-en>Concrete examples</span></div>
+        <h3 class="section-title" style="font-size: clamp(1.5rem, 3vw, 2rem);">
+          <span data-ro>Ce putem livra <span class="serif">săptămâna viitoare.</span></span>
+          <span data-en>What we can ship <span class="serif">next week.</span></span>
+        </h3>
+      </div>
+
+      <div class="sd-grid">
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>Finanțe</span><span data-en>Finance</span></div>
+          <div class="sd-title"><span data-ro>Automatizarea facturilor & e-Factura</span><span data-en>Invoice & e-Factura automation</span></div>
+          <div class="sd-desc"><span data-ro>AI citește facturile (PDF, XML, e-Factura UBL 2.1), validează totalurile și TVA-ul, direcționează datele în SmartBill, Oblio sau Saga.</span><span data-en>AI reads invoices (PDF, XML, e-Factura UBL 2.1), validates totals and VAT, routes data into SmartBill, Oblio or Saga.</span></div>
+          <div class="sd-tags"><span class="sd-tag">SmartBill</span><span class="sd-tag">ANAF SPV</span><span class="sd-tag">PDF/XML</span></div>
+        </div>
+
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>Finanțe</span><span data-en>Finance</span></div>
+          <div class="sd-title"><span data-ro>Remindere automate de plată</span><span data-en>Automated payment reminders</span></div>
+          <div class="sd-desc"><span data-ro>Preia facturile restante zilnic, trimite remindere personalizate la 3, 7 și 14 zile, escaladează tonul automat.</span><span data-en>Pulls overdue invoices daily, sends personalised reminders at 3, 7, and 14 days, escalates tone automatically.</span></div>
+          <div class="sd-tags"><span class="sd-tag">Email</span><span class="sd-tag">WhatsApp</span><span class="sd-tag">Scheduled</span></div>
+        </div>
+
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>AI / RAG</span><span data-en>AI / RAG</span></div>
+          <div class="sd-title"><span data-ro>Chatboți AI pe baza de cunoștințe</span><span data-en>AI knowledge chatbots</span></div>
+          <div class="sd-desc"><span data-ro>AI antrenat pe propriile documente — răspunde cu surse verificabile, fără halucinații. WhatsApp, Slack, web.</span><span data-en>AI trained on your own documents — answers with verifiable sources, no hallucinations. WhatsApp, Slack, web.</span></div>
+          <div class="sd-tags"><span class="sd-tag">RAG</span><span class="sd-tag">pgvector</span><span class="sd-tag">WhatsApp</span></div>
+        </div>
+
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>Operațiuni</span><span data-en>Operations</span></div>
+          <div class="sd-title"><span data-ro>Procesarea comenzilor capăt la capăt</span><span data-en>End-to-end order processing</span></div>
+          <div class="sd-desc"><span data-ro>Comenzi din WhatsApp, email sau web validate față de stoc, confirmate clientului în mai puțin de 3 minute.</span><span data-en>Orders from WhatsApp, email, or web validated against stock, confirmed to client in under 3 minutes.</span></div>
+          <div class="sd-tags"><span class="sd-tag">WhatsApp API</span><span class="sd-tag">Inventory</span><span class="sd-tag">Email</span></div>
+        </div>
+
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>Date</span><span data-en>Data</span></div>
+          <div class="sd-title"><span data-ro>Interogări în limbaj natural</span><span data-en>Natural language queries</span></div>
+          <div class="sd-desc"><span data-ro>Puneți întrebări în română sau engleză — AI interogează bazele de date. Fără SQL, fără analist, doar citire.</span><span data-en>Ask any business question in Romanian or English — AI queries your databases. No SQL, no analyst, read-only.</span></div>
+          <div class="sd-tags"><span class="sd-tag">PostgreSQL</span><span class="sd-tag">NLP</span><span class="sd-tag">Read-only</span></div>
+        </div>
+
+        <div class="sd-card">
+          <div class="sd-cat"><span data-ro>Legal</span><span data-en>Legal</span></div>
+          <div class="sd-title"><span data-ro>AI Legal & Compliance</span><span data-en>Legal & compliance AI</span></div>
+          <div class="sd-desc"><span data-ro>AI antrenat pe legislație, contracte și precedente. Monitorizează modificările legislative ANAF, GDPR, dreptul muncii.</span><span data-en>AI trained on legislation, contracts, and precedents. Monitors ANAF, GDPR, labour law changes automatically.</span></div>
+          <div class="sd-tags"><span class="sd-tag">RAG</span><span class="sd-tag">GDPR</span><span class="sd-tag">ANAF</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── CASE STUDY ─────────── -->
+<section class="case">
+  <div class="container case-inner">
+    <div>
+      <div class="case-eyebrow"><span data-ro>Studiu de caz · În producție</span><span data-en>Case study · Live</span></div>
+      <h2 class="case-title">
+        <span data-ro>Chatbot WhatsApp RAG pentru <span class="serif">Partner Corporation.</span></span>
+        <span data-en>WhatsApp RAG chatbot for <span class="serif">Partner Corporation.</span></span>
+      </h2>
+      <p class="case-body">
+        <span data-ro>Pentru Partner Corporation — companie românească de case de marcat — am construit un asistent WhatsApp bazat pe ~50 de documente tehnice, acoperind imprimantele fiscale Partner 200, 300 și 600. Tehnicienii primesc răspunsuri instant, cu surse citate, direct pe teren.</span>
+        <span data-en>For Partner Corporation — a Romanian cash register company — we built a WhatsApp assistant grounded in ~50 technical documents covering Partner 200, 300, and 600 fiscal printers. Technicians get instant answers with cited sources, directly in the field.</span>
+      </p>
+      <div class="case-stack">
+        <span>n8n</span>
+        <span>Supabase + pgvector</span>
+        <span>WhatsApp API</span>
+        <span>GPT-4</span>
+      </div>
+    </div>
+
+    <div class="case-visual">
+      <div class="chat-header">
+        <span class="pulse-dot"></span>
+        <span>Partner Assistant · WhatsApp</span>
+      </div>
+      <div class="chat-msg chat-user">
+        <span data-ro>Cum resetez Partner 300 după eroare 47?</span>
+        <span data-en>How do I reset Partner 300 after error 47?</span>
+      </div>
+      <div class="chat-msg chat-bot">
+        <span data-ro>Eroarea 47 indică o problemă cu memoria fiscală. Pași: 1) Opriți casa, 2) Țineți apăsat butonul MOD timp de 5 secunde, 3) Introduceți codul de service 9999...</span>
+        <span data-en>Error 47 indicates a fiscal memory issue. Steps: 1) Power off, 2) Hold MOD button for 5 seconds, 3) Enter service code 9999...</span>
+        <div class="chat-bot-source">
+          <span data-ro>Sursă: Manual Partner 300, secțiunea 8.4</span>
+          <span data-en>Source: Partner 300 Manual, section 8.4</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── HOW WE WORK ─────────── -->
+<section id="cum-lucram">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">03 · <span data-ro>Cum lucrăm</span><span data-en>How we work</span></div>
+      <h2 class="section-title">
+        <span data-ro>Două moduri de colaborare — <span class="serif">ambele cu risc redus.</span></span>
+        <span data-en>Two ways to engage — <span class="serif">both low risk.</span></span>
+      </h2>
+      <p class="section-sub">
+        <span data-ro>Ambele modele încep cu un apel de descoperire gratuit și o demonstrație funcțională gratuită — vedeți valoare reală înainte de orice angajament.</span>
+        <span data-en>Both models start with a free discovery call and a free working demo — so you see real value before any commitment.</span>
+      </p>
+    </div>
+
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-label"><span data-ro>Modelul A</span><span data-en>Model A</span></div>
+        <div class="how-title"><span data-ro>Proiect Specific</span><span data-en>Project Engagement</span></div>
+        <div class="how-sub"><span data-ro>Livrare delimitată. Estimare fixă. Predare clară.</span><span data-en>Scoped delivery. Fixed estimate. Clear handover.</span></div>
+
+        <div class="how-step">
+          <div class="how-step-num">01</div>
+          <div class="how-step-content">
+            <div class="how-step-meta">60 min · <span data-ro>gratuit</span><span data-en>free</span></div>
+            <div class="how-step-title"><span data-ro>Descoperire</span><span data-en>Discovery</span></div>
+            <div class="how-step-desc"><span data-ro>Cartografiem procesul și vă spunem sincer dacă automatizarea are sens.</span><span data-en>We map your process and tell you honestly if automation makes sense.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">02</div>
+          <div class="how-step-content">
+            <div class="how-step-meta"><span data-ro>Înainte de angajament · gratuit</span><span data-en>Before commitment · free</span></div>
+            <div class="how-step-title"><span data-ro>Demo / MVP</span><span data-en>Demo / MVP</span></div>
+            <div class="how-step-desc"><span data-ro>Construim un prototip funcțional al cazului dumneavoastră specific. Îl vedeți rulând.</span><span data-en>We build a working prototype of your specific use case. You see it running.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">03</div>
+          <div class="how-step-content">
+            <div class="how-step-meta">1–8 <span data-ro>săptămâni</span><span data-en>weeks</span></div>
+            <div class="how-step-title"><span data-ro>Construire & testare</span><span data-en>Build & test</span></div>
+            <div class="how-step-desc"><span data-ro>Progres săptămânal vizibil. Nimic nu intră în producție fără aprobarea dvs.</span><span data-en>Weekly progress visible. Nothing goes live without your sign-off.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">04</div>
+          <div class="how-step-content">
+            <div class="how-step-meta">1–2 <span data-ro>zile</span><span data-en>days</span></div>
+            <div class="how-step-title"><span data-ro>Predare & instruire</span><span data-en>Handover & training</span></div>
+            <div class="how-step-desc"><span data-ro>Documentație completă. Echipa dvs. gestionează zilnic, fără dependență de noi.</span><span data-en>Full documentation. Your team runs day-to-day, no dependency on us.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="how-card dark">
+        <div class="how-label"><span data-ro>Modelul B</span><span data-en>Model B</span></div>
+        <div class="how-title"><span data-ro>Parteneriat de Automatizare</span><span data-en>Automation Partnership</span></div>
+        <div class="how-sub"><span data-ro>Continuu. Îmbunătățire constantă. Strategic.</span><span data-en>Ongoing. Continuous improvement. Strategic.</span></div>
+
+        <div class="how-step">
+          <div class="how-step-num">01</div>
+          <div class="how-step-content">
+            <div class="how-step-title"><span data-ro>Audit de proces & foaie de parcurs</span><span data-en>Process audit & roadmap</span></div>
+            <div class="how-step-desc"><span data-ro>Cartografiem operațiunile complete și prioritizăm automatizările după randament.</span><span data-en>We map full operations and prioritise automations by return.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">02</div>
+          <div class="how-step-content">
+            <div class="how-step-title"><span data-ro>Construire & implementare continuă</span><span data-en>Rolling build & deployment</span></div>
+            <div class="how-step-desc"><span data-ro>Automatizări noi livrate lunar. Fiecare revizuită și aprobată înainte de producție.</span><span data-en>New automations delivered monthly. Each one signed off before going live.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">03</div>
+          <div class="how-step-content">
+            <div class="how-step-title"><span data-ro>Revizuire & optimizare lunară</span><span data-en>Monthly review & optimisation</span></div>
+            <div class="how-step-desc"><span data-ro>Revizuim performanța împreună, actualizăm fluxurile pe măsură ce afacerea se schimbă.</span><span data-en>We review performance together, update flows as the business evolves.</span></div>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">04</div>
+          <div class="how-step-content">
+            <div class="how-step-title"><span data-ro>Consultanță strategică</span><span data-en>Strategic advisory</span></div>
+            <div class="how-step-desc"><span data-ro>Acționăm ca echipa dvs. internă de AI și automatizare — oferind consiliere pe măsură ce tehnologia evoluează.</span><span data-en>We act as your internal AI and automation team — advising as the tech evolves.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── WHY US ─────────── -->
+<section class="why">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">04 · <span data-ro>De ce Adaptive</span><span data-en>Why Adaptive</span></div>
+      <h2 class="section-title">
+        <span data-ro>Locali. Experimentați. <span class="serif">Corecți.</span></span>
+        <span data-en>Local. Experienced. <span class="serif">Honest.</span></span>
+      </h2>
+    </div>
+
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="why-mark">RO</div>
+        <div class="why-title"><span data-ro>Construit pentru România</span><span data-en>Built for Romania</span></div>
+        <div class="why-desc"><span data-ro>Înțelegem ANAF, e-Factura, SPV. Construim nativ pentru mediul de reglementare local — nicio consultanță străină care învață pe timpul dvs.</span><span data-en>We understand ANAF, e-Factura, SPV. We build natively for the local regulatory environment — no foreign consultancy learning on your time.</span></div>
+      </div>
+
+      <div class="why-card">
+        <div class="why-mark">∞</div>
+        <div class="why-title"><span data-ro>Experiență la orice scară</span><span data-en>Experience at every scale</span></div>
+        <div class="why-desc"><span data-ro>Venim din multinaționale și administrăm noi înșine IMM-uri. Am construit AI și automatizare la ambele capete — știm ce funcționează la fiecare scară.</span><span data-en>We come from multinationals and run SMEs ourselves. We've built AI and automation at both ends — and we know what works at each scale.</span></div>
+      </div>
+
+      <div class="why-card">
+        <div class="why-mark">⌗</div>
+        <div class="why-title"><span data-ro>Dețineți tot</span><span data-en>You own everything</span></div>
+        <div class="why-desc"><span data-ro>Platforme deschise, ușor de întreținut. Dețineți fluxurile de lucru. Complet documentate — nu depindeți niciodată exclusiv de noi.</span><span data-en>Open, maintainable platforms. You own the workflows. Fully documented so you're never solely dependent on us.</span></div>
+      </div>
+
+      <div class="why-card accent">
+        <div class="why-mark">✓</div>
+        <div class="why-title"><span data-ro>Sinceritate înainte de orice</span><span data-en>Honest before anything</span></div>
+        <div class="why-desc"><span data-ro>Dacă nu se va amortiza singur, vă vom spune. Preferăm să renunțăm la un proiect decât să livrăm ceva care nu face diferența.</span><span data-en>If it won't pay for itself, we'll tell you. We'd rather pass on a project than deliver something that doesn't move the needle.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── ABOUT / TEAM ─────────── -->
+<section id="despre">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-eyebrow">05 · <span data-ro>Despre noi</span><span data-en>About us</span></div>
+      <h2 class="section-title">
+        <span data-ro>Trei oameni care au construit asta <span class="serif">la scară mare</span> și o construiesc acum pentru dumneavoastră.</span>
+        <span data-en>Three people who've built this <span class="serif">at scale</span> and are now building it for you.</span>
+      </h2>
+      <p class="section-sub">
+        <span data-ro>Echipa noastră combină expertiza tehnică, experiența operațională și gândirea strategică — fundamentele pentru livrarea de AI și automatizare care funcționează cu adevărat pentru IMM-urile din România.</span>
+        <span data-en>Our team combines technical depth, operational experience, and strategic thinking — the foundations for delivering AI and automation that actually works for Romanian SMEs.</span>
+      </p>
+    </div>
+
+    <div class="team-grid">
+      <div class="team-card">
+        <div class="team-photo">CR</div>
+        <div class="team-name">Catalin [Nume]</div>
+        <div class="team-role"><span data-ro>Strategie & Comercial</span><span data-en>Strategy & Commercial</span></div>
+        <div class="team-bio">
+          <span data-ro>[Înlocuiți acest text cu biografia dvs.] Conduce relațiile cu clienții, scoping-ul proiectelor și dezvoltarea afacerii. Combină înțelegerea tehnică a arhitecturilor RAG și n8n cu experiență strategică din mediul corporate.</span>
+          <span data-en>[Replace with your bio.] Leads client relationships, project scoping, and business development. Combines technical understanding of RAG and n8n architectures with strategic experience from the corporate world.</span>
+        </div>
+      </div>
+
+      <div class="team-card">
+        <div class="team-photo">P2</div>
+        <div class="team-name">[Nume Partener 2]</div>
+        <div class="team-role"><span data-ro>Lead Tehnic</span><span data-en>Technical Lead</span></div>
+        <div class="team-bio">
+          <span data-ro>[Înlocuiți cu biografie.] Arhitectul tehnic al echipei. Construiește sistemele de bază — fluxuri n8n, baze vectoriale Supabase, integrări API — care fac soluțiile să ruleze fiabil în producție.</span>
+          <span data-en>[Replace with bio.] The team's technical architect. Builds the core systems — n8n flows, Supabase vector stores, API integrations — that make solutions run reliably in production.</span>
+        </div>
+      </div>
+
+      <div class="team-card">
+        <div class="team-photo">P3</div>
+        <div class="team-name">[Nume Partener 3]</div>
+        <div class="team-role"><span data-ro>Lead Hibrid</span><span data-en>Hybrid Lead</span></div>
+        <div class="team-bio">
+          <span data-ro>[Înlocuiți cu biografie.] Punctul de legătură între strategie și execuție. Traduce nevoile clienților în soluții concrete și asigură că ceea ce livrăm rezolvă problema reală, nu doar cea declarată.</span>
+          <span data-en>[Replace with bio.] The bridge between strategy and execution. Translates client needs into concrete solutions and ensures we ship what solves the real problem, not just the stated one.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── CONTACT ─────────── -->
+<section id="contact" class="contact">
+  <div class="container">
+    <div class="contact-inner">
+      <div>
+        <div class="section-eyebrow" style="color: var(--amber);">06 · <span data-ro>Contact</span><span data-en>Contact</span></div>
+        <h2 class="section-title">
+          <span data-ro>Începeți cu o consultație <span class="serif">gratuită</span> de 60 de minute.</span>
+          <span data-en>Start with a <span class="serif">free</span> 60-minute consultation.</span>
+        </h2>
+        <p class="contact-sub">
+          <span data-ro>Fără prezentare comercială. Doar o analiză sinceră a modului în care AI și automatizarea vă pot economisi timp și bani — și dacă merită urmărit.</span>
+          <span data-en>No sales pitch. Just an honest look at where AI and automation can save you time and money — and whether it's worth pursuing.</span>
+        </p>
+
+        <div class="contact-meta">
+          <div class="contact-meta-item">
+            <span class="contact-meta-label">Email</span>
+            <span class="contact-meta-value"><a href="/cdn-cgi/l/email-protection#d0b4b1a4b1a3a5a0b5a2b8b5a2bfb5a3a4b5b1bd90b7bdb1b9bcfeb3bfbd"><span class="__cf_email__" data-cfemail="593d382d382a2c293c2b313c2b363c2a2d3c3834193e34383035773a3634">[email&#160;protected]</span></a></span>
+          </div>
+          <div class="contact-meta-item">
+            <span class="contact-meta-label"><span data-ro>Locație</span><span data-en>Location</span></span>
+            <span class="contact-meta-value">București, România</span>
+          </div>
+          <div class="contact-meta-item">
+            <span class="contact-meta-label"><span data-ro>Timp de răspuns</span><span data-en>Response time</span></span>
+            <span class="contact-meta-value"><span data-ro>&lt; 24 ore lucrătoare</span><span data-en>&lt; 24 business hours</span></span>
+          </div>
+        </div>
+      </div>
+
+      <form class="contact-form" id="contactForm" onsubmit="submitForm(event)">
+        <div class="form-row">
+          <label for="name"><span data-ro>Nume</span><span data-en>Name</span></label>
+          <input type="text" id="name" name="name" required />
+        </div>
+        <div class="form-row">
+          <label for="company"><span data-ro>Companie</span><span data-en>Company</span></label>
+          <input type="text" id="company" name="company" />
+        </div>
+        <div class="form-row">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required />
+        </div>
+        <div class="form-row">
+          <label for="interest"><span data-ro>Mă interesează</span><span data-en>I'm interested in</span></label>
+          <select id="interest" name="interest">
+            <option data-ro="Câștiguri Rapide" data-en="Quick Wins">Câștiguri Rapide / Quick Wins</option>
+            <option data-ro="Fluxuri de Proces" data-en="Process Flows">Fluxuri de Proces / Process Flows</option>
+            <option data-ro="Chatbot AI / RAG" data-en="AI / RAG chatbot">Chatbot AI / RAG</option>
+            <option data-ro="AI Avansat" data-en="Advanced AI">AI Avansat / Advanced AI</option>
+            <option data-ro="Nu sunt sigur" data-en="Not sure yet">Nu sunt sigur / Not sure yet</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="message"><span data-ro>Mesaj</span><span data-en>Message</span></label>
+          <textarea id="message" name="message" placeholder=""></textarea>
+        </div>
+        <button type="submit" class="form-submit">
+          <span data-ro>Trimite mesajul</span>
+          <span data-en>Send message</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── FOOTER ─────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true" style="flex:none;"><path fill="var(--amber)" d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
+        <span><strong style="color: var(--cream);">Adaptive Technologies S.R.L.</strong> · București, România · © <span id="year"></span></span>
+      </div>
+      <div>
+        <a href="/cdn-cgi/l/email-protection#d7b3b6a3b6a4a2a7b2a5bfb2a5b8b2a4a3b2b6ba97b0bab6bebbf9b4b8ba"><span class="__cf_email__" data-cfemail="8febeefbeefcfaffeafde7eafde0eafcfbeaeee2cfe8e2eee6e3a1ece0e2">[email&#160;protected]</span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ─────────── CHATBOT SLOT (placeholder for future RAG widget) ─────────── -->
+<button class="chatbot-slot" onclick="alert(this.dataset.tooltip)" data-tooltip="Chatbot RAG coming soon — built by Adaptive Technologies">
+  <span data-ro>Întreabă AI-ul nostru</span>
+  <span data-en>Ask our AI</span>
+</button>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  // Language toggle
+  function setLang(lang) {
+    document.documentElement.lang = lang;
+    document.getElementById('lang-ro').classList.toggle('active', lang === 'ro');
+    document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+    try { localStorage.setItem('adaptive-lang', lang); } catch (e) {}
+
+    // Update select option labels
+    document.querySelectorAll('#interest option').forEach(opt => {
+      const ro = opt.dataset.ro, en = opt.dataset.en;
+      if (ro && en) opt.textContent = lang === 'ro' ? ro : en;
+    });
+
+    // Update placeholder text
+    const msg = document.getElementById('message');
+    if (msg) msg.placeholder = lang === 'ro'
+      ? 'Spuneți-ne pe scurt despre afacere și ce ați dori să automatizați...'
+      : 'Tell us briefly about your business and what you\'d like to automate...';
+  }
+
+  // Restore lang on load
+  try {
+    const saved = localStorage.getItem('adaptive-lang');
+    if (saved === 'en') setLang('en');
+    else setLang('ro');
+  } catch (e) { setLang('ro'); }
+
+  // Year
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Form handler — for now, opens mailto. Replace with Formspree/Netlify Forms in production.
+  function submitForm(e) {
+    e.preventDefault();
+    const f = e.target;
+    const name = f.name.value;
+    const company = f.company.value;
+    const email = f.email.value;
+    const interest = f.interest.options[f.interest.selectedIndex].text;
+    const message = f.message.value;
+    const lang = document.documentElement.lang;
+
+    const subject = encodeURIComponent(`[Adaptive Website] ${name}${company ? ' · ' + company : ''}`);
+    const body = encodeURIComponent(
+      `Nume / Name: ${name}\nCompanie / Company: ${company}\nEmail: ${email}\nInteres / Interest: ${interest}\n\n${message}`
+    );
+
+    window.location.href = `mailto:datasuperheroesteam@gmail.com?subject=${subject}&body=${body}`;
+  }
+
+  // Reveal on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.problem-card, .tier, .sd-card, .how-card, .why-card, .team-card').forEach(el => {
+    el.classList.add('reveal');
+    observer.observe(el);
+  });
+
+  // Close mobile menu when clicking link
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.addEventListener('click', () => document.getElementById('navLinks').classList.remove('open'));
+  });
+</script>
+
+</body>
+</html>
