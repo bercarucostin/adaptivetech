@@ -1,0 +1,31 @@
+{$DEMO_DOMAIN} {
+	encode gzip
+
+	# The demo API. Same origin as the site, which is what lets the
+	# session ride in an httpOnly SameSite=Strict cookie.
+	handle /api/demo/* {
+		uri strip_prefix /api/demo
+		rewrite * /webhook/demo{uri}
+		reverse_proxy n8n:5678
+	}
+
+	handle {
+		root * /srv/site
+		try_files {path} {path}/ {path}.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+	}
+}
+
+# The n8n editor on its own hostname, never the public one.
+{$N8N_HOST} {
+	@notallowed not remote_ip {$ADMIN_IPS}
+	respond @notallowed 403
+	reverse_proxy n8n:5678
+}
