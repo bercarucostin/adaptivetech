@@ -1,3 +1,23 @@
+# Cloudflare proxies every request to this origin, so the TCP peer Caddy
+# sees is always a Cloudflare edge IP, never the visitor. `client_ip` (used
+# below, instead of `remote_ip`) reads the real client from the
+# Cloudflare-set forwarding header, but only trusts that header from peers
+# listed here -- so it must be Cloudflare's ranges, not the visitor's.
+#
+# REPLACE THE PLACEHOLDERS BELOW before deploying. Do not hard-code a
+# remembered or invented list: Cloudflare's ranges change, and a stale list
+# either locks out the admin or (worse) trusts a header from an IP that is
+# no longer Cloudflare's. Fetch the CURRENT lists at deploy time from:
+#   IPv4: https://www.cloudflare.com/ips-v4
+#   IPv6: https://www.cloudflare.com/ips-v6
+# See deploy/README.md, "Cloudflare + the ufw origin lock", for the exact
+# step that fills these in.
+{
+	servers {
+		trusted_proxies static REPLACE_WITH_CURRENT_CLOUDFLARE_IPV4_RANGES REPLACE_WITH_CURRENT_CLOUDFLARE_IPV6_RANGES
+	}
+}
+
 {$DEMO_DOMAIN} {
 	encode gzip
 
@@ -25,7 +45,20 @@
 
 # The n8n editor on its own hostname, never the public one.
 {$N8N_HOST} {
-	@notallowed not remote_ip {$ADMIN_IPS}
+	# client_ip, not remote_ip: this host is also proxied through Cloudflare,
+	# so the direct peer is always a Cloudflare edge IP. remote_ip would
+	# match against ADMIN_IPS and never once match the real admin, locking
+	# the editor out entirely from behind the proxy. client_ip resolves the
+	# real client via the trusted_proxies block above.
+	@notallowed not client_ip {$ADMIN_IPS}
 	respond @notallowed 403
+
+	# Second factor behind the IP allowlist. Generate the hash on the box
+	# with `caddy hash-password` and put the username/hash in .env as
+	# N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH -- see deploy/README.md.
+	basic_auth {
+		{$N8N_ADMIN_USER} {$N8N_ADMIN_PASSWORD_HASH}
+	}
+
 	reverse_proxy n8n:5678
 }

@@ -101,9 +101,6 @@ create index demo_documents_session on public.demo_documents (session_id);
 create index demo_documents_fts_gin
   on public.demo_documents using gin (fts);
 
-create index demo_documents_metadata_gin
-  on public.demo_documents using gin (metadata jsonb_path_ops);
-
 -- ---------------------------------------------------------------------
 -- Chat. SET NULL, not CASCADE: these questions are product signal and
 -- must survive the 2h session purge, detached from the session.
@@ -145,3 +142,32 @@ create table public.demo_suppressions (
   email      citext primary key,
   created_at timestamptz not null default now()
 );
+
+-- ---------------------------------------------------------------------
+-- Row Level Security.
+--
+-- Supabase grants the `anon` role access to public tables by default and
+-- PostgREST exposes them, so a table created here with RLS off is readable
+-- AND writable by the project's anon key -- a key meant to be published.
+--
+-- demo_hybrid_search scopes retrieval correctly, but it is one door.
+-- PostgREST is another, and the design never mentioned it.
+--
+-- No policies are defined deliberately: RLS with zero policies denies every
+-- role except the table owner and roles with BYPASSRLS. The demo's workflows
+-- connect as the service role, which bypasses RLS; nothing else gets in.
+-- ---------------------------------------------------------------------
+alter table public.demo_email_codes  enable row level security;
+alter table public.demo_sessions     enable row level security;
+alter table public.demo_uploads      enable row level security;
+alter table public.demo_documents    enable row level security;
+alter table public.demo_messages     enable row level security;
+alter table public.demo_leads        enable row level security;
+alter table public.demo_suppressions enable row level security;
+
+-- Belt and braces: revoke the default grants outright, so the tables are not
+-- reachable even if a future policy is added carelessly.
+revoke all on public.demo_email_codes, public.demo_sessions, public.demo_uploads,
+              public.demo_documents, public.demo_messages, public.demo_leads,
+              public.demo_suppressions
+  from anon, authenticated;

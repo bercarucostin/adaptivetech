@@ -33,6 +33,12 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
   demo documents, chunks, embeddings, leads or messages live — that data
   lives in a dedicated Supabase project, isolated from both this box and
   from the WhatsApp bot's own Supabase project.
+- `db/demo_schema.sql` enables Row Level Security on all seven demo tables
+  with zero policies, which denies every role except the table owner and
+  roles with `BYPASSRLS` — including the `anon` key Supabase exposes to
+  PostgREST by default. The demo's n8n workflows must connect to Supabase
+  as the **service role** (or another dedicated owner-level role), never
+  the anon key, or every query against these tables will fail closed.
 
 ## Files
 
@@ -98,6 +104,7 @@ and filled line would be ambiguous about which one Compose reads last).
 | `DEMO_CODE_PEPPER` | Peppers the 6-digit email-verification code before it's hashed. | `openssl rand -base64 48` |
 | `N8N_DB_PASSWORD` | Postgres password for n8n's own database. | `openssl rand -base64 48` |
 | `TURNSTILE_SECRET` | Server-side secret to verify Turnstile tokens. | Cloudflare Turnstile dashboard (paired with the site key — see Turnstile, below). Not locally generated. |
+| `N8N_ADMIN_PASSWORD_HASH` | Basic-auth password hash Caddy checks before proxying to the n8n editor. | `caddy hash-password` — see "Cloudflare + the n8n editor", below. |
 
 `DEMO_DOMAIN`, `N8N_HOST` and `ADMIN_IPS` in `.env.example` are not secrets;
 they're deployment-specific values (the demo's public hostname, the n8n
@@ -140,7 +147,7 @@ return [{ json: { ok: crypto.createHmac('sha256', 'k').update('x').digest('hex')
 Expected: an 8-character hex string. A failure here means the env var did
 not take, and no amount of workflow debugging downstream will fix it.
 
-## Cloudflare + the `ufw` origin lock
+## Cloudflare + the n8n editor, the `ufw` origin lock, and `trusted_proxies`
 
 Cloudflare's proxy is not, by itself, a security boundary: the origin's
 real IP is discoverable from historical DNS records (any A record the
@@ -151,10 +158,42 @@ finds that IP bypasses Cloudflare, Turnstile, and every edge rule entirely.
 **The firewall rule is what makes the proxy real; without it the proxy
 protects nothing.**
 
-1. DNS: point `DEMO_DOMAIN` at Cloudflare with the proxy (orange cloud) on.
+Being behind Cloudflare also means Caddy's `remote_ip` matcher — used by
+the n8n editor's IP allowlist — never sees the real visitor, only
+Cloudflare's edge IP. The Caddyfile uses `client_ip` instead, which trusts
+Cloudflare's forwarding header, but only from peers listed in
+`trusted_proxies`. That step below is what makes the editor's `ADMIN_IPS`
+check work at all once Cloudflare is in front of it.
+
+1. DNS: point `DEMO_DOMAIN` and `N8N_HOST` at Cloudflare with the proxy
+   (orange cloud) on.
 2. SSL/TLS mode: **Full (strict)** (Caddy auto-provisions a real cert, so
    Cloudflare can validate the origin instead of trusting an unverified one).
-3. Lock the origin to Cloudflare's published IP ranges plus your own admin
+3. **Fill in `trusted_proxies` in `deploy/Caddyfile`.** It ships with
+   placeholders (`REPLACE_WITH_CURRENT_CLOUDFLARE_IPV4_RANGES` /
+   `..._IPV6_RANGES`) instead of a hard-coded list on purpose — Cloudflare's
+   ranges change, and a stale list is worse than an obviously-broken
+   placeholder. Fetch the current lists and paste them in, space-separated,
+   in place of each placeholder:
+
+```bash
+curl -s https://www.cloudflare.com/ips-v4
+curl -s https://www.cloudflare.com/ips-v6
+```
+
+   Re-run this and update the Caddyfile after any Cloudflare network
+   change, and periodically re-diff against those two URLs.
+4. **Set basic auth on the n8n editor.** `ADMIN_IPS` is one factor; the
+   Caddyfile also expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH` in
+   `.env`. Generate the hash on the box (needs the `caddy` binary — run it
+   inside the `caddy` container if you don't have one on the host):
+
+```bash
+docker compose run --rm --no-deps caddy caddy hash-password
+```
+
+   Paste the result into `N8N_ADMIN_PASSWORD_HASH` in `.env`.
+5. Lock the origin to Cloudflare's published IP ranges plus your own admin
    IP for SSH, on the box itself:
 
 ```bash
@@ -164,16 +203,21 @@ done
 for ip in $(curl -s https://www.cloudflare.com/ips-v6); do
   ufw allow proto tcp from "$ip" to any port 80,443
 done
-ufw allow 22/tcp
+ufw allow proto tcp from <YOUR_ADMIN_IP> to any port 22
 ufw --force enable
 ufw status numbered
 ```
 
-Cloudflare's IP ranges change occasionally — re-run this after any
+   Replace `<YOUR_ADMIN_IP>` with the same address(es) you put in
+   `ADMIN_IPS`. `ufw allow 22/tcp` (no `from`) opens SSH to the entire
+   internet, not just your own admin IP — the `from` form above is what
+   actually restricts SSH to your admin IP, as the paragraph above promises.
+
+Cloudflare's IP ranges change occasionally — re-run step 3 after any
 Cloudflare network change, and periodically re-diff against
 `https://www.cloudflare.com/ips-v4` / `-v6`.
 
-4. **Verify the lock actually blocks a direct connection**, from a machine
+6. **Verify the lock actually blocks a direct connection**, from a machine
    that is neither Cloudflare nor in `ADMIN_IPS`:
 
 ```bash

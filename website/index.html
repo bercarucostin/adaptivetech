@@ -14,6 +14,9 @@
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="ro_RO" />
 <meta property="og:locale:alternate" content="en_US" />
+<meta property="og:image" content="https://adaptivetech.ro/assets/social/banner-4500x1500.png" />
+<meta property="og:url" content="https://adaptivetech.ro/" />
+<link rel="canonical" href="https://adaptivetech.ro/" />
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -27,7 +30,10 @@
      browser that matters; apple-touch-icon points at the real asset. Export proper
      32px and 192px PNGs from assets/svg/A-mark-gold.svg if you want the fallbacks. -->
 <link rel="apple-touch-icon" sizes="180x180" href="assets/png/app-icon-1024.png" />
-<link rel="manifest" href="site.webmanifest" />
+<!-- site.webmanifest was linked but never existed in the repository -- a
+     404 on every page load, same class of issue as the two favicons above.
+     Nothing else references a manifest, so the link is removed rather than
+     the file added. -->
 <meta name="theme-color" content="#0C3054" />
 
 <style>
@@ -53,7 +59,10 @@
     --ink-soft: #16406B;    /* 8.42:1 on Sand */
     --ink-mute: #506883;    /* derived: 4.57:1 on Sand. Steel fails at 2.39. */
     --line: #D9D9D7;        /* derived: Sand + 15% Steel */
-    --line-2: #CBCECF;      /* derived: Sand + 30% Steel */
+    --line-2: #949494;      /* derived: darkened from Sand + 30% Steel (#CBCECF,
+                               1.58:1 on white) to clear the 3:1 WCAG 1.4.11
+                               non-text floor now that it's on form input
+                               borders -- 3.03:1 on white. */
     --white: #FFFFFF;
 
     /* Two typefaces: a geometric sans for everything people read, and a
@@ -1196,36 +1205,6 @@
   .footer-inner a { color: var(--amber); }
   .footer-inner a:hover { text-decoration: underline; }
 
-  /* ─────────── CHATBOT EMBED PLACEHOLDER ─────────── */
-  .chatbot-slot {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    z-index: 90;
-    background: var(--amber);
-    color: var(--navy);
-    padding: 0.85rem 1.2rem;
-    border-radius: 999px;
-    font-weight: 500;
-    font-size: 0.9rem;
-    box-shadow: 0 6px 24px rgba(10, 22, 40, 0.18);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.2s;
-    font-family: var(--font-sans);
-  }
-  .chatbot-slot:hover { transform: translateY(-2px); background: var(--cream); }
-  .chatbot-slot::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    background: var(--navy);
-    border-radius: 50%;
-    animation: pulse 2s ease-in-out infinite;
-  }
-
   /* ─────────── FADE-IN ANIMATIONS ─────────── */
   .reveal {
     opacity: 0;
@@ -1238,10 +1217,15 @@
   }
 
   /* ─────────── BILINGUAL ─────────── */
-  [data-en] { display: none; }
-  html[lang="en"] [data-ro] { display: none; }
-  html[lang="en"] [data-en] { display: inline; }
-  html[lang="en"] [data-en].block { display: block; }
+  /* Scoped to span[...], not the bare attribute selector: the contact
+     form's five <option data-ro="…" data-en="…"> elements also carry these
+     attributes, and an unqualified [data-en] matched them too -- Chrome and
+     Firefox honour `display: none` on <option> and drop it from the
+     dropdown, so the default (Romanian) state rendered the select empty. */
+  span[data-en] { display: none; }
+  html[lang="en"] span[data-ro] { display: none; }
+  html[lang="en"] span[data-en] { display: inline; }
+  html[lang="en"] span[data-en].block { display: block; }
 
 </style>
 </head>
@@ -1250,7 +1234,7 @@
 <!-- ─────────── NAV ─────────── -->
 <nav class="nav">
   <div class="nav-inner">
-    <a href="#" class="logo">
+    <a href="/" class="logo">
       <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
       adaptive<span class="logo-dot"></span><span class="logo-sub">technologies</span>
     </a>
@@ -1967,12 +1951,6 @@
     </div>
   </div>
 </footer>
-
-<!-- ─────────── CHATBOT SLOT (placeholder for future RAG widget) ─────────── -->
-<button class="chatbot-slot" onclick="alert(this.dataset.tooltip)" data-tooltip="Chatbot RAG coming soon — built by Adaptive Technologies">
-  <span data-ro>Întreabă AI-ul nostru</span>
-  <span data-en>Ask our AI</span>
-</button>
 
 <script>
   // Language toggle

@@ -15,6 +15,8 @@ services:
       DEMO_DOMAIN: ${DEMO_DOMAIN}
       N8N_HOST: ${N8N_HOST}
       ADMIN_IPS: ${ADMIN_IPS}
+      N8N_ADMIN_USER: ${N8N_ADMIN_USER}
+      N8N_ADMIN_PASSWORD_HASH: ${N8N_ADMIN_PASSWORD_HASH}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../website:/srv/site:ro

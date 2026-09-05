@@ -17,7 +17,9 @@
   --ink-soft: #16406B;
   --ink-mute: #506883;    /* 4.57:1 on Sand and Surface, 5.76:1 on White */
   --line: #D9D9D7;
-  --line-2: #CBCECF;
+  --line-2: #949494;      /* derived: darkened from #CBCECF (1.58:1 on white) to
+                             clear the 3:1 WCAG 1.4.11 non-text floor -- this is
+                             on form input borders -- 3.03:1 on white. */
   --white: #FFFFFF;
 
   /* derived: this page's only new colour pair, for form/network errors.
@@ -156,8 +158,12 @@ html[lang="en"] [data-en] { display: inline; }
 }
 /* The chat panel is wider than the form panels; browsers without :has()
    simply keep the container at 640px, so chat renders slightly narrower
-   than its own max-width instead of breaking. */
-.demo:has(.demo__panel--chat) { max-width: 720px; }
+   than its own max-width instead of breaking.
+   :not([hidden]) matters: .demo__panel--chat is only ever hidden via the
+   [hidden] attribute, never removed from the DOM (see show() in demo.js),
+   so a bare :has(.demo__panel--chat) matched on every panel, always, and
+   the gate/upload panels rendered at 720px instead of the intended 640px. */
+.demo:has(.demo__panel--chat:not([hidden])) { max-width: 720px; }
 
 .demo__panel {
   width: 100%;

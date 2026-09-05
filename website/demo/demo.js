@@ -4,6 +4,10 @@ const API = '/api/demo';
 const POLL_MS = 5000;
 const POLL_MAX_ATTEMPTS = 60; // 60 x 5s = 5 minutes; extraction is normally 30-90s
 const REQUEST_TIMEOUT_MS = 45000;
+// Must match the server's own limit check (messages_used < 10). The chat
+// response includes messages_left once a conversation starts, so this
+// value is only ever shown before the first reply comes back.
+const MESSAGE_LIMIT = 10;
 const LANG_KEY = 'adaptive-lang'; // shared with the main site's toggle
 
 let pollAttempts = 0;
@@ -12,6 +16,16 @@ const $ = (id) => document.getElementById(id);
 const state = { email: '', turnstile: '', uploadId: null, filename: '' };
 
 window.onTurnstile = (token) => { state.turnstile = token; };
+
+// Turnstile tokens are single-use and expire after ~300 seconds. Without a
+// reset, a visitor whose first submit fails for any reason (bad email,
+// dropped connection, a slow read of the page before submitting) retries
+// with a spent token that siteverify rejects -- and every attempt after
+// that fails identically, with no recovery short of a page reload.
+function resetTurnstile() {
+  state.turnstile = '';
+  try { window.turnstile && window.turnstile.reset(); } catch (_) { /* widget not ready */ }
+}
 
 function show(name) {
   for (const id of ['state-gate', 'state-code', 'state-upload', 'state-chat']) {
@@ -151,6 +165,12 @@ $('gate-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   clearError('gate-error');
   const email = $('email').value.trim();
+  // novalidate is set on the form (see index.html), so the native
+  // type="email" check never runs; validate here so a typo surfaces
+  // immediately instead of advancing to "check your email" and stranding
+  // the visitor there -- /request-code returns 202 unconditionally by
+  // design, so the server never tells the client the address was bad.
+  if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) return fail('gate-error', explain('INVALID_EMAIL'));
   if (!$('consent').checked) return fail('gate-error', explain('CONSENT_REQUIRED'));
   if (!state.turnstile) return fail('gate-error', t().waitingSecurity);
 
@@ -162,6 +182,7 @@ $('gate-form').addEventListener('submit', async (e) => {
     $('code').focus();
   } catch (err) {
     fail('gate-error', explain(err.message));
+    resetTurnstile();
   } finally {
     $('gate-submit').disabled = false;
   }
@@ -228,7 +249,7 @@ async function poll() {
   if (res.status === 'ready') {
     $('progress').hidden = true;
     $('chat-filename').textContent = state.filename;
-    setRemaining(10);
+    setRemaining(MESSAGE_LIMIT);
     show('chat');
     $('question').focus();
     return;
