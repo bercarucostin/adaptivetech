@@ -18,36 +18,49 @@
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
 <!-- Favicon — Adaptive "A" mark (SVG modern + PNG fallback) -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A1628'/%3E%3Cpath fill='%23F59E0B' d='M50 24 L83 82 L65 82 L50 56 L35 82 L17 82 Z'/%3E%3C/svg%3E" />
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E" />
+<!-- favicon-32.png and favicon-192.png were linked but have never existed in the
+     repository — three 404s on every page load. The inline SVG above covers every
+     browser that matters; apple-touch-icon points at the real asset. Export proper
+     32px and 192px PNGs from assets/svg/A-mark-gold.svg if you want the fallbacks. -->
+<link rel="apple-touch-icon" sizes="180x180" href="assets/png/app-icon-1024.png" />
 <link rel="manifest" href="site.webmanifest" />
-<meta name="theme-color" content="#0A1628" />
+<meta name="theme-color" content="#0C3054" />
 
 <style>
+  /* ── Brand tokens ──────────────────────────────────────────────────
+     Source of truth: assets/Brand identity.pdf (Edition 2025).
+     Two colours do the work at roughly 70 navy / 20 neutral / 10 gold —
+     gold is a highlight, never a flood. Values marked "derived" are not
+     brand colours; they are the ramp steps and accessible variants the
+     book does not enumerate, and each carries the contrast that forced it.
+     ------------------------------------------------------------------ */
   :root {
-    --navy: #0A1628;
-    --navy-2: #14253F;
-    --navy-3: #1F3458;
-    --amber: #F59E0B;
-    --amber-2: #D97706;
-    --amber-soft: #FEF3C7;
-    --cream: #FAF8F3;
-    --cream-2: #F2EFE6;
-    --ink: #0F0F0F;
-    --ink-soft: #4A4A48;
-    --ink-mute: #7A7A75;
-    --line: #E3DFD3;
-    --line-2: #D4CFC0;
+    --navy: #0C3054;        /* Adaptive Navy — primary, ink, backgrounds */
+    --navy-2: #16406B;      /* Navy 700 */
+    --navy-3: #32567B;      /* derived: third dark step, for borders on navy */
+    --amber: #F2A91E;       /* Spark Gold — accent, highlights, energy */
+    --amber-2: #D5951A;     /* derived: darkened gold for fills and hover */
+    --gold-ink: #8A5D07;    /* derived: gold TEXT on light. 4.57:1 on Sand.
+                               Spark Gold itself is 1.59:1 there — unreadable. */
+    --amber-soft: #FDF1DB;  /* derived: 16% gold tint */
+    --cream: #E7E5DF;       /* Sand */
+    --cream-2: #F4F7FA;     /* Surface */
+    --ink: #0C3054;         /* navy carries the brand, so navy is the ink */
+    --ink-soft: #16406B;    /* 8.42:1 on Sand */
+    --ink-mute: #506883;    /* derived: 4.57:1 on Sand. Steel fails at 2.39. */
+    --line: #D9D9D7;        /* derived: Sand + 15% Steel */
+    --line-2: #CBCECF;      /* derived: Sand + 30% Steel */
     --white: #FFFFFF;
 
-    --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
-    --font-mono: 'Geist Mono', ui-monospace, monospace;
-    --font-serif: 'Instrument Serif', Georgia, serif;
+    /* Two typefaces: a geometric sans for everything people read, and a
+       monospace for the technical voice — labels, data, code, captions.
+       That contrast is part of the brand; there is deliberately no serif. */
+    --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
     --maxw: 1240px;
     --pad: clamp(1.25rem, 4vw, 2.5rem);
@@ -70,6 +83,39 @@
   img { max-width: 100%; display: block; }
   button { font-family: inherit; cursor: pointer; border: none; background: none; }
 
+  /* Keyboard focus. Nothing outside the form had a focus style, so anyone
+     tabbing the page could not see where they were. :focus-visible keeps it
+     off mouse clicks.
+
+     The ring is navy by default and gold inside dark sections, because a
+     focus indicator needs 3:1 against what surrounds it and one colour
+     cannot do both: Spark Gold on Surface is 1.87:1, navy on navy is 1:1.
+     Navy on light reads at 12.5:1; gold on navy at 6.7:1. */
+  :focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  .stats :focus-visible,
+  .case :focus-visible,
+  .contact :focus-visible,
+  .how-card.dark :focus-visible,
+  footer :focus-visible {
+    outline-color: var(--amber);
+  }
+
+  /* Respect a reduced-motion preference: the reveal-on-scroll transition and
+     the pulse both animate, and neither carries meaning. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .reveal { opacity: 1 !important; transform: none !important; }
+  }
+
   .container {
     max-width: var(--maxw);
     margin: 0 auto;
@@ -81,7 +127,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(250, 248, 243, 0.85);
+    background: rgba(231, 229, 223, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
@@ -250,7 +296,7 @@
     right: -10%;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent 60%);
+    background: radial-gradient(circle, rgba(242, 169, 30, 0.08), transparent 60%);
     pointer-events: none;
   }
   .hero-eyebrow {
@@ -279,12 +325,18 @@
     max-width: 16ch;
     margin-bottom: 1.5rem;
   }
-  .hero h1 .serif {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 400;
-    color: var(--amber-2);
+  /* ── Accent words ──────────────────────────────────────────────────
+     "Gold is a highlight, never a flood." On LIGHT surfaces the accent word
+     stays navy and the gold appears as a rule beneath it — Spark Gold as
+     text on Sand is 1.59:1, unreadable. On NAVY surfaces gold IS the text
+     (6.68:1). The gradient draws the rule on the inline box, so it follows
+     the word across a line break.
+     ------------------------------------------------------------------ */
+  .hero h1 .accent {
+    font-weight: 700;
+    color: var(--navy);
     letter-spacing: -0.01em;
+    background: linear-gradient(to top, var(--amber) 0.14em, transparent 0.14em);
   }
   .hero-sub {
     font-size: clamp(1.05rem, 1.5vw, 1.25rem);
@@ -333,7 +385,7 @@
     gap: clamp(1rem, 3vw, 3rem);
   }
   .stat {
-    border-left: 1px solid rgba(250, 248, 243, 0.15);
+    border-left: 1px solid rgba(231, 229, 223, 0.15);
     padding-left: clamp(0.8rem, 2vw, 1.5rem);
   }
   .stat-num {
@@ -347,15 +399,14 @@
     align-items: baseline;
     gap: 0.15em;
   }
-  .stat-num .serif {
-    font-family: var(--font-serif);
-    font-style: italic;
-    color: var(--cream);
-    font-weight: 400;
+  /* On navy: gold is the text. */
+  .stat-num .accent {
+    color: var(--amber);
+    font-weight: 700;
   }
   .stat-label {
     font-size: 0.85rem;
-    color: rgba(250, 248, 243, 0.75);
+    color: rgba(231, 229, 223, 0.75);
     line-height: 1.4;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -377,7 +428,7 @@
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     margin-bottom: 1rem;
     display: flex;
     align-items: center;
@@ -397,11 +448,11 @@
     color: var(--navy);
     margin-bottom: 1.25rem;
   }
-  .section-title .serif {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 400;
-    color: var(--amber-2);
+  /* On light: navy word, gold rule. */
+  .section-title .accent {
+    font-weight: 700;
+    color: var(--navy);
+    background: linear-gradient(to top, var(--amber) 0.12em, transparent 0.12em);
   }
   .section-sub {
     font-size: 1.1rem;
@@ -439,7 +490,7 @@
     align-items: center;
     justify-content: center;
     margin-bottom: 1rem;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     font-weight: 600;
   }
   .problem-title {
@@ -468,7 +519,7 @@
     content: '—';
     position: absolute;
     left: 0;
-    color: var(--amber);
+    color: var(--gold-ink);
   }
 
   /* ─────────── SOLUTIONS TIERS ─────────── */
@@ -546,9 +597,9 @@
     border-color: var(--navy);
   }
   .tier.featured .tier-num,
-  .tier.featured .tier-tagline { color: rgba(250, 248, 243, 0.55); }
+  .tier.featured .tier-tagline { color: rgba(231, 229, 223, 0.65); }
   .tier.featured .tier-name { color: var(--amber); }
-  .tier.featured .tier-body { color: rgba(250, 248, 243, 0.85); }
+  .tier.featured .tier-body { color: rgba(231, 229, 223, 0.85); }
   .tier.featured .tier-tag {
     background: var(--navy-2);
     border-color: var(--navy-3);
@@ -577,7 +628,7 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     margin-bottom: 0.6rem;
   }
   .sd-title {
@@ -603,7 +654,7 @@
     font-size: 0.68rem;
     padding: 3px 9px;
     background: var(--amber-soft);
-    color: var(--amber-2);
+    color: var(--gold-ink);
     border-radius: 999px;
   }
 
@@ -621,7 +672,7 @@
     left: -100px;
     width: 500px;
     height: 500px;
-    background: radial-gradient(circle, rgba(245, 158, 11, 0.12), transparent 60%);
+    background: radial-gradient(circle, rgba(242, 169, 30, 0.12), transparent 60%);
     pointer-events: none;
   }
   .case-inner {
@@ -658,15 +709,14 @@
     letter-spacing: -0.025em;
     margin-bottom: 1.4rem;
   }
-  .case-title .serif {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-weight: 400;
+  /* .case sits on navy, so the accent is gold text with no rule. */
+  .case-title .accent {
+    font-weight: 700;
     color: var(--amber);
   }
   .case-body {
     font-size: 1.05rem;
-    color: rgba(250, 248, 243, 0.85);
+    color: rgba(231, 229, 223, 0.85);
     line-height: 1.6;
     margin-bottom: 1.5rem;
   }
@@ -723,10 +773,104 @@
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--navy-3);
     font-size: 0.75rem;
-    color: rgba(250, 248, 243, 0.6);
+    color: rgba(231, 229, 223, 0.6);
     text-transform: uppercase;
     letter-spacing: 0.1em;
   }
+
+  /* ─────────── TRY THE DEMO ─────────── */
+  /* Sits between the navy case study and the light "how we work" section, so
+     it takes Surface rather than a third navy block in a row. */
+  .demo { background: var(--cream-2); }
+  .demo-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+  }
+  @media (max-width: 900px) { .demo-inner { grid-template-columns: 1fr; gap: 2.5rem; } }
+
+  .demo-steps {
+    list-style: none;
+    margin: 1.8rem 0 2rem;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .demo-step {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+  }
+  .demo-step-num {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--gold-ink);
+    flex-shrink: 0;
+  }
+  .demo-note {
+    margin-top: 1.4rem;
+    font-size: 0.86rem;
+    color: var(--ink-mute);
+    padding-left: 0.9rem;
+    border-left: 2px solid var(--amber);
+  }
+
+  /* A still of the product, not a screenshot: the point is the source chip
+     and the refusal, which are what make a RAG answer trustworthy. */
+  .demo-mock {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px rgba(12, 48, 84, 0.04);
+  }
+  .demo-mock-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.9rem;
+    margin-bottom: 1.1rem;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-mute);
+  }
+  .demo-file {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--cream);
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 1.1rem;
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+  }
+  .demo-file-meta { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-mute); }
+  .demo-q, .demo-a {
+    border-radius: 12px;
+    padding: 0.8rem 1rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin-bottom: 0.8rem;
+  }
+  .demo-q { background: var(--navy); color: var(--cream); }
+  .demo-a { background: var(--cream); color: var(--ink-soft); }
+  .demo-source {
+    display: inline-block;
+    margin-top: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--gold-ink);
+    background: var(--amber-soft);
+    border-radius: 6px;
+    padding: 0.25rem 0.5rem;
+  }
+  .demo-refusal { color: var(--ink-mute); font-style: normal; }
 
   /* ─────────── HOW WE WORK ─────────── */
   .how-grid {
@@ -752,7 +896,7 @@
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     margin-bottom: 0.6rem;
   }
   .how-card.dark .how-label { color: var(--amber); }
@@ -770,7 +914,7 @@
     margin-bottom: 1.8rem;
     font-style: italic;
   }
-  .how-card.dark .how-sub { color: rgba(250, 248, 243, 0.6); }
+  .how-card.dark .how-sub { color: rgba(231, 229, 223, 0.6); }
   .how-step {
     display: flex;
     gap: 1rem;
@@ -782,7 +926,7 @@
   .how-step-num {
     font-family: var(--font-mono);
     font-size: 0.8rem;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     font-weight: 500;
     min-width: 24px;
   }
@@ -798,7 +942,7 @@
   .how-step-meta {
     font-family: var(--font-mono);
     font-size: 0.72rem;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     margin-bottom: 0.3rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -809,7 +953,7 @@
     color: var(--ink-soft);
     line-height: 1.5;
   }
-  .how-card.dark .how-step-desc { color: rgba(250, 248, 243, 0.75); }
+  .how-card.dark .how-step-desc { color: rgba(231, 229, 223, 0.75); }
 
   /* ─────────── WHY US ─────────── */
   .why { background: var(--cream-2); }
@@ -888,10 +1032,9 @@
     align-items: center;
     justify-content: center;
     color: var(--amber);
-    font-family: var(--font-serif);
-    font-style: italic;
     font-size: 4rem;
-    font-weight: 400;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     overflow: hidden;
     position: relative;
   }
@@ -903,7 +1046,7 @@
     font-family: var(--font-mono);
     font-style: normal;
     font-size: 0.6rem;
-    color: rgba(245, 158, 11, 0.5);
+    color: rgba(242, 169, 30, 0.5);
     letter-spacing: 0.1em;
   }
   .team-name {
@@ -916,7 +1059,7 @@
   .team-role {
     font-family: var(--font-mono);
     font-size: 0.78rem;
-    color: var(--amber-2);
+    color: var(--gold-ink);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 1rem;
@@ -941,8 +1084,10 @@
     .contact-inner { grid-template-columns: 1fr; gap: 2.5rem; }
   }
   .contact h2 { color: var(--cream); }
-  .contact h2 .serif { color: var(--amber); }
-  .contact-sub { color: rgba(250, 248, 243, 0.8); margin-bottom: 2rem; }
+  /* .contact is navy: gold text, and the rule is cleared — a gold bar under
+     gold text on navy reads as an artefact, not an accent. */
+  .contact h2 .accent { color: var(--amber); background: none; }
+  .contact-sub { color: rgba(231, 229, 223, 0.8); margin-bottom: 2rem; }
   .contact-meta { margin-top: 2.5rem; }
   .contact-meta-item {
     padding: 1rem 0;
@@ -955,7 +1100,7 @@
   .contact-meta-label {
     font-family: var(--font-mono);
     font-size: 0.75rem;
-    color: rgba(250, 248, 243, 0.55);
+    color: rgba(231, 229, 223, 0.65);
     text-transform: uppercase;
     letter-spacing: 0.1em;
   }
@@ -975,7 +1120,7 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: rgba(250, 248, 243, 0.6);
+    color: rgba(231, 229, 223, 0.6);
     margin-bottom: 0.5rem;
   }
   .form-row input,
@@ -1011,10 +1156,32 @@
   }
   .form-submit:hover { background: var(--cream); }
 
+  /* Marking what is optional removes the commonest source of form
+     abandonment: the assumption that every field is mandatory. */
+  .form-optional {
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.65;
+  }
+  /* A mailto form navigates away with no feedback, so say what will happen
+     before it does — and give the address for anyone whose browser has no
+     mail client configured, which is most people on webmail. */
+  .form-note {
+    margin-top: 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: rgba(231, 229, 223, 0.65);
+  }
+  .form-note a {
+    color: var(--amber);
+    border-bottom: 1px solid rgba(242, 169, 30, 0.4);
+  }
+  .form-note a:hover { border-bottom-color: var(--amber); }
+
   /* ─────────── FOOTER ─────────── */
   footer {
     background: var(--navy);
-    color: rgba(250, 248, 243, 0.7);
+    color: rgba(231, 229, 223, 0.7);
     padding: 2.5rem 0;
     border-top: 1px solid var(--navy-3);
   }
@@ -1089,6 +1256,7 @@
     </a>
     <div class="nav-links" id="navLinks">
       <a href="#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
+      <a href="#demo">Demo</a>
       <a href="#cum-lucram"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
       <a href="#despre"><span data-ro>Despre</span><span data-en>About</span></a>
       <a href="#contact"><span data-ro>Contact</span><span data-en>Contact</span></a>
@@ -1117,8 +1285,8 @@
       <span data-en>AI & automation · Romanian SMEs</span>
     </div>
     <h1>
-      <span data-ro>Lucrați mai <span class="serif">inteligent.</span><br />Nu mai mult.</span>
-      <span data-en>Work <span class="serif">smarter.</span><br />Not harder.</span>
+      <span data-ro>Lucrați mai <span class="accent">inteligent.</span><br />Nu mai mult.</span>
+      <span data-en>Work <span class="accent">smarter.</span><br />Not harder.</span>
     </h1>
     <p class="hero-sub">
       <span data-ro>Construim soluții AI și automatizări care elimină munca manuală, reduc erorile la zero și redau echipei dumneavoastră timpul pentru ceea ce contează cu adevărat — creșterea afacerii.</span>
@@ -1148,28 +1316,28 @@
   <div class="container">
     <div class="stats-grid">
       <div class="stat">
-        <div class="stat-num">70<span class="serif">%+</span></div>
+        <div class="stat-num">70<span class="accent">%+</span></div>
         <div class="stat-label">
           <span data-ro>Reducere timp procesare manuală</span>
           <span data-en>Reduction in manual processing time</span>
         </div>
       </div>
       <div class="stat">
-        <div class="stat-num">24<span class="serif">/7</span></div>
+        <div class="stat-num">24<span class="accent">/7</span></div>
         <div class="stat-label">
           <span data-ro>Fluxuri AI active non-stop</span>
           <span data-en>AI workflows running around the clock</span>
         </div>
       </div>
       <div class="stat">
-        <div class="stat-num">↓ <span class="serif">erori</span></div>
+        <div class="stat-num">↓ <span class="accent">erori</span></div>
         <div class="stat-label">
           <span data-ro>La sarcinile automate de date</span>
           <span data-en>On automated data tasks</span>
         </div>
       </div>
       <div class="stat">
-        <div class="stat-num">↑ <span class="serif">timp</span></div>
+        <div class="stat-num">↑ <span class="accent">timp</span></div>
         <div class="stat-label">
           <span data-ro>Eliberat pentru activități de valoare</span>
           <span data-en>Freed for high-value work</span>
@@ -1185,8 +1353,8 @@
     <div class="section-header">
       <div class="section-eyebrow">01 · <span data-ro>Vă sună cunoscut?</span><span data-en>Does this sound familiar?</span></div>
       <h2 class="section-title">
-        <span data-ro>Care zonă a afacerii vă <span class="serif">consumă</span> cel mai mult timp?</span>
-        <span data-en>Which area is <span class="serif">costing</span> you the most time?</span>
+        <span data-ro>Care zonă a afacerii vă <span class="accent">consumă</span> cel mai mult timp?</span>
+        <span data-en>Which area is <span class="accent">costing</span> you the most time?</span>
       </h2>
       <p class="section-sub">
         <span data-ro>Majoritatea afacerilor cu care lucrăm au ineficiențe în două-trei dintre domeniile de mai jos. Vedeți care vi se potrivesc — apoi vorbim despre ce putem face.</span>
@@ -1288,8 +1456,8 @@
     <div class="section-header">
       <div class="section-eyebrow">02 · <span data-ro>Ce construim</span><span data-en>What we build</span></div>
       <h2 class="section-title">
-        <span data-ro>Soluții la <span class="serif">fiecare</span> nivel — de la rezolvări rapide la AI avansat.</span>
-        <span data-en>A solution at <span class="serif">every</span> level — from quick fixes to advanced AI.</span>
+        <span data-ro>Soluții la <span class="accent">fiecare</span> nivel — de la rezolvări rapide la AI avansat.</span>
+        <span data-en>A solution at <span class="accent">every</span> level — from quick fixes to advanced AI.</span>
       </h2>
       <p class="section-sub">
         <span data-ro>Majoritatea clienților încep cu Câștiguri Rapide și extind pe măsură ce văd rezultatele. Nu împingem complexitate de care nu aveți nevoie.</span>
@@ -1352,8 +1520,8 @@
       <div class="section-header" style="max-width: 600px;">
         <div class="section-eyebrow"><span data-ro>Exemple concrete</span><span data-en>Concrete examples</span></div>
         <h3 class="section-title" style="font-size: clamp(1.5rem, 3vw, 2rem);">
-          <span data-ro>Ce putem livra <span class="serif">săptămâna viitoare.</span></span>
-          <span data-en>What we can ship <span class="serif">next week.</span></span>
+          <span data-ro>Ce putem livra <span class="accent">săptămâna viitoare.</span></span>
+          <span data-en>What we can ship <span class="accent">next week.</span></span>
         </h3>
       </div>
 
@@ -1410,8 +1578,8 @@
     <div>
       <div class="case-eyebrow"><span data-ro>Studiu de caz · În producție</span><span data-en>Case study · Live</span></div>
       <h2 class="case-title">
-        <span data-ro>Chatbot WhatsApp RAG pentru <span class="serif">Partner Corporation.</span></span>
-        <span data-en>WhatsApp RAG chatbot for <span class="serif">Partner Corporation.</span></span>
+        <span data-ro>Chatbot WhatsApp RAG pentru <span class="accent">Partner Corporation.</span></span>
+        <span data-en>WhatsApp RAG chatbot for <span class="accent">Partner Corporation.</span></span>
       </h2>
       <p class="case-body">
         <span data-ro>Pentru Partner Corporation — companie românească de case de marcat — am construit un asistent WhatsApp bazat pe ~50 de documente tehnice, acoperind imprimantele fiscale Partner 200, 300 și 600. Tehnicienii primesc răspunsuri instant, cu surse citate, direct pe teren.</span>
@@ -1446,14 +1614,95 @@
   </div>
 </section>
 
+<!-- ─────────── TRY THE DEMO ─────────── -->
+<section id="demo" class="demo">
+  <div class="container">
+    <div class="demo-inner">
+      <div>
+        <div class="section-eyebrow">03 · <span data-ro>Încercați singur</span><span data-en>Try it yourself</span></div>
+        <h2 class="section-title">
+          <span data-ro>Nu ne credeți pe cuvânt. <span class="accent">Încărcați un document.</span></span>
+          <span data-en>Don't take our word for it. <span class="accent">Upload a document.</span></span>
+        </h2>
+        <p class="section-sub">
+          <span data-ro>Demo-ul rulează exact mecanismul din exemplul de mai sus: extrage textul, îl indexează și răspunde <strong>doar</strong> din ce scrie în documentul dumneavoastră — arătând secțiunea din care a citit. Dacă răspunsul nu este acolo, vă spune asta în loc să inventeze.</span>
+          <span data-en>The demo runs the same machinery as the example above: it extracts your text, indexes it, and answers <strong>only</strong> from what your document actually says — showing the section it read. If the answer isn't in there, it tells you so instead of inventing one.</span>
+        </p>
+
+        <ol class="demo-steps">
+          <li class="demo-step">
+            <span class="demo-step-num">01</span>
+            <span data-ro>Vă confirmați emailul cu un cod din 6 cifre.</span>
+            <span data-en>Confirm your email with a 6-digit code.</span>
+          </li>
+          <li class="demo-step">
+            <span class="demo-step-num">02</span>
+            <span data-ro>Încărcați un PDF, DOCX sau TXT — un manual, un contract, o procedură.</span>
+            <span data-en>Upload a PDF, DOCX or TXT — a manual, a contract, a procedure.</span>
+          </li>
+          <li class="demo-step">
+            <span class="demo-step-num">03</span>
+            <span data-ro>Întrebați ce vreți despre el.</span>
+            <span data-en>Ask it whatever you want.</span>
+          </li>
+        </ol>
+
+        <a href="/demo" class="btn-cta btn-cta-amber">
+          <span data-ro>Deschideți demo-ul</span>
+          <span data-en>Open the demo</span>
+          <span>→</span>
+        </a>
+
+        <p class="demo-note">
+          <span data-ro>Documentul dumneavoastră este vizibil doar sesiunii dumneavoastră și se șterge automat după două ore. Nu îl folosim pentru nimic altceva.</span>
+          <span data-en>Your document is visible only to your own session and is deleted automatically after two hours. We don't use it for anything else.</span>
+        </p>
+      </div>
+
+      <div class="demo-mock" aria-hidden="true">
+        <div class="demo-mock-head">
+          <span class="pulse-dot"></span>
+          <span data-ro>Demo · documentul dumneavoastră</span>
+          <span data-en>Demo · your document</span>
+        </div>
+
+        <div class="demo-file">
+          <span>📄</span>
+          <span>manual-service.pdf</span>
+          <span class="demo-file-meta">42 <span data-ro>pagini</span><span data-en>pages</span></span>
+        </div>
+
+        <div class="demo-q">
+          <span data-ro>Care este intervalul de revizie pentru pompă?</span>
+          <span data-en>What's the service interval for the pump?</span>
+        </div>
+        <div class="demo-a">
+          <span data-ro>La fiecare 500 de ore de funcționare sau anual, oricare survine prima.</span>
+          <span data-en>Every 500 operating hours or annually, whichever comes first.</span>
+          <span class="demo-source">manual-service.pdf — 4.2 <span data-ro>Întreținere</span><span data-en>Maintenance</span></span>
+        </div>
+
+        <div class="demo-q">
+          <span data-ro>Care este garanția?</span>
+          <span data-en>What's the warranty?</span>
+        </div>
+        <div class="demo-a demo-refusal">
+          <span data-ro>Documentul încărcat nu conține informații despre garanție.</span>
+          <span data-en>The uploaded document doesn't cover the warranty.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ─────────── HOW WE WORK ─────────── -->
 <section id="cum-lucram">
   <div class="container">
     <div class="section-header">
-      <div class="section-eyebrow">03 · <span data-ro>Cum lucrăm</span><span data-en>How we work</span></div>
+      <div class="section-eyebrow">04 · <span data-ro>Cum lucrăm</span><span data-en>How we work</span></div>
       <h2 class="section-title">
-        <span data-ro>Două moduri de colaborare — <span class="serif">ambele cu risc redus.</span></span>
-        <span data-en>Two ways to engage — <span class="serif">both low risk.</span></span>
+        <span data-ro>Două moduri de colaborare — <span class="accent">ambele cu risc redus.</span></span>
+        <span data-en>Two ways to engage — <span class="accent">both low risk.</span></span>
       </h2>
       <p class="section-sub">
         <span data-ro>Ambele modele încep cu un apel de descoperire gratuit și o demonstrație funcțională gratuită — vedeți valoare reală înainte de orice angajament.</span>
@@ -1549,10 +1798,10 @@
 <section class="why">
   <div class="container">
     <div class="section-header">
-      <div class="section-eyebrow">04 · <span data-ro>De ce Adaptive</span><span data-en>Why Adaptive</span></div>
+      <div class="section-eyebrow">05 · <span data-ro>De ce Adaptive</span><span data-en>Why Adaptive</span></div>
       <h2 class="section-title">
-        <span data-ro>Locali. Experimentați. <span class="serif">Corecți.</span></span>
-        <span data-en>Local. Experienced. <span class="serif">Honest.</span></span>
+        <span data-ro>Locali. Experimentați. <span class="accent">Corecți.</span></span>
+        <span data-en>Local. Experienced. <span class="accent">Honest.</span></span>
       </h2>
     </div>
 
@@ -1588,10 +1837,10 @@
 <section id="despre">
   <div class="container">
     <div class="section-header">
-      <div class="section-eyebrow">05 · <span data-ro>Despre noi</span><span data-en>About us</span></div>
+      <div class="section-eyebrow">06 · <span data-ro>Despre noi</span><span data-en>About us</span></div>
       <h2 class="section-title">
-        <span data-ro>Trei oameni care au construit asta <span class="serif">la scară mare</span> și o construiesc acum pentru dumneavoastră.</span>
-        <span data-en>Three people who've built this <span class="serif">at scale</span> and are now building it for you.</span>
+        <span data-ro>Trei oameni care au construit asta <span class="accent">la scară mare</span> și o construiesc acum pentru dumneavoastră.</span>
+        <span data-en>Three people who've built this <span class="accent">at scale</span> and are now building it for you.</span>
       </h2>
       <p class="section-sub">
         <span data-ro>Echipa noastră combină expertiza tehnică, experiența operațională și gândirea strategică — fundamentele pentru livrarea de AI și automatizare care funcționează cu adevărat pentru IMM-urile din România.</span>
@@ -1638,10 +1887,10 @@
   <div class="container">
     <div class="contact-inner">
       <div>
-        <div class="section-eyebrow" style="color: var(--amber);">06 · <span data-ro>Contact</span><span data-en>Contact</span></div>
+        <div class="section-eyebrow" style="color: var(--amber);">07 · <span data-ro>Contact</span><span data-en>Contact</span></div>
         <h2 class="section-title">
-          <span data-ro>Începeți cu o consultație <span class="serif">gratuită</span> de 60 de minute.</span>
-          <span data-en>Start with a <span class="serif">free</span> 60-minute consultation.</span>
+          <span data-ro>Începeți cu o consultație <span class="accent">gratuită</span> de 60 de minute.</span>
+          <span data-en>Start with a <span class="accent">free</span> 60-minute consultation.</span>
         </h2>
         <p class="contact-sub">
           <span data-ro>Fără prezentare comercială. Doar o analiză sinceră a modului în care AI și automatizarea vă pot economisi timp și bani — și dacă merită urmărit.</span>
@@ -1651,7 +1900,7 @@
         <div class="contact-meta">
           <div class="contact-meta-item">
             <span class="contact-meta-label">Email</span>
-            <span class="contact-meta-value"><a href="/cdn-cgi/l/email-protection#d0b4b1a4b1a3a5a0b5a2b8b5a2bfb5a3a4b5b1bd90b7bdb1b9bcfeb3bfbd"><span class="__cf_email__" data-cfemail="593d382d382a2c293c2b313c2b363c2a2d3c3834193e34383035773a3634">[email&#160;protected]</span></a></span>
+            <span class="contact-meta-value"><a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a></span>
           </div>
           <div class="contact-meta-item">
             <span class="contact-meta-label"><span data-ro>Locație</span><span data-en>Location</span></span>
@@ -1670,7 +1919,7 @@
           <input type="text" id="name" name="name" required />
         </div>
         <div class="form-row">
-          <label for="company"><span data-ro>Companie</span><span data-en>Company</span></label>
+          <label for="company"><span data-ro>Companie <span class="form-optional">(opțional)</span></span><span data-en>Company <span class="form-optional">(optional)</span></span></label>
           <input type="text" id="company" name="company" />
         </div>
         <div class="form-row">
@@ -1688,13 +1937,17 @@
           </select>
         </div>
         <div class="form-row">
-          <label for="message"><span data-ro>Mesaj</span><span data-en>Message</span></label>
+          <label for="message"><span data-ro>Mesaj <span class="form-optional">(opțional)</span></span><span data-en>Message <span class="form-optional">(optional)</span></span></label>
           <textarea id="message" name="message" placeholder=""></textarea>
         </div>
         <button type="submit" class="form-submit">
           <span data-ro>Trimite mesajul</span>
           <span data-en>Send message</span>
         </button>
+        <p class="form-note">
+          <span data-ro>Se deschide clientul dumneavoastră de email cu mesajul pregătit. Preferați direct? <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a></span>
+          <span data-en>This opens your email client with the message ready. Prefer to write directly? <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a></span>
+        </p>
       </form>
     </div>
   </div>
@@ -1709,7 +1962,7 @@
         <span><strong style="color: var(--cream);">Adaptive Technologies S.R.L.</strong> · București, România · © <span id="year"></span></span>
       </div>
       <div>
-        <a href="/cdn-cgi/l/email-protection#d7b3b6a3b6a4a2a7b2a5bfb2a5b8b2a4a3b2b6ba97b0bab6bebbf9b4b8ba"><span class="__cf_email__" data-cfemail="8febeefbeefcfaffeafde7eafde0eafcfbeaeee2cfe8e2eee6e3a1ece0e2">[email&#160;protected]</span></a>
+        <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
       </div>
     </div>
   </div>
@@ -1721,7 +1974,7 @@
   <span data-en>Ask our AI</span>
 </button>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
   // Language toggle
   function setLang(lang) {
     document.documentElement.lang = lang;
@@ -1768,7 +2021,7 @@
       `Nume / Name: ${name}\nCompanie / Company: ${company}\nEmail: ${email}\nInteres / Interest: ${interest}\n\n${message}`
     );
 
-    window.location.href = `mailto:datasuperheroesteam@gmail.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:contact@adaptivetech.ro?subject=${subject}&body=${body}`;
   }
 
   // Reveal on scroll
