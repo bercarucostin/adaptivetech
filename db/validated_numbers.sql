@@ -1,11 +1,3 @@
--- Dropped and rebuilt on 2026-08-14. The previous table keyed validation on a
--- manually maintained phone list; this one keys it on the technician's sigiliu.
--- The drop below was a one-time cutover on 2026-08-14. This file is re-run
--- verbatim as tracked DDL, and an unconditional DROP would silently destroy
--- every validated number, ai_whisperer flag, and hand-granted sigiliu-null row
--- on every subsequent run. Do not uncomment without a deliberate, reviewed decision.
--- drop table if exists public.validated_numbers;
-
 create table public.validated_numbers (
   id              bigserial primary key,
   phone_e164      text not null unique,

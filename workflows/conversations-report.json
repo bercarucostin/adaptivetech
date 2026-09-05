@@ -1,0 +1,641 @@
+{
+  "name": "conversations report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1120,
+        96
+      ],
+      "id": "c29dab18-b17c-471b-a9aa-7e57a02eacb1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT phone_e164, message, created_at FROM public.n8n_chat_histories WHERE created_at >= date_trunc('month', NOW()) - INTERVAL '1 month' AND created_at < date_trunc('month', NOW()) - INTERVAL '1 day' ORDER BY phone_e164, created_at ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -672,
+        96
+      ],
+      "id": "1d27402f-abd2-4e56-a5cf-f8c77fb395d9",
+      "name": "Get last month's conversations",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Get last month\\'s conversations').all();\nconst sqlStats = $('Get SQL Stats').first().json;\n\nfunction maskPhone(phone) {\n  if (!phone || phone.length < 6) return '***';\n  return phone.slice(0, 4) + '***' + phone.slice(-3);\n}\n\n// Stats from SQL (accurate, uncapped)\nconst uniqueClients = Number(sqlStats.unique_clients) || 0;\nconst totalHuman = Number(sqlStats.total_human) || 0;\nconst totalAssistant = Number(sqlStats.total_assistant) || 0;\nconst totalMessages = Number(sqlStats.total_messages) || 0;\nconst avgMessagesPerUser = sqlStats.avg_messages_per_user || '0';\nconst avgHumanPerUser = sqlStats.avg_human_per_user || '0';\nconst avgAssistantPerUser = sqlStats.avg_assistant_per_user || '0';\nconst singleMessageUsers = Number(sqlStats.single_message_users) || 0;\nconst escalationCount = Number(sqlStats.escalation_users) || 0;\nconst botResolutionRate = uniqueClients > 0\n  ? ((1 - escalationCount / uniqueClients) * 100).toFixed(1)\n  : '0';\nconst dist1 = Number(sqlStats.dist_1msg) || 0;\nconst dist2to5 = Number(sqlStats.dist_2to5) || 0;\nconst dist5plus = Number(sqlStats.dist_5plus) || 0;\n\n// Top users from SQL\nlet sqlTopUsers = [];\ntry {\n  sqlTopUsers = typeof sqlStats.top_users_json === 'string'\n    ? JSON.parse(sqlStats.top_users_json)\n    : (sqlStats.top_users_json || []);\n} catch(e) { sqlTopUsers = []; }\n\nconst topUsers = sqlTopUsers.map(r => ({\n  phone_masked: maskPhone(r.phone_e164),\n  total: Number(r.total),\n  human: Number(r.human),\n  assistant: Number(r.assistant)\n}));\n\n// Date and filename (computed once, used by both paths)\nconst now = new Date();\nconst lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);\nconst roMonths = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];\nconst roMonthName = roMonths[lastMonth.getMonth()];\nconst year = lastMonth.getFullYear();\nconst monthNameRo = `${roMonthName} ${year}`;\nconst fileName = `raport_lunar_${roMonthName}_${year}`;\n\nconst stats = {\n  uniqueClients, totalMessages, totalHuman, totalAssistant,\n  avgMessagesPerUser, avgHumanPerUser, avgAssistantPerUser,\n  singleMessageUsers, escalationCount, botResolutionRate,\n  dist1, dist2to5, dist5plus\n};\n\n// Parse messages\nconst parsed = rows.map(r => {\n  let msg = r.json.message;\n  if (typeof msg === 'string') {\n    try { msg = JSON.parse(msg); } catch(e) { return null; }\n  }\n  return {\n    phone_e164: r.json.phone_e164,\n    type: msg.type === 'human' ? 'human' : 'assistant',\n    content: msg.content || ''\n  };\n}).filter(Boolean);\n\n// Group by phone, build transcripts\nconst sessions = {};\nfor (const m of parsed) {\n  if (!sessions[m.phone_e164]) sessions[m.phone_e164] = [];\n  sessions[m.phone_e164].push(m);\n}\n\nconst allConversations = [];\nfor (const [phone, msgs] of Object.entries(sessions)) {\n  const transcript = msgs\n    .map(m => `${m.type === 'human' ? 'User' : 'Bot'}: ${m.content}`)\n    .join('\\n');\n  allConversations.push(`--- ${maskPhone(phone)} (${msgs.length} msgs) ---\\n${transcript}`);\n}\n\n// Empty month: no parseable conversations\nif (allConversations.length === 0) {\n  return [{\n    json: {\n      isEmptyMonth: true,\n      monthNameRo, fileName, stats, topUsers,\n      totalConversations: 0,\n      totalChunks: 0,\n      haikuRequestBody: null,\n      chunkIndex: 0\n    }\n  }];\n}\n\n// Split oversized single-user conversations\nconst MAX_CONV_CHARS = 200000;\nconst safeConversations = [];\nfor (const conv of allConversations) {\n  if (conv.length <= MAX_CONV_CHARS) {\n    safeConversations.push(conv);\n  } else {\n    let remaining = conv;\n    while (remaining.length > MAX_CONV_CHARS) {\n      let splitIdx = remaining.lastIndexOf('\\n', MAX_CONV_CHARS);\n      if (splitIdx < MAX_CONV_CHARS / 2) splitIdx = MAX_CONV_CHARS;\n      safeConversations.push(remaining.substring(0, splitIdx));\n      remaining = remaining.substring(splitIdx);\n    }\n    if (remaining.trim().length > 0) safeConversations.push(remaining);\n  }\n}\n\n// Chunk conversations for Haiku\nconst CHUNK_CHAR_LIMIT = 300000;\nconst chunks = [];\nlet currentChunk = '';\nfor (const conv of safeConversations) {\n  if (currentChunk.length + conv.length + 2 > CHUNK_CHAR_LIMIT && currentChunk.length > 0) {\n    chunks.push(currentChunk);\n    currentChunk = '';\n  }\n  currentChunk += conv + '\\n\\n';\n}\nif (currentChunk.trim().length > 0) chunks.push(currentChunk);\n\nconst shared = {\n  monthNameRo, fileName, stats, topUsers,\n  totalConversations: allConversations.length,\n  totalChunks: chunks.length\n};\n\n// Pre-build Haiku request bodies (avoids n8n expression injection from user messages)\nconst systemPrompt = 'Ești un analist de business. Analizezi conversații dintre clienți și un asistent WhatsApp pentru a înțelege nevoile, întrebările și problemele clienților. Returnează DOAR JSON valid, fără markdown code fences, fără text suplimentar. Toate textele în limba română.';\n\nreturn chunks.map((chunk, i) => {\n  const userMessage = `Analizează acest set de conversații (chunk ${i + 1} din ${chunks.length}) dintre clienții companiei Partner și asistentul WhatsApp.\\n\\nCONVERSAȚII:\\n${chunk}\\n\\nConcentrează-te pe perspectiva business: ce vor clienții, ce probleme au, ce întreabă cel mai des.\\n\\nReturnează DOAR un JSON valid cu aceste câmpuri:\\n{\\n  \"themes\": [{\"name\": \"subiectul/tema întrebării\", \"count\": N, \"example\": \"exemplu întrebare de la client\"}],\\n  \"customer_problems\": [{\"problem\": \"problema clientului\", \"count\": N, \"resolved\": true/false}],\\n  \"customer_needs\": [\"nevoie/cerere frecventă identificată\"],\\n  \"escalation_requests\": [\"cerere explicită de a vorbi cu un om\"],\\n  \"unanswered_questions\": [\"întrebare la care clientul nu a primit răspuns satisfăcător\"]\\n}`;\n\n  const requestBody = {\n    model: 'claude-haiku-4-5-20251001',\n    max_tokens: 2000,\n    system: systemPrompt,\n    messages: [{ role: 'user', content: userMessage }]\n  };\n\n  return {\n    json: {\n      ...(i === 0 ? shared : {}),\n      isEmptyMonth: false,\n      chunkIndex: i,\n      totalChunks: chunks.length,\n      haikuRequestBody: JSON.stringify(requestBody)\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "5dbf8dd8-7372-485e-9e4c-c66c6be1aa22",
+      "name": "Compute Stats & Prepare Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if we came from the empty-month path or the full-analysis path\n// Try to read from Skip to Report first (empty month), fall back to Merge\nlet mergeData, isEmpty;\ntry {\n  mergeData = $('Skip to Report').first().json;\n  isEmpty = true;\n} catch(e) {\n  mergeData = $('Merge Chunk Results').first().json;\n  isEmpty = mergeData && mergeData.emptyMonth;\n}\n\nconst shared = isEmpty ? mergeData.shared : mergeData.shared;\nconst s = shared.stats;\nconst genDate = new Date().toLocaleDateString('ro-RO', { year: 'numeric', month: 'long', day: 'numeric' });\n\nif (isEmpty) {\n  const html = `<!DOCTYPE html>\n<html lang=\"ro\"><head><meta charset=\"UTF-8\"><title>Raport Lunar Suport — ${shared.monthNameRo}</title>\n<style>body{font-family:Arial,sans-serif;margin:0;padding:0;background:#fff;color:#333;line-height:1.6}.header{background:#2c3e50;color:#fff;padding:30px 40px}.header h1{margin:0 0 5px 0;font-size:24px}.header p{margin:0;opacity:.85;font-size:14px}.content{padding:30px 40px;max-width:900px}h2{color:#2c3e50;border-bottom:2px solid #3498db;padding-bottom:6px;margin-top:32px;font-size:18px}</style>\n</head><body>\n<div class=\"header\"><h1>Raport Lunar Suport — ${shared.monthNameRo}</h1><p>Generat: ${genDate}</p></div>\n<div class=\"content\"><h2>Fără date</h2><p>Nu au fost înregistrate conversații în luna ${shared.monthNameRo}.</p></div>\n</body></html>`;\n\n  const fileName = shared.fileName;\n  const folderId = '1mIBnp7jJBf0AIAejO33lcQutWBfMWqmn';\n  const boundary = '----n8nBoundary' + Date.now();\n  const CRLF = '\\r\\n';\n  const metadata = JSON.stringify({ name: fileName, mimeType: 'application/vnd.google-apps.document', parents: [folderId] });\n  const bodyStr = `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}${metadata}${CRLF}--${boundary}${CRLF}Content-Type: text/html; charset=UTF-8${CRLF}${CRLF}${html}${CRLF}--${boundary}--`;\n  const bodyBuffer = Buffer.from(bodyStr, 'utf-8');\n  const contentType = `multipart/related; boundary=${boundary}`;\n  return [{ json: { fileName, contentType }, binary: { data: await this.helpers.prepareBinaryData(bodyBuffer, 'upload.bin', contentType) } }];\n}\n\n// === Normal path: parse Sonnet response ===\nconst sonnetResp = $('Sonnet: Final Report').first().json;\n\nif (sonnetResp.error) {\n  throw new Error('Sonnet API error: ' + (sonnetResp.error.message || JSON.stringify(sonnetResp.error)));\n}\n\nlet rawText = '';\nif (Array.isArray(sonnetResp.content)) {\n  rawText = sonnetResp.content.map(b => b.text || '').join('');\n} else {\n  rawText = sonnetResp.text || sonnetResp.output || '';\n}\nrawText = rawText.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\nlet analysis;\ntry {\n  analysis = JSON.parse(rawText);\n} catch(e) {\n  throw new Error('Sonnet did not return valid JSON: ' + rawText.substring(0, 500));\n}\n\nconst meta = shared;\n\n// Table builders\nconst topUserRows = (shared.topUsers || []).map((u, i) =>\n  `<tr class=\"${i % 2 === 0 ? 'even' : 'odd'}\">\n    <td>${i + 1}</td><td>${u.phone_masked}</td><td>${u.total}</td><td>${u.human}</td><td>${u.assistant}</td>\n  </tr>`\n).join('');\n\nconst questionRows = (analysis.top_questions || []).map((q, i) =>\n  `<tr class=\"${i % 2 === 0 ? 'even' : 'odd'}\">\n    <td>${q.rank}</td><td>${q.theme}</td><td>${q.estimated_pct}</td><td>${q.example}</td>\n  </tr>`\n).join('');\n\nconst issueRows = (analysis.top_issues || []).map((q, i) =>\n  `<tr class=\"${i % 2 === 0 ? 'even' : 'odd'}\">\n    <td>${i + 1}</td><td>${q.issue}</td><td>${q.estimated_pct}</td><td>${q.resolved ? 'Da' : 'Nu'}</td>\n  </tr>`\n).join('');\n\nconst recsHtml = (analysis.recommendations || []).map(r => `<li>${r}</li>`).join('');\n\nfunction paragraphs(text) {\n  if (!text) return '<p>—</p>';\n  return text.split('\\n').filter(Boolean).map(p => `<p>${p}</p>`).join('');\n}\n\nconst html = `<!DOCTYPE html>\n<html lang=\"ro\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Raport Lunar Suport — ${shared.monthNameRo}</title>\n<style>\n  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #ffffff; color: #333333; line-height: 1.7; font-size: 14px; }\n\n  .header { background-color: #2c3e50; color: #ffffff; padding: 36px 44px 30px; }\n  .header h1 { margin: 0 0 6px 0; font-size: 26px; font-weight: 600; color: #ffffff; }\n  .header p { margin: 0; font-size: 13px; color: #b0bec5; }\n\n  .content { max-width: 860px; margin: 0 auto; padding: 28px 44px 50px; }\n\n  .coverage-bar { font-size: 12px; color: #555555; background-color: #eef4fb; padding: 10px 16px; margin: 0 0 30px 0; border: 1px solid #d0e1f0; }\n\n  h2 { color: #2c3e50; font-size: 17px; font-weight: 600; margin: 34px 0 14px 0; padding-bottom: 8px; border-bottom: 2px solid #3498db; }\n\n  .summary-box { background-color: #f7f8fa; padding: 16px 20px; border: 1px solid #e0e4e8; margin: 0 0 12px 0; }\n  .summary-box p { margin: 4px 0; font-size: 14px; color: #333333; }\n\n  /* KPI cards as a 2-column table */\n  .kpi-table-cards { width: 100%; border-collapse: collapse; margin: 14px 0; }\n  .kpi-table-cards td { width: 50%; padding: 14px 18px; vertical-align: top; }\n  .kpi-card-blue { background-color: #eef4fb; border: 1px solid #c8ddf0; }\n  .kpi-card-green { background-color: #eafaf1; border: 1px solid #b8e6cc; }\n  .kpi-card-orange { background-color: #fef5ec; border: 1px solid #f0d9b8; }\n  .kpi-value { font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0; line-height: 1.2; }\n  .kpi-label { font-size: 12px; color: #666666; margin: 3px 0 0 0; }\n\n  /* Detail KPI table */\n  .kpi-detail { width: 100%; border-collapse: collapse; margin: 10px 0 6px 0; font-size: 13px; }\n  .kpi-detail td { padding: 7px 14px; border-bottom: 1px solid #eeeeee; }\n  .kpi-detail td:first-child { color: #555555; }\n  .kpi-detail td:last-child { text-align: right; font-weight: 600; color: #2c3e50; }\n  .kpi-detail tr:last-child td { border-bottom: none; }\n\n  /* Data tables */\n  table.data { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; border: 1px solid #dddddd; }\n  table.data th { background-color: #2c3e50; color: #ffffff; padding: 10px 14px; text-align: left; font-weight: 500; font-size: 12px; }\n  table.data td { padding: 9px 14px; border-bottom: 1px solid #eeeeee; color: #333333; }\n  table.data tr.odd { background-color: #f9fafb; }\n  table.data tr.even { background-color: #ffffff; }\n  table.data tr:last-child td { border-bottom: none; }\n\n  .insight-box { background-color: #f7f8fa; padding: 16px 20px; border: 1px solid #e0e4e8; margin: 12px 0; }\n  .insight-box p { margin: 6px 0; font-size: 14px; color: #333333; }\n\n  ol.recs { padding-left: 22px; margin: 14px 0; }\n  ol.recs li { margin-bottom: 12px; font-size: 14px; color: #333333; padding: 10px 14px; background-color: #f4faf6; border: 1px solid #c8e6d0; }\n\n  .methodology { font-size: 11px; color: #999999; margin-top: 6px; }\n\n  .dist-table th:first-child { width: 40%; }\n  .dist-table td:nth-child(2), .dist-table td:nth-child(3) { text-align: center; }\n  .dist-table th:nth-child(2), .dist-table th:nth-child(3) { text-align: center; }\n\n  @media print {\n    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n  }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <h1>Raport Lunar Suport — ${shared.monthNameRo}</h1>\n  <p>Generat: ${genDate} · Perioada: luna ${shared.monthNameRo} · Compania Partner</p>\n</div>\n<div class=\"content\">\n\n<div class=\"coverage-bar\">Analiză bazată pe <strong>${meta.totalConversations}</strong> conversații.</div>\n\n<h2>1. Sumar Executiv</h2>\n<div class=\"summary-box\">${paragraphs(analysis.executive_summary)}</div>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>2. Indicatori Cheie</h2>\n<table class=\"kpi-table-cards\">\n  <tr>\n    <td class=\"kpi-card-blue\">\n      <p class=\"kpi-value\">${s.uniqueClients}</p>\n      <p class=\"kpi-label\">Clienți unici</p>\n    </td>\n    <td class=\"kpi-card-blue\">\n      <p class=\"kpi-value\">${s.totalMessages}</p>\n      <p class=\"kpi-label\">Total mesaje</p>\n    </td>\n  </tr>\n  <tr>\n    <td class=\"kpi-card-green\">\n      <p class=\"kpi-value\">${s.botResolutionRate}%</p>\n      <p class=\"kpi-label\">Rezolvare automată</p>\n    </td>\n    <td class=\"kpi-card-orange\">\n      <p class=\"kpi-value\">${s.escalationCount}</p>\n      <p class=\"kpi-label\">Clienți care au cerut operator</p>\n    </td>\n  </tr>\n</table>\n<table class=\"kpi-detail\">\n  <tr><td>Mesaje de la clienți</td><td>${s.totalHuman}</td></tr>\n  <tr><td>Răspunsuri asistent</td><td>${s.totalAssistant}</td></tr>\n  <tr><td>Media mesaje trimise de client</td><td>${s.avgHumanPerUser}</td></tr>\n  <tr><td>Clienți cu o singură întrebare</td><td>${s.singleMessageUsers}</td></tr>\n</table>\n<p class=\"methodology\">Rezolvare automată = clienți care nu au solicitat operator uman. Detectare prin cuvinte cheie: operator, agent, om, persoana, reprezentant.</p>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>3. Top 5 Cele Mai Frecvente Întrebări</h2>\n<table class=\"data\">\n  <tr><th>#</th><th>Temă</th><th>Frecvență</th><th>Exemplu</th></tr>\n  ${questionRows}\n</table>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>4. Top 5 Probleme Raportate de Clienți</h2>\n<table class=\"data\">\n  <tr><th>#</th><th>Problema clientului</th><th>Frecvență</th><th>Rezolvat</th></tr>\n  ${issueRows}\n</table>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>5. Observații și Tendințe</h2>\n<div class=\"insight-box\">${paragraphs(analysis.customer_insights)}</div>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>6. Distribuția Angajamentului Clienților</h2>\n<table class=\"data dist-table\">\n  <tr><th>Nivel angajament</th><th>Clienți</th><th>Procent</th></tr>\n  <tr class=\"even\"><td>O singură întrebare</td><td>${s.dist1}</td><td>${s.uniqueClients > 0 ? ((s.dist1 / s.uniqueClients) * 100).toFixed(1) : 0}%</td></tr>\n  <tr class=\"odd\"><td>2–5 mesaje</td><td>${s.dist2to5}</td><td>${s.uniqueClients > 0 ? ((s.dist2to5 / s.uniqueClients) * 100).toFixed(1) : 0}%</td></tr>\n  <tr class=\"even\"><td>Peste 5 mesaje</td><td>${s.dist5plus}</td><td>${s.uniqueClients > 0 ? ((s.dist5plus / s.uniqueClients) * 100).toFixed(1) : 0}%</td></tr>\n</table>\n<div class=\"insight-box\">${paragraphs(analysis.engagement_analysis)}</div>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>7. Recomandări</h2>\n<ol class=\"recs\">${recsHtml}</ol>\n\n<p>%%%PAGEBREAK%%%</p>\n<h2>8. Anexă: Top 10 Cei Mai Activi Clienți</h2>\n<table class=\"data\">\n  <tr><th>#</th><th>Telefon (mascat)</th><th>Total mesaje</th><th>Client</th><th>Asistent</th></tr>\n  ${topUserRows}\n</table>\n\n</div>\n</body>\n</html>`;\n\nif (html.length < 500) {\n  throw new Error('Generated HTML too short (' + html.length + ' chars).');\n}\n\nconst fileName = shared.fileName;\nconst folderId = '1mIBnp7jJBf0AIAejO33lcQutWBfMWqmn';\nconst boundary = '----n8nBoundary' + Date.now();\nconst CRLF = '\\r\\n';\n\nconst metadata = JSON.stringify({\n  name: fileName,\n  mimeType: 'application/vnd.google-apps.document',\n  parents: [folderId]\n});\n\nconst bodyStr =\n  `--${boundary}${CRLF}` +\n  `Content-Type: application/json; charset=UTF-8${CRLF}` +\n  `${CRLF}` +\n  `${metadata}${CRLF}` +\n  `--${boundary}${CRLF}` +\n  `Content-Type: text/html; charset=UTF-8${CRLF}` +\n  `${CRLF}` +\n  `${html}${CRLF}` +\n  `--${boundary}--`;\n\nconst bodyBuffer = Buffer.from(bodyStr, 'utf-8');\nconst contentType = `multipart/related; boundary=${boundary}`;\n\nreturn [{\n  json: { fileName, contentType },\n  binary: {\n    data: await this.helpers.prepareBinaryData(bodyBuffer, 'upload.bin', contentType)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        96
+      ],
+      "id": "3ab9a259-7e88-4f1a-943d-e48a65554eeb",
+      "name": "Build Multipart Binary"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.contentType }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        896,
+        96
+      ],
+      "id": "00b17e0e-0ffe-4ebd-a42a-a07d72d8a3f3",
+      "name": "Upload HTML as Google Doc (API)",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Build Page Break Requests').first().json.docId }}/export?mimeType=application/pdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1792,
+        96
+      ],
+      "id": "91688a27-21dc-44ee-af3a-03cdea3546bf",
+      "name": "Export Google Doc as PDF",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Build Multipart Binary').first().json.fileName }}.pdf",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1mIBnp7jJBf0AIAejO33lcQutWBfMWqmn",
+          "mode": "list",
+          "cachedResultName": "reports",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1mIBnp7jJBf0AIAejO33lcQutWBfMWqmn"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2016,
+        96
+      ],
+      "id": "2b5fd5ed-acbb-46b2-8dec-042b9b1536dd",
+      "name": "Upload PDF to Google Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Build Page Break Requests').first().json.docId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2240,
+        96
+      ],
+      "id": "a69264b0-a82c-4316-a2bf-a830b6e4b4c2",
+      "name": "Delete Temp Google Doc",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH month_data AS (\n  SELECT phone_e164, message, created_at\n  FROM public.n8n_chat_histories\n  WHERE created_at >= date_trunc('month', NOW()) - INTERVAL '1 month' AND created_at < date_trunc('month', NOW()) - INTERVAL '1 day'\n),\nper_user AS (\n  SELECT\n    phone_e164,\n    COUNT(*) AS total,\n    SUM(CASE WHEN message::jsonb->>'type' = 'human' THEN 1 ELSE 0 END) AS human,\n    SUM(CASE WHEN message::jsonb->>'type' != 'human' THEN 1 ELSE 0 END) AS assistant\n  FROM month_data\n  GROUP BY phone_e164\n),\nhuman_counts AS (\n  SELECT phone_e164, SUM(CASE WHEN message::jsonb->>'type' = 'human' THEN 1 ELSE 0 END) AS cnt\n  FROM month_data\n  GROUP BY phone_e164\n)\nSELECT\n  (SELECT COUNT(*) FROM per_user) AS unique_clients,\n  (SELECT SUM(total) FROM per_user) AS total_messages,\n  (SELECT SUM(human) FROM per_user) AS total_human,\n  (SELECT SUM(assistant) FROM per_user) AS total_assistant,\n  ROUND((SELECT SUM(total) FROM per_user)::numeric / NULLIF((SELECT COUNT(*) FROM per_user), 0), 1) AS avg_messages_per_user,\n  ROUND((SELECT SUM(human) FROM per_user)::numeric / NULLIF((SELECT COUNT(*) FROM per_user), 0), 1) AS avg_human_per_user,\n  ROUND((SELECT SUM(assistant) FROM per_user)::numeric / NULLIF((SELECT COUNT(*) FROM per_user), 0), 1) AS avg_assistant_per_user,\n  (SELECT COUNT(*) FROM human_counts WHERE cnt = 1) AS single_message_users,\n  (SELECT COUNT(DISTINCT phone_e164) FROM month_data\n    WHERE message::jsonb->>'type' = 'human'\n      AND (message::jsonb->>'content' ~* '(operator|agent|\\mom\\M|persoana|\\mreal\\M|uman|human|reprezentant|ajutor\\s+real)')\n  ) AS escalation_users,\n  (SELECT COUNT(*) FROM human_counts WHERE cnt = 1) AS dist_1msg,\n  (SELECT COUNT(*) FROM human_counts WHERE cnt BETWEEN 2 AND 5) AS dist_2to5,\n  (SELECT COUNT(*) FROM human_counts WHERE cnt > 5) AS dist_5plus,\n  (SELECT json_agg(sub ORDER BY sub.total DESC) FROM (SELECT phone_e164, total, human, assistant FROM per_user ORDER BY total DESC LIMIT 10) sub) AS top_users_json;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -896,
+        96
+      ],
+      "id": "8ef32208-8ca1-4628-b6c7-c941c3af9131",
+      "name": "Get SQL Stats",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.haikuRequestBody }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2afd417b-70eb-423c-b916-5b136b9d986b",
+      "name": "Haiku: Analyze Chunk",
+      "credentials": {
+        "anthropicApi": {
+          "id": "LbpDCBotEZqU7Zjk",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const firstItem = $('Compute Stats & Prepare Data').first().json;\n\nconst shared = {\n  monthNameRo: firstItem.monthNameRo,\n  fileName: firstItem.fileName,\n  stats: firstItem.stats,\n  topUsers: firstItem.topUsers,\n  totalConversations: firstItem.totalConversations,\n  totalChunks: firstItem.totalChunks\n};\n\nconst items = $('Haiku: Analyze Chunk').all();\nconst chunkResults = [];\n\nfor (const item of items) {\n  try {\n    const resp = item.json;\n    if (resp.error) {\n      chunkResults.push({\n        themes: [], issues: [],\n        customer_needs: ['Eroare API: ' + (resp.error.message || JSON.stringify(resp.error))],\n        escalation_requests: [], unanswered_questions: []\n      });\n      continue;\n    }\n    \n    const content = resp.content;\n    let text = '';\n    if (Array.isArray(content)) {\n      text = content.map(b => b.text || '').join('');\n    } else if (typeof content === 'string') {\n      text = content;\n    }\n    const cleaned = text.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n    chunkResults.push(JSON.parse(cleaned));\n  } catch(e) {\n    chunkResults.push({\n      themes: [], issues: [],\n      customer_needs: ['Eroare procesare chunk: ' + e.message],\n      escalation_requests: [], unanswered_questions: []\n    });\n  }\n}\n\nconst s = shared.stats;\n\nconst mergePrompt = `Sintetizează următoarele analize ale conversațiilor cu clienții companiei \"Partner\" din ${shared.monthNameRo}. Acest raport este destinat proprietarului afacerii și trebuie să ofere o imagine clară a nevoilor și problemelor clienților.\n\nSTATISTICI GLOBALE:\n- Clienți unici care au contactat suportul: ${s.uniqueClients}\n- Total mesaje schimbate: ${s.totalMessages} (clienți: ${s.totalHuman}, asistent: ${s.totalAssistant})\n- Clienți care au cerut să vorbească cu un operator: ${s.escalationCount}\n- Rata de rezolvare automată: ${s.botResolutionRate}%\n- Angajament: ${s.dist1} clienți cu o singură întrebare, ${s.dist2to5} cu 2-5 mesaje, ${s.dist5plus} cu peste 5 mesaje\n- Total conversații analizate: ${shared.totalConversations}\n\nANALIZE DIN ${shared.totalChunks} SEGMENTE:\n${JSON.stringify(chunkResults, null, 1)}\n\nSintetizează într-un singur JSON cu exact aceste câmpuri (TOATE ÎN LIMBA ROMÂNĂ):\n{\n  \"executive_summary\": \"3-4 propoziții rezumat pentru proprietarul afacerii: câți clienți au contactat suportul, ce au cerut cel mai des, care sunt problemele principale\",\n  \"top_questions\": [\n    {\"rank\": 1, \"theme\": \"subiectul\", \"estimated_pct\": \"X%\", \"example\": \"exemplu întrebare de la client\"},\n    ...5 total, agregate din toate segmentele\n  ],\n  \"top_issues\": [\n    {\"issue\": \"problema clientului\", \"estimated_pct\": \"X%\", \"resolved\": true/false},\n    ...5 total — problemele cele mai frecvente ale CLIENȚILOR, nu ale botului\n  ],\n  \"customer_insights\": \"2-3 paragrafe: ce tipare se observă în nevoile clienților, ce informații lipsesc frecvent, ce frustrări au clienții, ce funcționează bine\",\n  \"engagement_analysis\": \"1-2 paragrafe: ce spune distribuția angajamentului despre comportamentul clienților (clienți cu o singură întrebare vs conversații lungi)\",\n  \"recommendations\": [\"rec 1\", \"rec 2\", ...3-5 recomandări acționabile pentru îmbunătățirea serviciilor și a satisfacției clienților]\n}`;\n\n// Pre-build Sonnet request body (avoids n8n expression injection)\nconst sonnetRequestBody = JSON.stringify({\n  model: 'claude-sonnet-4-6',\n  max_tokens: 3000,\n  system: 'Ești un analist senior de business. Sintetizezi date despre interacțiunile clienților într-un raport clar și acționabil pentru proprietarul afacerii. Concentrează-te pe nevoile clienților, nu pe performanța tehnică a botului. Returnează DOAR JSON valid, fără markdown code fences. Totul în limba română.',\n  messages: [{ role: 'user', content: mergePrompt }]\n});\n\nreturn [{\n  json: {\n    sonnetRequestBody,\n    shared,\n    emptyMonth: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "ff67eb65-4362-43ba-98ba-3a82c0f1d179",
+      "name": "Merge Chunk Results"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.sonnetRequestBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "b274643b-5d9e-49ad-be7b-4b9a455564d2",
+      "name": "Sonnet: Final Report",
+      "credentials": {
+        "anthropicApi": {
+          "id": "LbpDCBotEZqU7Zjk",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "df4d4f48-b93d-4510-afed-efb946672c5b",
+              "leftValue": "={{ $json.isEmptyMonth }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "690f5c63-827c-4f98-ab55-46aa32ab2aa8",
+      "name": "Has Data?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Compute Stats & Prepare Data').first().json;\nreturn [{\n  json: {\n    mergePrompt: null,\n    shared: {\n      monthNameRo: d.monthNameRo,\n      fileName: d.fileName,\n      stats: d.stats,\n      topUsers: d.topUsers || [],\n      totalConversations: 0,\n      totalChunks: 0\n    },\n    emptyMonth: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        192
+      ],
+      "id": "09baf1ad-d16b-4c6e-8ba9-60a525f13198",
+      "name": "Skip to Report"
+    },
+    {
+      "parameters": {
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1120,
+        96
+      ],
+      "id": "e4e8dc71-4d6d-4e63-876e-a52a32d03e88",
+      "name": "Get Doc Content",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const doc = $input.first().json;\nconst docId = doc.documentId;\nconst content = doc.body.content || [];\nconst PLACEHOLDER = '%%%PAGEBREAK%%%';\n\n// Find all paragraph elements containing the placeholder\nconst positions = [];\nfor (const element of content) {\n  if (element.paragraph && element.paragraph.elements) {\n    for (const el of element.paragraph.elements) {\n      if (el.textRun && el.textRun.content && el.textRun.content.includes(PLACEHOLDER)) {\n        positions.push({\n          start: element.startIndex,\n          end: element.endIndex\n        });\n      }\n    }\n  }\n}\n\nif (positions.length === 0) {\n  return [{ json: { docId, requests: [], pageBreaksInserted: 0 } }];\n}\n\n// Build batchUpdate requests in reverse order (so indices don't shift)\npositions.sort((a, b) => b.start - a.start);\n\nconst requests = [];\nfor (const pos of positions) {\n  // First delete the placeholder paragraph\n  requests.push({\n    deleteContentRange: {\n      range: { startIndex: pos.start, endIndex: pos.end }\n    }\n  });\n  // Then insert a page break at that position\n  requests.push({\n    insertPageBreak: {\n      location: { index: pos.start }\n    }\n  });\n}\n\nreturn [{ json: { docId, requestBody: JSON.stringify({ requests }), pageBreaksInserted: positions.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        96
+      ],
+      "id": "27f3a060-0a33-4e88-b502-9d55985259a7",
+      "name": "Build Page Break Requests"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.docId }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1568,
+        96
+      ],
+      "id": "37542261-3b0f-4760-be55-ce23b7f13fa0",
+      "name": "Apply Page Breaks",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get SQL Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get SQL Stats": {
+      "main": [
+        [
+          {
+            "node": "Get last month's conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get last month's conversations": {
+      "main": [
+        [
+          {
+            "node": "Compute Stats & Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Stats & Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Has Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Data?": {
+      "main": [
+        [
+          {
+            "node": "Skip to Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Haiku: Analyze Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip to Report": {
+      "main": [
+        [
+          {
+            "node": "Build Multipart Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haiku: Analyze Chunk": {
+      "main": [
+        [
+          {
+            "node": "Merge Chunk Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Chunk Results": {
+      "main": [
+        [
+          {
+            "node": "Sonnet: Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sonnet: Final Report": {
+      "main": [
+        [
+          {
+            "node": "Build Multipart Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Multipart Binary": {
+      "main": [
+        [
+          {
+            "node": "Upload HTML as Google Doc (API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload HTML as Google Doc (API)": {
+      "main": [
+        [
+          {
+            "node": "Get Doc Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Google Doc as PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Delete Temp Google Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Doc Content": {
+      "main": [
+        [
+          {
+            "node": "Build Page Break Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Page Break Requests": {
+      "main": [
+        [
+          {
+            "node": "Apply Page Breaks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Page Breaks": {
+      "main": [
+        [
+          {
+            "node": "Export Google Doc as PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "259b3b3c-8d3d-44d2-aab1-ffa269cea4a8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b29154469c7b6048a4af2059dfbd9d8d6409b5084188c0b838fb358a4b152054"
+  },
+  "nodeGroups": [],
+  "id": "UvXSV8jkVgMCUsfy",
+  "tags": []
+}
