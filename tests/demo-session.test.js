@@ -68,3 +68,26 @@ test('the token is cookie-safe -- no characters needing encoding', () => {
   const token = signToken(SID, SOON, SECRET);
   assert.match(token, /^[A-Za-z0-9._-]+$/);
 });
+
+test('a non-string secret is rejected rather than thrown from createHmac', () => {
+  const token = signToken(SID, SOON, SECRET);
+  for (const bad of [{}, [], 42, true, () => {}]) {
+    assert.strictEqual(verifyToken(token, bad, NOW), null,
+      `should reject secret ${JSON.stringify(bad)} without throwing`);
+  }
+});
+
+test('an oversized token is rejected before any crypto work', () => {
+  const huge = 'x'.repeat(600) + '.' + String(SOON) + '.' + 'y'.repeat(43);
+  assert.strictEqual(verifyToken(huge, SECRET, NOW), null);
+});
+
+test('a token at the length limit is still processed normally', () => {
+  const token = signToken(SID, SOON, SECRET);
+  assert.ok(token.length < 512, 'a real token must fit well inside the cap');
+  assert.deepStrictEqual(verifyToken(token, SECRET, NOW), { sessionId: SID, expiresAtMs: SOON });
+});
+
+test('signToken refuses a non-string secret', () => {
+  assert.throws(() => signToken(SID, SOON, {}), /string or Buffer/);
+});
