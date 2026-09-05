@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell($sp=\"C:\\\\Users\\\\berca\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Work-adaptive-technologies-whatsapp-rag-bot-n8n\\\\0cc2aee5-85bd-4823-9eff-0903be454a54\\\\scratchpad\"; $x=Get-Content \"$sp\\\\ods\\\\content.xml\" -Raw -Encoding UTF8; $x=$x -replace '</table:table-row>',\"`n\"; $x=$x -replace '</table:table-cell>','|'; $x=$x -replace '<[^>]+>',''; $sigs=\\($x -split \"`n\"\\) | Where-Object { $_ -match '^\\\\d+\\\\|' } | ForEach-Object { \\($_ -split '\\\\|'\\)[3].Trim\\(\\).ToUpper\\(\\) -replace '[^A-Z0-9]','' }; foreach\\($t in @\\('DE005','DE002','LA005','CU003','AM002','DE001','DE003'\\)\\){ \"$t -> $\\([bool]\\($sigs -contains $t\\)\\)\" })",
+      "Bash(node -e \"require\\('node:test'\\); console.log\\('node:test OK'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(grep -n \"0300-036f\\\\|replace\\(/\\\\[.*\\\\]/g, ''\\)\" docs/superpowers/plans/2026-08-14-sigiliu-validation.md)",
+      "Bash(node \"C:/Users/berca/AppData/Local/Temp/claude/e--Work-adaptive-technologies-whatsapp-rag-bot-n8n/0cc2aee5-85bd-4823-9eff-0903be454a54/scratchpad/fix-escapes.js\")",
+      "Bash(node C:/Users/berca/AppData/Local/Temp/claude/e--Work-adaptive-technologies-whatsapp-rag-bot-n8n/0cc2aee5-85bd-4823-9eff-0903be454a54/scratchpad/extract.js)",
+      "Bash(node --test tests/)",
+      "Read(//c/Users/berca/.claude/plugins/cache/claude-plugins-official/superpowers/6.1.1/skills/subagent-driven-development/**)",
+      "Read(//c/Users/berca/.claude/plugins/cache/claude-plugins-official/superpowers/6.1.1/skills/subagent-driven-development/scripts/**)",
+      "PowerShell(Get-ChildItem \"E:\\\\Work\\\\adaptive_technologies\\\\whatsapp-rag-bot-n8n\\\\db\\\\\" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })"
+    ]
+  }
+}

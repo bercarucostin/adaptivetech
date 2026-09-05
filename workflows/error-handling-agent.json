@@ -1,0 +1,167 @@
+{
+  "name": "error-handling-agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "c54a44ac-10a5-452f-b265-874aad997d2f",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "6tRquXoJr3uK6EJe",
+          "mode": "list",
+          "cachedResultName": "executions",
+          "cachedResultUrl": "/projects/nBz6YaODLYw56Uv2/datatables/6tRquXoJr3uK6EJe"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "keyValue": "={{ $json.execution.id }}"
+            },
+            {
+              "keyName": "workflow_id",
+              "keyValue": "={{ $json.workflow.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "31c28977-fd3b-469b-bdcb-9d58d84440d4",
+      "name": "Get row(s)",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "service_account@adaptivetech.ro",
+        "toEmail": "service_account@adaptivetech.ro",
+        "subject": "=Partner {{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        192
+      ],
+      "id": "c551848a-14f2-4dc6-a61a-4b7c89e2235e",
+      "name": "Email Adaptive Tech Team",
+      "webhookId": "e37ee486-e413-4991-b337-2c20f34c76a3",
+      "credentials": {
+        "smtp": {
+          "id": "QxUCxoTT5ueXKJbY",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1163275810213556",
+        "recipientPhoneNumber": "={{ String($json.phone_number || \"\") }}",
+        "textBody": "=Îmi pare rău, a apărut o problemă tehnică temporară și nu am putut procesa mesajul tău. 🙏\n\nTe rog încearcă din nou în câteva momente. Dacă problema persistă, echipa noastră tehnică a fost deja notificată și lucrează la rezolvare.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0bf7c2dc-71be-4e66-bba4-6ead69a8370e",
+      "name": "Send Error Message to Original Sender",
+      "webhookId": "f8a09529-020c-43c3-b233-c87227cd0282",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "z3YmE6IQAfoUnDtL",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build an insightful error report from the n8n Error Trigger.\nconst t = $('Error Trigger').first().json || {};\nconst ex = t.execution || {};\nconst wf = t.workflow || {};\nconst err = ex.error || {};\nconst phone = ($json && $json.phone_number) || '';\n\nconst failedNode = (err.node && err.node.name) || ex.lastNodeExecuted || 'unknown';\nconst httpCode = err.httpCode || err.statusCode || (err.context && err.context.httpCode) || '';\nconst message = err.message || (typeof err === 'string' ? err : '') || 'Unknown error';\nconst description = err.description || (err.context && err.context.description) || '';\nconst stack = String(err.stack || '').split('\\n').slice(0, 8).join('\\n');\nconst when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' });\nconst execUrl = ex.url || '';\n\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst subject = '⚠️ ' + (wf.name || 'Workflow') + ' — failed at \"' + failedNode + '\"' + (httpCode ? ' (' + httpCode + ')' : '');\n\nconst fields = [\n  ['Workflow', (wf.name || '?') + ' (' + (wf.id || '?') + ')'],\n  ['Failed node', failedNode],\n  ['Error', message],\n  description ? ['Details', description] : null,\n  httpCode ? ['HTTP code', String(httpCode)] : null,\n  ['When', when + ' (Europe/Bucharest)'],\n  ['Execution ID', String(ex.id || '?')],\n  ex.mode ? ['Mode', ex.mode] : null,\n  phone ? ['Affected user (phone)', phone] : null,\n].filter(Boolean);\n\nconst table = fields\n  .map((r) => '<tr><td style=\"padding:4px 12px;font-weight:600;vertical-align:top;white-space:nowrap\">' + esc(r[0]) + '</td><td style=\"padding:4px 12px\">' + esc(r[1]) + '</td></tr>')\n  .join('');\n\nconst html =\n  '<div style=\"font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111;line-height:1.45\">' +\n  '<h2 style=\"margin:0 0 10px\">' + esc(wf.name || 'Workflow') + ' error</h2>' +\n  '<table style=\"border-collapse:collapse;background:#f7f7f8;border:1px solid #e2e2e2\">' + table + '</table>' +\n  (execUrl ? '<p style=\"margin:14px 0\"><a href=\"' + esc(execUrl) + '\" style=\"color:#2563eb\">Open the failed execution in n8n →</a></p>' : '') +\n  '<p style=\"margin:14px 0 4px;color:#666;font-size:12px\">Stack trace (top frames):</p>' +\n  '<pre style=\"background:#111;color:#eee;padding:10px;border-radius:6px;overflow:auto;font-size:12px;white-space:pre-wrap\">' + esc(stack) + '</pre>' +\n  '</div>';\n\nreturn [{ json: { subject, html, phone } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ],
+      "id": "10616610-df83-403c-bcbc-466e3581f9e4",
+      "name": "Build Error Report"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Build Error Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Error Message to Original Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Report": {
+      "main": [
+        [
+          {
+            "node": "Email Adaptive Tech Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "41da25c4-5809-47bf-ba66-4c9484a6c283",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b29154469c7b6048a4af2059dfbd9d8d6409b5084188c0b838fb358a4b152054"
+  },
+  "nodeGroups": [],
+  "id": "M2moCDLXgY2HNl8z",
+  "tags": []
+}

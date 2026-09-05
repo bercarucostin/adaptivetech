@@ -1,0 +1,157 @@
+{
+  "name": "hybrid-search-tool",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "510c3d73-9cba-45b2-af79-b8e2d418176b",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'models/gemini-embedding-001', content: { parts: [{ text: $json.query || '' }] }, taskType: 'RETRIEVAL_QUERY', outputDimensionality: 1536 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "e64291b9-edcb-40d2-b6e7-8546e54268ef",
+      "name": "Embed Query",
+      "retryOnFail": true,
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a hybrid_search() call so the 1536-dim vector and any\n// comma/quote-bearing lexical text are passed safely (no positional queryReplacement).\nconst EXPECTED_DIMS = 1536;\n\n// L2-normalize. gemini-embedding-001 only returns pre-normalized vectors\n// at 3072 dims; at 1536 the API leaves them unnormalized.\nfunction l2normalize(v) {\n  let norm = 0;\n  for (const x of v) norm += x * x;\n  norm = Math.sqrt(norm);\n  return norm > 0 ? v.map(x => x / norm) : v;\n}\n\nconst trigger = $('When Executed by Another Workflow').first().json || {};\nconst lexical = String(trigger.lexical || trigger.query || '');\nlet filter = trigger.filter || '{}';\nif (typeof filter !== 'string') filter = JSON.stringify(filter);\nif (!filter.trim()) filter = '{}';\n\nconst embedding = $json.embedding && $json.embedding.values;\nif (!Array.isArray(embedding)) {\n  throw new Error('Embedding failed: ' + JSON.stringify($json).slice(0, 300));\n}\n\n// Fail here, at the source, rather than on the Postgres cast.\nif (embedding.length !== EXPECTED_DIMS) {\n  throw new Error('Query embedding is ' + embedding.length + ' dims, expected ' +\n    EXPECTED_DIMS + ' - check outputDimensionality on the Embed Query node.');\n}\n\nconst vector = '[' + l2normalize(embedding).join(',') + ']';\n\nreturn [{ json: { lexical, vector, filter } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "9c5c5c40-77f1-483f-9124-0e0cad4700f2",
+      "name": "Build Search SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM hybrid_search($1::text, $2::vector(1536), $3::jsonb, 15, 0.5, 0.5)",
+        "options": {
+          "queryReplacement": "={{ [$json.lexical, $json.vector, $json.filter] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b211d6ee-1157-43c3-be49-dbfbf926ad80",
+      "name": "Run Hybrid Search",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format retrieved chunks as a single text block with rich source labels,\n// so the agent gets file + section context (which match_documents dropped).\nconst rows = $input.all();\nconst blocks = rows.map(item => {\n  const j = item.json || {};\n  const content = j.content;\n  if (!content) return '';\n  const meta = j.metadata || {};\n  const source = meta.original_file_name || '';\n  const section = meta.section_heading || '';\n  const label = source && section ? source + ' \\u2014 ' + section : (source || section || '');\n  return label ? '[Source: ' + label + ']\\n' + content : content;\n}).filter(Boolean);\n\nconst response = blocks.length ? blocks.join('\\n\\n---\\n\\n') : 'No relevant documentation found.';\nreturn [{ json: { response } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "id": "9647b3ce-5b9a-4b42-88e6-9e79bf1eea6c",
+      "name": "Format Results"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Embed Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Query": {
+      "main": [
+        [
+          {
+            "node": "Build Search SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search SQL": {
+      "main": [
+        [
+          {
+            "node": "Run Hybrid Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Hybrid Search": {
+      "main": [
+        [
+          {
+            "node": "Format Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4c3c530d-81fb-43c8-9a58-18913dec5e49",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b29154469c7b6048a4af2059dfbd9d8d6409b5084188c0b838fb358a4b152054"
+  },
+  "nodeGroups": [],
+  "id": "e6scpPioL5hoJY7R",
+  "tags": []
+}
