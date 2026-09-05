@@ -39,8 +39,10 @@ test('no client-specific file has returned to the branch', () => {
 
 test('no tracked file names the client or leaks a sigiliu', () => {
   for (const file of tracked()) {
-    // The plans and spec discuss the separation itself, by necessity.
-    if (file.startsWith('docs/')) continue;
+    // The plans and spec discuss the separation itself, by necessity, and
+    // this file must name what it forbids in order to forbid it. Every
+    // other file, including every other test, is scanned.
+    if (file.startsWith('docs/') || file === 'tests/branch-contract.test.js') continue;
     const body = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.ok(!/robotel/i.test(body), file + ' names the client');
     assert.ok(!/\bsigiliu/i.test(body), file + ' mentions sigiliu');
