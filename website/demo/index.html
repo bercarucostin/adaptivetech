@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo RAG — Adaptive Technologies</title>
+<meta name="description" content="Încarcă un document și pune-i întrebări. Un demo RAG care răspunde doar din ce scrie în documentul tău.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0C3054">
+
+<!-- Fonts — same stack as the main site -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Favicon — same inline Adaptive "A" mark as the main site, no extra request -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/png/app-icon-1024.png">
+
+<link rel="stylesheet" href="demo.css">
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+
+<header class="demo__bar">
+  <a href="/" class="demo__brand">
+    <svg class="demo__brand-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
+    <span>adaptive<span class="demo__brand-dot"></span><span class="demo__brand-sub">technologies</span></span>
+  </a>
+  <div class="lang-toggle" role="group" aria-label="Limbă / Language">
+    <button id="lang-ro" type="button" class="active">RO</button>
+    <button id="lang-en" type="button">EN</button>
+  </div>
+</header>
+
+<main class="demo">
+
+  <section id="state-gate" class="demo__panel">
+    <h1>
+      <span data-ro>Încearcă un asistent RAG pe documentul tău</span>
+      <span data-en>Try a RAG assistant on your own document</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>Încarcă un document și pune-i întrebări. Răspunde doar din ce scrie în el
+        și îți arată secțiunea din care a citit.</span>
+      <span data-en>Upload a document and ask it questions. It answers only from what the
+        document says, and shows you the section it read.</span>
+    </p>
+    <form id="gate-form" novalidate>
+      <label for="email">
+        <span data-ro>Adresa ta de email</span>
+        <span data-en>Your email address</span>
+      </label>
+      <input id="email" name="email" type="email" required autocomplete="email"
+             data-ro-placeholder="nume@companie.ro" data-en-placeholder="name@company.com"
+             placeholder="nume@companie.ro">
+
+      <label class="demo__check">
+        <input id="consent" name="consent" type="checkbox" required>
+        <span>
+          <span data-ro>Sunt de acord să fiu contactat de Adaptive Technologies.
+            <a href="/politica-de-confidentialitate.html">Politica de confidențialitate</a>.</span>
+          <span data-en>I agree to be contacted by Adaptive Technologies.
+            <a href="/politica-de-confidentialitate.html">Privacy policy</a>.</span>
+        </span>
+      </label>
+
+      <!-- No Cloudflare Turnstile widget has been provisioned for this domain
+           yet (the backend it verifies against does not exist either — Tasks
+           8-11), so there is no real site key to put here. Cloudflare's own
+           documented "always passes, visible" test key stands in for it —
+           it renders and calls onTurnstile with no console errors, unlike
+           the brief's literal TURNSTILE_SITE_KEY placeholder, which the live
+           Cloudflare script rejects at 400020 as soon as the page loads.
+           Swap this for the real, public site key before this page goes live. -->
+      <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstile"></div>
+
+      <button type="submit" id="gate-submit">
+        <span data-ro>Trimite-mi codul</span>
+        <span data-en>Send me the code</span>
+      </button>
+      <p class="demo__error" id="gate-error" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="state-code" class="demo__panel" hidden>
+    <h1>
+      <span data-ro>Verifică-ți emailul</span>
+      <span data-en>Check your email</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>Ți-am trimis un cod din 6 cifre. Expiră în 10 minute.</span>
+      <span data-en>We sent you a 6-digit code. It expires in 10 minutes.</span>
+    </p>
+    <form id="code-form" novalidate>
+      <label for="code">
+        <span data-ro>Codul din email</span>
+        <span data-en>The code from the email</span>
+      </label>
+      <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}"
+             maxlength="6" autocomplete="one-time-code" required>
+      <button type="submit" id="code-submit">
+        <span data-ro>Continuă</span>
+        <span data-en>Continue</span>
+      </button>
+      <p class="demo__error" id="code-error" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="state-upload" class="demo__panel" hidden>
+    <h1>
+      <span data-ro>Încarcă un document</span>
+      <span data-en>Upload a document</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>PDF, DOCX sau TXT. Maximum 10 MB, un singur fișier.</span>
+      <span data-en>PDF, DOCX, or TXT. Maximum 10 MB, one file.</span>
+    </p>
+    <form id="upload-form">
+      <input id="file" name="file" type="file" accept=".pdf,.docx,.txt" required>
+      <button type="submit" id="upload-submit">
+        <span data-ro>Încarcă</span>
+        <span data-en>Upload</span>
+      </button>
+    </form>
+    <div id="progress" class="demo__progress" hidden>
+      <span class="demo__spinner" aria-hidden="true"></span>
+      <p id="progress-text" role="status"></p>
+    </div>
+    <p class="demo__error" id="upload-error" role="alert" hidden></p>
+  </section>
+
+  <section id="state-chat" class="demo__panel demo__panel--chat" hidden>
+    <header class="demo__chathead">
+      <span id="chat-filename"></span>
+      <span id="chat-remaining" class="demo__remaining"></span>
+    </header>
+    <ol id="messages" class="demo__messages"></ol>
+    <form id="chat-form">
+      <input id="question" name="question" autocomplete="off" required
+             data-ro-placeholder="Întreabă ceva despre document…"
+             data-en-placeholder="Ask something about the document…"
+             placeholder="Întreabă ceva despre document…">
+      <button type="submit" id="chat-submit">
+        <span data-ro>Trimite</span>
+        <span data-en>Send</span>
+      </button>
+    </form>
+    <p class="demo__error" id="chat-error" role="alert" hidden></p>
+  </section>
+
+</main>
+<script src="demo.js"></script>
+</body>
+</html>

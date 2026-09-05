@@ -1,0 +1,278 @@
+'use strict';
+
+const API = '/api/demo';
+const POLL_MS = 5000;
+const LANG_KEY = 'adaptive-lang'; // shared with the main site's toggle
+
+const $ = (id) => document.getElementById(id);
+const state = { email: '', turnstile: '', uploadId: null, filename: '' };
+
+window.onTurnstile = (token) => { state.turnstile = token; };
+
+function show(name) {
+  for (const id of ['state-gate', 'state-code', 'state-upload', 'state-chat']) {
+    $(id).hidden = id !== 'state-' + name;
+  }
+}
+
+function fail(elId, message) {
+  const el = $(elId);
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function clearError(elId) { $(elId).hidden = true; }
+
+// ── Language ────────────────────────────────────────────────────────────
+// Every failure produces a state the UI can render, and it has to render in
+// whichever language the visitor is reading. A dead spinner is the one
+// outcome that is not allowed; a Romanian-only error on an English page is
+// the other.
+const STRINGS = {
+  ro: {
+    MESSAGES: {
+      INVALID_EMAIL: 'Adresa de email nu pare validă.',
+      CONSENT_REQUIRED: 'Bifează căsuța pentru a continua.',
+      BAD_CODE: 'Cod greșit sau expirat. Cere unul nou.',
+      SESSION_INVALID: 'Sesiunea a expirat. Ia-o de la început.',
+      UPLOAD_LIMIT: 'Ai încărcat deja un document în această sesiune.',
+      FILE_TOO_LARGE: 'Fișierul depășește 10 MB.',
+      UNSUPPORTED_TYPE: 'Acceptăm doar PDF, DOCX sau TXT.',
+      NO_TEXT_LAYER: 'Documentul pare scanat și nu conține text. Încearcă unul cu text selectabil.',
+      MESSAGE_LIMIT: 'Ai folosit toate întrebările din acest demo.',
+      UNAVAILABLE: 'Demo-ul este temporar indisponibil. Scrie-ne și îți arătăm live.',
+      NETWORK: 'Conexiune întreruptă. Încearcă din nou.',
+    },
+    STAGE_TEXT: {
+      pending: 'În așteptare…',
+      extracting: 'Extragem textul din document…',
+      embedding: 'Construim indexul…',
+    },
+    generic: 'Ceva n-a mers. Încearcă din nou.',
+    waitingSecurity: 'Așteaptă verificarea de securitate.',
+    uploading: 'Se încarcă…',
+    processing: 'Se procesează…',
+    remainingOne: 'o întrebare rămasă',
+    remainingN: (n) => n + ' întrebări rămase',
+  },
+  en: {
+    MESSAGES: {
+      INVALID_EMAIL: 'That email address doesn’t look valid.',
+      CONSENT_REQUIRED: 'Check the box to continue.',
+      BAD_CODE: 'Wrong or expired code. Ask for a new one.',
+      SESSION_INVALID: 'Your session expired. Start again from the top.',
+      UPLOAD_LIMIT: 'You’ve already uploaded a document in this session.',
+      FILE_TOO_LARGE: 'The file is over 10 MB.',
+      UNSUPPORTED_TYPE: 'We only accept PDF, DOCX, or TXT.',
+      NO_TEXT_LAYER: 'This document looks scanned and has no text layer. Try one with selectable text.',
+      MESSAGE_LIMIT: 'You’ve used all the questions in this demo.',
+      UNAVAILABLE: 'The demo is temporarily unavailable. Message us and we’ll show you live.',
+      NETWORK: 'Connection lost. Try again.',
+    },
+    STAGE_TEXT: {
+      pending: 'Waiting…',
+      extracting: 'Extracting text from the document…',
+      embedding: 'Building the index…',
+    },
+    generic: 'Something went wrong. Try again.',
+    waitingSecurity: 'Waiting for the security check.',
+    uploading: 'Uploading…',
+    processing: 'Processing…',
+    remainingOne: 'one question left',
+    remainingN: (n) => n + ' questions left',
+  },
+};
+
+function lang() { return document.documentElement.lang === 'en' ? 'en' : 'ro'; }
+function t() { return STRINGS[lang()]; }
+const explain = (code) => t().MESSAGES[code] || t().generic;
+
+function setLang(next) {
+  document.documentElement.lang = next;
+  $('lang-ro').classList.toggle('active', next === 'ro');
+  $('lang-en').classList.toggle('active', next === 'en');
+  try { localStorage.setItem(LANG_KEY, next); } catch (_) { /* private mode etc. */ }
+
+  document.querySelectorAll('[data-ro-placeholder]').forEach((el) => {
+    el.placeholder = next === 'en' ? el.dataset.enPlaceholder : el.dataset.roPlaceholder;
+  });
+}
+
+$('lang-ro').addEventListener('click', () => setLang('ro'));
+$('lang-en').addEventListener('click', () => setLang('en'));
+
+try {
+  const saved = localStorage.getItem(LANG_KEY);
+  setLang(saved === 'en' ? 'en' : 'ro');
+} catch (_) {
+  setLang('ro');
+}
+
+// ── Networking ──────────────────────────────────────────────────────────
+async function post(path, body, isForm) {
+  let res;
+  try {
+    res = await fetch(API + path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: isForm ? undefined : { 'Content-Type': 'application/json' },
+      body: isForm ? body : JSON.stringify(body),
+    });
+  } catch (_) {
+    throw new Error('NETWORK');
+  }
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* empty body is fine */ }
+  if (!res.ok) throw new Error(data.code || 'UNAVAILABLE');
+  return data;
+}
+
+$('gate-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError('gate-error');
+  const email = $('email').value.trim();
+  if (!$('consent').checked) return fail('gate-error', explain('CONSENT_REQUIRED'));
+  if (!state.turnstile) return fail('gate-error', t().waitingSecurity);
+
+  $('gate-submit').disabled = true;
+  try {
+    await post('/request-code', { email, consent: true, turnstile_token: state.turnstile });
+    state.email = email;
+    show('code');
+    $('code').focus();
+  } catch (err) {
+    fail('gate-error', explain(err.message));
+  } finally {
+    $('gate-submit').disabled = false;
+  }
+});
+
+$('code-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError('code-error');
+  $('code-submit').disabled = true;
+  try {
+    await post('/verify-code', { email: state.email, code: $('code').value.trim() });
+    show('upload');
+  } catch (err) {
+    fail('code-error', explain(err.message));
+  } finally {
+    $('code-submit').disabled = false;
+  }
+});
+
+$('upload-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError('upload-error');
+  const file = $('file').files[0];
+  if (!file) return;
+
+  state.filename = file.name;
+  const form = new FormData();
+  form.append('file', file);
+
+  $('upload-submit').disabled = true;
+  $('progress').hidden = false;
+  $('progress-text').textContent = t().uploading;
+
+  try {
+    const res = await post('/upload', form, true);
+    if (!res.upload_id) throw new Error('UPLOAD_LIMIT');
+    state.uploadId = res.upload_id;
+    poll();
+  } catch (err) {
+    $('progress').hidden = true;
+    $('upload-submit').disabled = false;
+    fail('upload-error', explain(err.message));
+  }
+});
+
+async function poll() {
+  let res;
+  try {
+    res = await post('/upload-status', { upload_id: state.uploadId });
+  } catch (err) {
+    $('progress').hidden = true;
+    $('upload-submit').disabled = false;
+    return fail('upload-error', explain(err.message));
+  }
+
+  if (res.status === 'ready') {
+    $('progress').hidden = true;
+    $('chat-filename').textContent = state.filename;
+    setRemaining(10);
+    show('chat');
+    $('question').focus();
+    return;
+  }
+
+  if (res.status === 'failed') {
+    $('progress').hidden = true;
+    $('upload-submit').disabled = false;
+    return fail('upload-error', explain(res.error));
+  }
+
+  $('progress-text').textContent = t().STAGE_TEXT[res.status] || t().processing;
+  setTimeout(poll, POLL_MS);
+}
+
+function setRemaining(n) {
+  $('chat-remaining').textContent = n === 1 ? t().remainingOne : t().remainingN(n);
+}
+
+function addMessage(role, text, sources) {
+  const li = document.createElement('li');
+  li.className = 'demo__msg demo__msg--' + role;
+
+  const body = document.createElement('p');
+  body.textContent = text;           // textContent, never innerHTML
+  li.appendChild(body);
+
+  if (sources && sources.length) {
+    const chips = document.createElement('ul');
+    chips.className = 'demo__sources';
+    for (const s of sources) {
+      const chip = document.createElement('li');
+      chip.textContent = s.section ? s.file + ' — ' + s.section : s.file;
+      chips.appendChild(chip);
+    }
+    li.appendChild(chips);
+  }
+
+  $('messages').appendChild(li);
+  li.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  return li;
+}
+
+$('chat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError('chat-error');
+  const question = $('question').value.trim();
+  if (!question) return;
+
+  addMessage('user', question);
+  $('question').value = '';
+  $('chat-submit').disabled = true;
+
+  const typing = addMessage('assistant', '…');
+  try {
+    const res = await post('/chat', { message: question });
+    typing.remove();
+    addMessage('assistant', res.answer, res.sources);
+    setRemaining(res.messages_left);
+    if (res.messages_left <= 0) {
+      $('question').disabled = true;
+      $('chat-submit').disabled = true;
+      fail('chat-error', explain('MESSAGE_LIMIT'));
+      return;
+    }
+  } catch (err) {
+    typing.remove();
+    fail('chat-error', explain(err.message));
+  } finally {
+    if (!$('question').disabled) {
+      $('chat-submit').disabled = false;
+      $('question').focus();
+    }
+  }
+});
