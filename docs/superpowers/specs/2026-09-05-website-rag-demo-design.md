@@ -48,16 +48,22 @@ rewritten *before* that happens.
 answers against a single document land in a couple of seconds. Server-sent events through a webhook
 buy nothing at this size.
 
-**Caddy per-IP rate limiting.** The `caddy-ratelimit` plugin requires a custom `xcaddy` build. The
-limits that actually matter are per-email and per-session, and those must be enforced against the
-database regardless — an IP limit cannot count a visitor's sessions. Caddy rate limiting is later
-hardening, not a v1 dependency.
+**Caddy per-IP rate limiting.** The `caddy-ratelimit` plugin requires a custom `xcaddy` build, and
+Cloudflare now provides the same thing without one. See Abuse and cost control.
 
 **Anything resembling accounts.** No passwords, no profiles, no returning-user state beyond the
 2-hour session. The email gate exists to verify a human and capture a lead, not to build an identity
 system.
 
 ## Architecture
+
+**Cloudflare sits in front of the origin** (free plan): it proxies the site, absorbs volumetric
+attacks, and hides the Hetzner IP.
+
+This is worthless unless the second half is done: the Hetzner firewall must accept ports 80 and 443
+**only from Cloudflare's published IP ranges**. An origin that still answers on its own IP is one DNS
+history lookup away from being hit directly, and Cloudflare becomes decorative. The firewall rule is
+the control; the proxy is only the delivery mechanism for it.
 
 One Hetzner VPS (CX22 class), Docker Compose, three services:
 
@@ -88,6 +94,56 @@ HMAC key.
 
 This invariant is enforced mechanically by a test (see Testing), not by review discipline.
 
+## Abuse and cost control
+
+A public endpoint that spends money on every request needs this reasoned about explicitly, so here is
+the arithmetic. Per session: chat is ten messages of roughly 9K input and 400 output tokens against
+Haiku 4.5 at $1.00 / $5.00 per MTok, about **$0.11**; embeddings are negligible; Gemini extraction of
+a 50-page PDF produces 25–40K output tokens and is probably the largest single line item. Call it
+**$0.20–0.40 per session**.
+
+**The email gate does not control this.** Three sessions per email per day sounds like a limit until
+you notice disposable addresses are free and unlimited. A script with a temp-mail API and 1,000
+addresses buys 3,000 sessions a day — $600–1,200 — and nothing else in the design stops it. The gate
+raises the attacker's effort by about twenty minutes. It is a lead-capture mechanism that happens to
+deter casual abuse, and treating it as a spending control would be a mistake.
+
+Two distinct threats follow, and they need different answers: **volumetric attack** takes the site
+down but costs no tokens, while **economic abuse** costs money without producing traffic anyone would
+notice.
+
+Five controls, in descending order of value:
+
+**1. Separate provider keys with hard caps.** A dedicated Anthropic workspace key and a separate
+Google Cloud project for the demo's Gemini key, each with its own spend and quota ceiling. This is
+the only control that bounds the loss regardless of what fails in the application, and it extends the
+isolation decision already made for Supabase: demo abuse must not be able to drain the budget serving
+a paying client.
+
+**2. Cloudflare Turnstile on the gate.** The Turnstile token is verified server-side in
+`demo-request-code` before a code is issued. This is what actually defeats the attack above, because
+that attack is scripted by definition.
+
+**3. Cloudflare proxy plus origin firewall lock.** Covered under Architecture.
+
+**4. Retrieval short-circuit** — see `demo-chat` below.
+
+**5. Token budgets rather than message counts** — see `demo-chat` below.
+
+### Accepted risks
+
+**No global daily spend ceiling.** The provider caps in control 1 are the ceiling. The cost of this
+choice is that the ceiling trips as a hard API failure mid-request rather than a graceful message, so
+Error handling below requires quota failures to degrade to a *"demo temporarily unavailable — book a
+call"* state rather than surfacing a provider error.
+
+**Per-IP and per-subnet session caps, and a disposable-domain blocklist**, are deferred to a hardening
+pass. Both are cheap and both raise an attacker's cost; neither is load-bearing once Turnstile and the
+provider caps are in place.
+
+**Caddy per-IP rate limiting** is superseded by Cloudflare, which does it without a custom `xcaddy`
+build.
+
 ## Data model
 
 New Supabase project, `demo` schema. Embeddings are `vector(1536)`, matching the existing pipeline.
@@ -103,10 +159,15 @@ unexpired code **for the supplied email**, and `attempts` lives on that code row
 ### `demo_sessions`
 
 `id uuid primary key`, `email citext`, `created_at`, `expires_at` (created_at + 2h),
-`files_uploaded int default 0`, `messages_used int default 0`, `ip inet`.
+`files_uploaded int default 0`, `messages_used int default 0`, `input_tokens bigint default 0`,
+`output_tokens bigint default 0`, `ip inet`.
 
-The two counters are the authoritative quota state. They are incremented server-side in the same
-statement that authorises the action, so a concurrent double-submit cannot exceed the limit.
+The counters are the authoritative quota state. They are incremented server-side in the same statement
+that authorises the action, so a concurrent double-submit cannot exceed the limit.
+
+The two token columns are the real budget. A message count is a proxy for what you are billed for;
+tokens are the thing itself, and ten messages each dragging fifteen chunks of context cost roughly
+twice what ten lean ones do. They accumulate the `usage` figures returned by each Anthropic response.
 
 ### `demo_uploads`
 
@@ -203,7 +264,7 @@ All routes are `POST` under `/api/demo/`, proxied to n8n webhooks. All except `r
 
 | Route | Body | Returns |
 |---|---|---|
-| `request-code` | `{email, consent}` | `202` always |
+| `request-code` | `{email, consent, turnstile_token}` | `202` always |
 | `verify-code` | `{email, code}` | `200` + `Set-Cookie`, or `401` |
 | `upload` | multipart file | `202 {upload_id}` |
 | `upload-status` | `{upload_id}` | `{status, error, chunk_count, page_count}` |
@@ -221,8 +282,12 @@ matching the existing `hybrid-search-tool.json` pattern.
 
 ### `demo-request-code`
 
-Validate the email's shape and require `consent`. Enforce two throttles: **3 sessions per email per
-day** and **3 codes per email per hour**. The second is not redundant — without it the endpoint is a
+Verify the **Turnstile token** server-side against Cloudflare's `siteverify` endpoint before doing
+anything else; reject the request if it fails. This is the control that actually stops scripted
+signup, so it runs first and unconditionally.
+
+Then validate the email's shape and require `consent`. Enforce two throttles: **3 sessions per email
+per day** and **3 codes per email per hour**. The second is not redundant — without it the endpoint is a
 free mail-bombing tool aimed at someone else's inbox, and the sending reputation burned is Adaptive
 Technologies'.
 
@@ -284,9 +349,24 @@ Verify session, return the `demo_uploads` row scoped to that session. Polled eve
 
 ### `demo-chat`
 
-Verify session. Enforce `messages_used < 10`. Load history from `demo_messages`, call `demo-search`
-with the verified `session_id`, prompt Haiku 4.5 over `httpRequest` as `agent.json` does, persist both
-turns, increment the counter, respond.
+Verify session. Enforce `messages_used < 10` **and the per-session token budget**. Load history from
+`demo_messages`, call `demo-search` with the verified `session_id`, prompt Haiku 4.5 over `httpRequest`
+as `agent.json` does, persist both turns, add the response's `usage` to the session's token counters,
+respond.
+
+**Retrieval short-circuits before Claude is called.** If `demo-search` returns nothing above a score
+floor, `demo-chat` returns the canned "that isn't in your document" refusal **without making an
+Anthropic request at all**.
+
+This is the control that answers "someone using our tokens for something other than the demo". An
+off-document query costs one embedding call and never reaches Haiku. Anyone hoping to use the endpoint
+as a general-purpose LLM must first upload a document and then phrase every query so it retrieves
+against that document — at which point the retrieved context is prepended and constrains the output
+anyway. It costs one `IF` node and it removes almost all of the endpoint's value as a proxy.
+
+Two supporting caps: `max_tokens` is set to ~800, and retrieval is cut to the top 8 chunks rather than
+15. The demo answers questions about one document; it does not need the context budget the WhatsApp
+agent uses against a whole knowledge base.
 
 The system prompt is narrow: answer only from the supplied excerpts, name the section used, and say
 plainly when the document does not cover the question. Answers carry source chips built from the
@@ -307,6 +387,9 @@ One page, vanilla JavaScript, no build step — matching the site as it exists. 
 place: **email gate → upload with progress → chat**. Same-origin `fetch`, so the cookie rides
 automatically.
 
+The gate embeds the Turnstile widget and sends its token with `request-code`. Turnstile is invisible
+for most visitors, so it costs the funnel almost nothing.
+
 The chat shows a typing indicator, source chips beneath each answer, and a visible *"7 questions
 left"* counter, so the limit reads as a demo boundary rather than a malfunction.
 
@@ -319,6 +402,12 @@ The visitor-facing rule: **every failure produces a state the UI can render, nev
 Extraction failure, a hit quota, an expired session, a scanned PDF with no text layer — each either
 sets `demo_uploads.status = 'failed'` with a plain-language `error`, or returns a typed error code.
 
+**Provider quota exhaustion is a named case, not a generic one.** Because there is no global soft cap
+(see Accepted risks), the spend ceiling trips as a hard failure from Anthropic or Gemini in the middle
+of a real visitor's request. Both `demo-upload` and `demo-chat` catch quota and rate-limit responses
+specifically and degrade to *"the demo is temporarily unavailable — book a call"*, with an alert to
+the team. Without this the worst case is a prospect watching the product fail with a raw API error.
+
 The scanned-PDF case deserves naming because it is the most likely real failure:
 *"this PDF has no text layer — try a text-based document"* is a far better demo moment than a generic
 error, and it is a one-branch check on extracted character count.
@@ -329,9 +418,14 @@ is worse than no demo.
 
 ## Secrets
 
-The HMAC signing key, the code-hash pepper, the Supabase connection string, and the Gemini and
-Anthropic keys are all n8n credentials. None appear in workflow JSON. The workflow files are committed
-to this repository, so this is a hard line rather than a preference.
+The HMAC signing key, the code-hash pepper, the Supabase connection string, the Turnstile secret, and
+the Gemini and Anthropic keys are all n8n credentials. None appear in workflow JSON. The workflow files
+are committed to this repository, so this is a hard line rather than a preference.
+
+**The demo's Anthropic and Gemini keys are distinct from the ones the WhatsApp bot uses** — a separate
+Anthropic workspace key and a separate Google Cloud project, each carrying its own spend and quota
+ceiling. Sharing a key would mean a scripted attack on a public marketing demo could exhaust the quota
+that answers a paying client's support messages.
 
 ## Testing
 
@@ -359,3 +453,9 @@ Before this is called done:
 - Confirm an off-document question produces a refusal, not a fabrication.
 - Confirm the hourly purge removes documents and uploads, and spares `demo_messages` and `demo_leads`.
 - Confirm a scanned PDF fails with the specific message rather than a generic error.
+- Confirm `request-code` rejects a request with a missing or replayed Turnstile token.
+- Confirm an off-document question returns the refusal **without an Anthropic request being billed** —
+  check the workflow execution, not just the reply text. This is the control that fails silently if it
+  is wired in the wrong order.
+- Confirm the origin refuses a direct connection to the Hetzner IP on 80/443 from outside Cloudflare's
+  ranges. A Cloudflare proxy without this firewall rule provides no protection at all.
