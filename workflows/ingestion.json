@@ -1,0 +1,801 @@
+{
+  "name": "ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 30000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4768,
+        -416
+      ],
+      "id": "2b43eded-c4e5-4e2a-bc6b-50ab88b1c35e",
+      "name": "Generate Embeddings",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 120000
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format for Insert — unpacks embedding batches, builds INSERT queries.\r\n// Emits a DELETE for each file before its first INSERT to allow clean re-ingestion.\r\n\r\nconst items = $input.all();\r\nconst chunkBatches = $('Preparing Chunks').all();\r\nconst out = [];\r\n\r\n// Dollar-quoting: SQL-injection-proof escaping for PostgreSQL.\r\nfunction dollarQuote(s) {\r\n  let tag = 'q';\r\n  while (s.includes('$' + tag + '$')) tag += '_';\r\n  return '$' + tag + '$' + s + '$' + tag + '$';\r\n}\r\n\r\n// L2-normalize. gemini-embedding-001 only returns pre-normalized\r\n// vectors at 3072 dims; at 1536 you must normalize yourself.\r\nfunction l2normalize(v) {\r\n  let norm = 0;\r\n  for (const x of v) norm += x * x;\r\n  norm = Math.sqrt(norm);\r\n  return norm > 0 ? v.map(x => x / norm) : v;\r\n}\r\n\r\nconst SQ = \"'\";\r\nconst deletedFiles = new Set();\r\n\r\nfor (let i = 0; i < items.length; i++) {\r\n  const embeddings = items[i].json.embeddings;\r\n  if (!embeddings || !Array.isArray(embeddings)) {\r\n    const errMsg = items[i].json.error?.message || JSON.stringify(items[i].json).slice(0, 500);\r\n    throw new Error('Embedding API error for batch ' + i + ': ' + errMsg);\r\n  }\r\n  const chunks = chunkBatches[i].json.chunks;\r\n\r\n  for (let j = 0; j < embeddings.length; j++) {\r\n    const embedding = l2normalize(embeddings[j].values);\r\n    const chunk = chunks[j];\r\n\r\n    // Delete all existing rows for this file before the first insert.\r\n    // Keyed on file_id, not the file name: file_id is stable across Drive\r\n    // renames, so a renamed file replaces its old rows instead of orphaning\r\n    // them under the old name -- the sync's orphan sweep would not catch\r\n    // those, because the file_id is still present in Drive.\r\n    const fileKey = chunk.file_id;\r\n    if (fileKey && !deletedFiles.has(fileKey)) {\r\n      deletedFiles.add(fileKey);\r\n      out.push({\r\n        json: {\r\n          query: \"DELETE FROM documents WHERE metadata->>'file_id' = \" + dollarQuote(fileKey)\r\n        }\r\n      });\r\n    }\r\n\r\n    const metadata = JSON.stringify({\r\n      file_id: chunk.file_id,\r\n      original_file_name: chunk.original_file_name,\r\n      section_heading: chunk.section_heading,\r\n      chunk_index: chunk.chunk_index,\r\n      // Both ingestion branches share this table. The sync's orphan sweep is\r\n      // scoped to source='knowledge_base' so it cannot delete expert feedback.\r\n      source: 'knowledge_base'\r\n    });\r\n    const embeddingStr = '[' + embedding.join(',') + ']';\r\n    const lastModifiedSql = chunk.last_modified\r\n      ? dollarQuote(chunk.last_modified) + '::timestamptz'\r\n      : 'NULL';\r\n    out.push({\r\n      json: {\r\n        query: 'INSERT INTO documents (content, metadata, embedding, last_modified) VALUES (' +\r\n          dollarQuote(chunk.text) + ', ' +\r\n          dollarQuote(metadata) + '::jsonb, ' +\r\n          SQ + embeddingStr + SQ + '::vector(1536), ' +\r\n          lastModifiedSql + ') ON CONFLICT DO NOTHING'\r\n      }\r\n    });\r\n  }\r\n}\r\nreturn out;\r\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4992,
+        -416
+      ],
+      "id": "328c75b1-3866-4101-812a-86c6a8aef7d4",
+      "name": "Format for Insert"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparing Chunks — section-aware chunking with batched embedding output.\n\nconst extractedItems = $input.all();\n\nconst TOKEN_LIMIT = 350;\nconst OVERLAP_TOKENS = 75;\nconst EMBED_BATCH_SIZE = 100;\n\nfunction toTokens(text) {\n  return text.split(/\\s+/).filter(Boolean);\n}\nfunction toText(tokens) {\n  return tokens.join(' ');\n}\n\nconst allChunks = [];\n\nfor (let itemIndex = 0; itemIndex < extractedItems.length; itemIndex++) {\n  const extracted = extractedItems[itemIndex]?.json || {};\n  const originalFileName = extracted.original_file_name || ('file_' + (itemIndex + 1));\n  const title = originalFileName.replace(/\\.[^.]+$/, '');\n  const fileId = extracted.file_id || '';\n  const text = extracted.text || '';\n  const lastModified = extracted.last_modified || null;\n  if (!text.trim()) continue;\n\n  // Split into sections by ## headings\n  const lines = text.split('\\n');\n  let currentSection = title;\n  const sections = [];\n  let currentContent = [];\n\n  for (const line of lines) {\n    const match = line.match(/^##\\s+(.+)$/);\n    if (match) {\n      if (currentContent.length > 0) {\n        sections.push({ heading: currentSection, content: currentContent.join('\\n') });\n        currentContent = [];\n      }\n      currentSection = match[1].trim();\n    } else {\n      currentContent.push(line);\n    }\n  }\n  if (currentContent.length > 0) {\n    sections.push({ heading: currentSection, content: currentContent.join('\\n') });\n  }\n\n  // Chunk each section with overlap\n  let chunkIndex = 0;\n  for (const section of sections) {\n    const sectionText = section.content.trim();\n    if (!sectionText) continue;\n\n    const tokens = toTokens(sectionText);\n    if (tokens.length === 0) continue;\n\n    let idx = 0;\n    while (idx < tokens.length) {\n      const take = tokens.slice(idx, idx + TOKEN_LIMIT);\n      const chunkText = toText(take);\n\n      // Prefix with doc title and section heading for retrieval context\n      const embeddingText = title + ' \\u2014 ' + section.heading + '\\n\\n' + chunkText;\n\n      allChunks.push({\n        text: embeddingText,\n        section_heading: section.heading,\n        chunk_index: chunkIndex,\n        original_file_name: originalFileName,\n        file_id: fileId,\n        last_modified: lastModified,\n      });\n\n      chunkIndex++;\n      idx += (tokens.length - idx <= TOKEN_LIMIT) ? tokens.length : (TOKEN_LIMIT - OVERLAP_TOKENS);\n    }\n  }\n}\n\n// Deduplicate chunks by content — LLM extraction may produce repeated sections\nconst seen = new Set();\nconst uniqueChunks = [];\nfor (const chunk of allChunks) {\n  if (!seen.has(chunk.text)) {\n    seen.add(chunk.text);\n    uniqueChunks.push(chunk);\n  }\n}\nif (uniqueChunks.length < allChunks.length) {\n  console.log('Dedup: removed ' + (allChunks.length - uniqueChunks.length) + ' duplicate chunks out of ' + allChunks.length);\n}\n\n// Output as batches for embedding API\nconst batches = [];\nfor (let i = 0; i < uniqueChunks.length; i += EMBED_BATCH_SIZE) {\n  const batch = uniqueChunks.slice(i, i + EMBED_BATCH_SIZE);\n  batches.push({\n    json: {\n      chunks: batch,\n      requestBody: {\n        requests: batch.map(c => ({\n          model: 'models/gemini-embedding-001',\n          content: { parts: [{ text: c.text }] },\n          taskType: 'RETRIEVAL_DOCUMENT',\n          title: c.original_file_name.replace(/\\.[^.]+$/, '') + ' \\u2014 ' + c.section_heading,\n          outputDimensionality: 1536\n        }))\n      }\n    }\n  });\n}\n\nreturn batches;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4544,
+        -416
+      ],
+      "id": "4130fe5d-dfe8-4424-b863-81bdb1650b58",
+      "name": "Preparing Chunks"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3424,
+        -352
+      ],
+      "id": "4faaf79d-c246-43c6-b6fb-7d9421a639c7",
+      "name": "Process One File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Gemini Request — builds Gemini generateContent request body.\n\nconst items = $input.all();\nconst out = [];\n\nconst SYSTEM_PROMPT = \"Ești un extractor de conținut pentru o bază de cunoștințe de suport tehnic. Textul extras va fi folosit într-un sistem RAG pentru un bot WhatsApp de suport tehnic.\\n\\nREGULI DE EXTRACȚIE:\\n\\n1. PROCESEAZĂ ABSOLUT FIECARE PAGINĂ de la prima până la ultima, INCLUSIV paginile introductive. Paginile cu specificații tehnice, măsuri de precauție, cerințe pentru hârtie/consumabile, moduri de utilizare și informații despre producător sunt CRITICE pentru suport tehnic — NU le omite.\\n\\n2. SECȚIUNI: Înainte de fiecare secțiune sau capitol, scrie titlul pe propria linie prefixat cu \\\"## \\\" (ex: \\\"## 5. Procedura de reset\\\"). Detectează titlurile din text (numerotate, bold, sau cu font mai mare) și marchează-le astfel.\\n\\n3. TABELE: Transformă fiecare rând al tabelului într-o propoziție de sine stătătoare. Exemplu: În loc de un tabel cu coloanele \\\"cod eroare | descriere\\\", scrie fiecare rând ca \\\"Eroarea [cod]: [descriere]\\\". Fiecare rând trebuie să fie inteligibil independent.\\n\\n4. IMAGINI: Descrie DOAR imaginile care conțin informații tehnice critice (diagrame hardware, localizări componente). Descrie în maximum 2 propoziții. Ignoră logo-uri, filigrane, imagini decorative.\\n\\n5. FIDELITATE: Păstrează exact parolele, codurile de acces, secvențele de taste, numerele de serie, numele meniurilor, specificațiile tehnice (dimensiuni, voltaje, viteze, capacități memorie). Acestea sunt critice pentru suport tehnic.\\n\\n6. Folosește limba originală a documentului. NU traduce, NU rezuma, NU adăuga comentarii.\\n\\n7. .\\n\\n8. CUPRINS: Ignoră DOAR paginile care conțin cuprinsul (Table of Contents) — adică liste de titluri urmate de numere de pagină și linii punctate. NU reproduce aceste liste. ATENȚIE: paginile din jurul cuprinsului (introducere, specificații, măsuri de precauție etc.) conțin informații critice și TREBUIE extrase integral.\\n\\n9. Omite numere de pagină, headere/footere repetitive, filigrane.\\n\\n10. INCLUDE OBLIGATORIU: specificații constructive, cerințe consumabile (tip hârtie, dimensiuni), măsuri de precauție și siguranță, interfețe și conectori, moduri de configurare. Aceste informații sunt frecvent cerute în suportul tehnic.\\n\\nREGULI CRITICE DE COMPLETARE:\\n- Aceasta este o singura cerere API. NU exista mesaj urmator sau continuare.\\n- NU scrie fraze precum continuare mai jos sau in reply urmator.\\n- Tot ce nu incluzi ACUM se pierde definitiv.\\n- Continua pana la ULTIMA pagina a documentului.\";\n\nconst USER_MSG = \"Extrage continutul acestui document PDF conform instructiunilor de sistem.\";\n\nfor (let i = 0; i < items.length; i++) {\n  const binaryKey = Object.keys(items[i].binary || {})[0] || 'data';\n  const buffer = await this.helpers.getBinaryDataBuffer(i, binaryKey);\n  const base64 = buffer.toString('base64');\n  const binaryMeta = items[i].binary[binaryKey] || {};\n  const mimeType = binaryMeta.mimeType || 'application/pdf';\n  const fileName = binaryMeta.fileName || 'document.pdf';\n  const driveJson = items[i].json || {};\n\n  // Drive: File Updated1 is gone; the sync now feeds Process One File directly.\n  const syncRow = $('Process One File').item?.json || {};\n  const fileId = driveJson.id || syncRow.id || '';\n  const originalFileName = driveJson.name || syncRow.name || fileName;\n  // Drive's max(createdTime, modifiedTime), threaded through to the INSERT so\n  // the next sync run can tell whether this file changed.\n  const lastModified = driveJson.last_modified || syncRow.last_modified || null;\n\n  out.push({\n    json: {\n      file_id: fileId,\n      original_file_name: originalFileName,\n      last_modified: lastModified,\n      requestBody: {\n        contents: [{\n          parts: [\n            {\n              inline_data: {\n                mime_type: mimeType,\n                data: base64\n              }\n            },\n            {\n              text: USER_MSG\n            }\n          ]\n        }],\n        systemInstruction: {\n          parts: [{ text: SYSTEM_PROMPT }]\n        },\n        generationConfig: {\n          maxOutputTokens: 65536,\n          temperature: 0.1,\n          thinkingConfig: {\n            thinkingLevel: 'minimal'\n          }\n        }\n      }\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3872,
+        -416
+      ],
+      "id": "4b743577-a23e-409c-9773-ce6c8850747b",
+      "name": "Prepare Gemini Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 10000
+            }
+          },
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4096,
+        -416
+      ],
+      "id": "51a4faa4-2809-425b-a8f9-96872320845e",
+      "name": "Gemini Text Extraction",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 120000
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Gemini Result — parses Gemini generateContent response\r\n\r\nconst items = $input.all();\r\nconst prepItems = $('Prepare Gemini Request').all();\r\nconst out = [];\r\n\r\nfor (let i = 0; i < items.length; i++) {\r\n  const prep = prepItems[i]?.json || {};\r\n  const response = items[i].json;\r\n  const fileName = prep.original_file_name || 'unknown';\r\n\r\n  if (response.error) {\r\n    throw new Error('Gemini API error for \"' + fileName + '\": ' + (response.error.message || JSON.stringify(response.error)) + '. Document was NOT ingested.');\r\n  }\r\n\r\n  const candidate = response.candidates?.[0];\r\n  const finishReason = candidate?.finishReason || 'unknown';\r\n\r\n  if (!candidate) {\r\n    throw new Error('Gemini returned no candidates for \"' + fileName + '\". Document was NOT ingested.');\r\n  }\r\n\r\n  if (finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {\r\n    throw new Error('Gemini extraction ended with finishReason=' + finishReason + ' for \"' + fileName + '\". Document was NOT ingested.');\r\n  }\r\n\r\n  let text = '';\r\n  const parts = candidate.content?.parts || [];\r\n  for (const part of parts) { if (part.text) text += part.text; }\r\n  text = text.trim();\r\n\r\n  if (!text) {\r\n    throw new Error('Gemini returned empty text for \"' + fileName + '\" despite finishReason=' + finishReason + '. Document was NOT ingested.');\r\n  }\r\n\r\n  const inputTokens = response.usageMetadata?.promptTokenCount || 0;\r\n  const outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\r\n\r\n  if (inputTokens > 1000 && outputTokens < inputTokens * 0.1) {\r\n    throw new Error('Gemini extraction suspiciously short for \"' + fileName + '\": ' + outputTokens + ' output tokens for ' + inputTokens + ' input tokens (' + (outputTokens / inputTokens * 100).toFixed(1) + '%). The model likely truncated. Document was NOT ingested.');\r\n  }\r\n\r\n  out.push({\r\n    json: {\r\n      text: text,\r\n      method: 'gemini_flash',\r\n      file_id: prep.file_id || '',\r\n      original_file_name: fileName,\r\n      last_modified: prep.last_modified || null\r\n    }\r\n  });\r\n}\r\n\r\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        -416
+      ],
+      "id": "2a4bb653-0e19-4e43-b1bb-1f8064873a1f",
+      "name": "Format Gemini Result"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 30000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4096,
+        -944
+      ],
+      "id": "9c1726b6-fa60-465d-b3bb-f5ed4df59205",
+      "name": "Generate Embeddings1",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 120000
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format for Insert — unpacks embedding batches, builds INSERT queries.\r\n// Emits a DELETE for each file before its first INSERT to allow clean re-ingestion.\r\n\r\nconst items = $input.all();\r\nconst chunkBatches = $('Preparing Chunks1').all();\r\nconst out = [];\r\n\r\n// Dollar-quoting: SQL-injection-proof escaping for PostgreSQL.\r\nfunction dollarQuote(s) {\r\n  let tag = 'q';\r\n  while (s.includes('$' + tag + '$')) tag += '_';\r\n  return '$' + tag + '$' + s + '$' + tag + '$';\r\n}\r\n\r\n// L2-normalize. gemini-embedding-001 only returns pre-normalized\r\n// vectors at 3072 dims; at 1536 you must normalize yourself.\r\nfunction l2normalize(v) {\r\n  let norm = 0;\r\n  for (const x of v) norm += x * x;\r\n  norm = Math.sqrt(norm);\r\n  return norm > 0 ? v.map(x => x / norm) : v;\r\n}\r\n\r\nconst SQ = \"'\";\r\nconst deletedFiles = new Set();\r\n\r\nfor (let i = 0; i < items.length; i++) {\r\n  const embeddings = items[i].json.embeddings;\r\n  if (!embeddings || !Array.isArray(embeddings)) {\r\n    const errMsg = items[i].json.error?.message || JSON.stringify(items[i].json).slice(0, 500);\r\n    throw new Error('Embedding API error for batch ' + i + ': ' + errMsg);\r\n  }\r\n  const chunks = chunkBatches[i].json.chunks;\r\n\r\n  for (let j = 0; j < embeddings.length; j++) {\r\n    const embedding = l2normalize(embeddings[j].values);\r\n    const chunk = chunks[j];\r\n\r\n    // Delete all existing rows for this file before the first insert\r\n    const fileKey = chunk.original_file_name;\r\n    if (!deletedFiles.has(fileKey)) {\r\n      deletedFiles.add(fileKey);\r\n      out.push({\r\n        json: {\r\n          query: \"DELETE FROM documents WHERE metadata->>'source' = 'expert_feedback' AND metadata->>'original_file_name' = \" + dollarQuote(fileKey)\r\n        }\r\n      });\r\n    }\r\n\r\n    const metadata = JSON.stringify({\r\n      file_id: chunk.file_id,\r\n      original_file_name: chunk.original_file_name,\r\n      section_heading: chunk.section_heading,\r\n      chunk_index: chunk.chunk_index,\r\n      source: 'expert_feedback'\r\n    });\r\n    const embeddingStr = '[' + embedding.join(',') + ']';\r\n    out.push({\r\n      json: {\r\n        query: 'INSERT INTO documents (content, metadata, embedding) VALUES (' +\r\n          dollarQuote(chunk.text) + ', ' +\r\n          dollarQuote(metadata) + '::jsonb, ' +\r\n          SQ + embeddingStr + SQ + '::vector(1536)) ON CONFLICT DO NOTHING'\r\n      }\r\n    });\r\n  }\r\n}\r\nreturn out;\r\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        -944
+      ],
+      "id": "84ee3c61-6044-4b8e-9b34-02bb736f94d2",
+      "name": "Format for Insert1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparing Chunks — section-aware chunking with batched embedding output.\n\nconst extractedItems = $input.all();\n\nconst TOKEN_LIMIT = 350;\nconst OVERLAP_TOKENS = 75;\nconst EMBED_BATCH_SIZE = 100;\n\nfunction toTokens(text) {\n  return text.split(/\\s+/).filter(Boolean);\n}\nfunction toText(tokens) {\n  return tokens.join(' ');\n}\n\nconst allChunks = [];\n\nfor (let itemIndex = 0; itemIndex < extractedItems.length; itemIndex++) {\n  const extracted = extractedItems[itemIndex]?.json || {};\n  const originalFileName = extracted.original_file_name || ('file_' + (itemIndex + 1));\n  const title = originalFileName.replace(/\\.[^.]+$/, '');\n  const fileId = extracted.file_id || '';\n  const text = extracted.text || '';\n  if (!text.trim()) continue;\n\n  // Split into sections by ## headings\n  const lines = text.split('\\n');\n  let currentSection = title;\n  const sections = [];\n  let currentContent = [];\n\n  for (const line of lines) {\n    const match = line.match(/^##\\s+(.+)$/);\n    if (match) {\n      if (currentContent.length > 0) {\n        sections.push({ heading: currentSection, content: currentContent.join('\\n') });\n        currentContent = [];\n      }\n      currentSection = match[1].trim();\n    } else {\n      currentContent.push(line);\n    }\n  }\n  if (currentContent.length > 0) {\n    sections.push({ heading: currentSection, content: currentContent.join('\\n') });\n  }\n\n  // Chunk each section with overlap\n  let chunkIndex = 0;\n  for (const section of sections) {\n    const sectionText = section.content.trim();\n    if (!sectionText) continue;\n\n    const tokens = toTokens(sectionText);\n    if (tokens.length === 0) continue;\n\n    let idx = 0;\n    while (idx < tokens.length) {\n      const take = tokens.slice(idx, idx + TOKEN_LIMIT);\n      const chunkText = toText(take);\n\n      // Prefix with doc title and section heading for retrieval context\n      const embeddingText = title + ' \\u2014 ' + section.heading + '\\n\\n' + chunkText;\n\n      allChunks.push({\n        text: embeddingText,\n        section_heading: section.heading,\n        chunk_index: chunkIndex,\n        original_file_name: originalFileName,\n        file_id: fileId,\n      });\n\n      chunkIndex++;\n      idx += (tokens.length - idx <= TOKEN_LIMIT) ? tokens.length : (TOKEN_LIMIT - OVERLAP_TOKENS);\n    }\n  }\n}\n\n// Deduplicate chunks by content — LLM extraction may produce repeated sections\nconst seen = new Set();\nconst uniqueChunks = [];\nfor (const chunk of allChunks) {\n  if (!seen.has(chunk.text)) {\n    seen.add(chunk.text);\n    uniqueChunks.push(chunk);\n  }\n}\nif (uniqueChunks.length < allChunks.length) {\n  console.log('Dedup: removed ' + (allChunks.length - uniqueChunks.length) + ' duplicate chunks out of ' + allChunks.length);\n}\n\n// Output as batches for embedding API\nconst batches = [];\nfor (let i = 0; i < uniqueChunks.length; i += EMBED_BATCH_SIZE) {\n  const batch = uniqueChunks.slice(i, i + EMBED_BATCH_SIZE);\n  batches.push({\n    json: {\n      chunks: batch,\n      requestBody: {\n        requests: batch.map(c => ({\n          model: 'models/gemini-embedding-001',\n          content: { parts: [{ text: c.text }] },\n          taskType: 'RETRIEVAL_DOCUMENT',\n          title: c.original_file_name.replace(/\\.[^.]+$/, '') + ' \\u2014 ' + c.section_heading,\n          outputDimensionality: 1536\n        }))\n      }\n    }\n  });\n}\n\nreturn batches;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3872,
+        -944
+      ],
+      "id": "0cd8318d-5428-43f5-ab25-7be530f9033c",
+      "name": "Preparing Chunks1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2752,
+        -864
+      ],
+      "id": "109afd8b-3dd5-489c-a6ec-688ef1423331",
+      "name": "Process One File1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Gemini Request — builds Gemini generateContent request body.\n\nconst items = $input.all();\nconst out = [];\n\nconst SYSTEM_PROMPT = \"Ești un extractor de conținut pentru o bază de cunoștințe de suport tehnic. Textul extras va fi folosit într-un sistem RAG pentru un bot WhatsApp de suport tehnic.\\n\\nREGULI DE EXTRACȚIE:\\n\\n1. SECȚIUNI: Înainte de fiecare secțiune sau capitol, scrie titlul pe propria linie prefixat cu \\\"## \\\" (ex: \\\"## 5. Procedura de reset\\\"). 2. Folosește limba originală a documentului. NU traduce, NU rezuma, NU adăuga comentarii.\\n\\n- Aceasta este o singura cerere API. NU exista mesaj urmator sau continuare.\\n- NU scrie fraze precum continuare mai jos sau in reply urmator.\\n- Tot ce nu incluzi ACUM se pierde definitiv.\\n- Continua pana la ULTIMA pagina a documentului.\";\n\nconst USER_MSG = \"Extrage continutul acestui document PDF conform instructiunilor de sistem.\";\n\nfor (let i = 0; i < items.length; i++) {\n  const binaryKey = Object.keys(items[i].binary || {})[0] || 'data';\n  const buffer = await this.helpers.getBinaryDataBuffer(i, binaryKey);\n  const base64 = buffer.toString('base64');\n  const binaryMeta = items[i].binary[binaryKey] || {};\n  const mimeType = binaryMeta.mimeType || 'application/pdf';\n  const fileName = binaryMeta.fileName || 'document.pdf';\n  const driveJson = items[i].json || {};\n\n  const fileId = driveJson.id || $('Drive: Expert Feedback').item?.json?.id || '';\n  const originalFileName = driveJson.name || $('Drive: Expert Feedback').item?.json?.name || fileName;\n\n  out.push({\n    json: {\n      file_id: fileId,\n      original_file_name: originalFileName,\n      requestBody: {\n        contents: [{\n          parts: [\n            {\n              inline_data: {\n                mime_type: mimeType,\n                data: base64\n              }\n            },\n            {\n              text: USER_MSG\n            }\n          ]\n        }],\n        systemInstruction: {\n          parts: [{ text: SYSTEM_PROMPT }]\n        },\n        generationConfig: {\n          maxOutputTokens: 65536,\n          temperature: 0.1,\n          thinkingConfig: {\n            thinkingBudget: 0\n          }\n        }\n      }\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        -944
+      ],
+      "id": "474c2144-391d-4b20-b3fb-82aa717bc5aa",
+      "name": "Prepare Gemini Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 10000
+            }
+          },
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3424,
+        -944
+      ],
+      "id": "adc707ef-0ef0-409d-9729-4361fc65b099",
+      "name": "Gemini Text Extraction1",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 120000
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Gemini Result — parses Gemini generateContent response\r\n\r\nconst items = $input.all();\r\nconst prepItems = $('Prepare Gemini Request1').all();\r\nconst out = [];\r\n\r\nfor (let i = 0; i < items.length; i++) {\r\n  const prep = prepItems[i]?.json || {};\r\n  const response = items[i].json;\r\n  const fileName = prep.original_file_name || 'unknown';\r\n\r\n  if (response.error) {\r\n    throw new Error('Gemini API error for \"' + fileName + '\": ' + (response.error.message || JSON.stringify(response.error)) + '. Document was NOT ingested.');\r\n  }\r\n\r\n  const candidate = response.candidates?.[0];\r\n  const finishReason = candidate?.finishReason || 'unknown';\r\n\r\n  if (!candidate) {\r\n    throw new Error('Gemini returned no candidates for \"' + fileName + '\". Document was NOT ingested.');\r\n  }\r\n\r\n  if (finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {\r\n    throw new Error('Gemini extraction ended with finishReason=' + finishReason + ' for \"' + fileName + '\". Document was NOT ingested.');\r\n  }\r\n\r\n  let text = '';\r\n  const parts = candidate.content?.parts || [];\r\n  for (const part of parts) { if (part.text) text += part.text; }\r\n  text = text.trim();\r\n\r\n  if (!text) {\r\n    throw new Error('Gemini returned empty text for \"' + fileName + '\" despite finishReason=' + finishReason + '. Document was NOT ingested.');\r\n  }\r\n\r\n  const inputTokens = response.usageMetadata?.promptTokenCount || 0;\r\n  const outputTokens = response.usageMetadata?.candidatesTokenCount || 0;\r\n\r\n  if (inputTokens > 1000 && outputTokens < inputTokens * 0.1) {\r\n    throw new Error('Gemini extraction suspiciously short for \"' + fileName + '\": ' + outputTokens + ' output tokens for ' + inputTokens + ' input tokens (' + (outputTokens / inputTokens * 100).toFixed(1) + '%). The model likely truncated. Document was NOT ingested.');\r\n  }\r\n\r\n  out.push({\r\n    json: {\r\n      text: text,\r\n      method: 'gemini_flash',\r\n      file_id: prep.file_id || '',\r\n      original_file_name: fileName\r\n    }\r\n  });\r\n}\r\n\r\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3648,
+        -944
+      ],
+      "id": "73c41b71-a80b-45f5-9fe9-d4801d2a98bc",
+      "name": "Format Gemini Result1"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2976,
+        -944
+      ],
+      "id": "dc9e980b-8005-4483-9ace-1fca97f9f0f1",
+      "name": "Download File1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {}
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "1bbBb0bEeXE-UZ9L3cjD8B58IKVJIC84G",
+          "mode": "list",
+          "cachedResultName": "EXPERT FEEDBACK",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1bbBb0bEeXE-UZ9L3cjD8B58IKVJIC84G"
+        },
+        "event": "fileUpdated",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        2528,
+        -864
+      ],
+      "id": "71b1589d-be74-4de3-ac9d-4caa366b7b4f",
+      "name": "Drive: Expert Feedback",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "1-y3bvqtTXEj2Vyl-lC5Em6aISbtqCcbm",
+            "mode": "list",
+            "cachedResultName": "documentation",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1-y3bvqtTXEj2Vyl-lC5Em6aISbtqCcbm"
+          }
+        },
+        "options": {
+          "fields": [
+            "*"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2752,
+        -352
+      ],
+      "id": "2bea64b1-22dd-4400-820c-7b498c49d4d4",
+      "name": "Drive: Knowledge Base",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3648,
+        -416
+      ],
+      "id": "45e8199e-fc1b-4dc2-beba-e819fc917d40",
+      "name": "Download Knowledge Base File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WuE5ur27KVvphmjl",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5216,
+        -352
+      ],
+      "id": "116f704b-a921-4909-b457-edfb2119f856",
+      "name": "Insert Into Postgres Knowledge Base",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4544,
+        -864
+      ],
+      "id": "0594dd74-0fe7-4c63-96ea-96d72d86ad4e",
+      "name": "Insert into Postgres Expert Feedback",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        2528,
+        -352
+      ],
+      "id": "997ac4c0-17c9-475d-8af5-312edb1909a1",
+      "name": "Sync Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Drive Manifest — reconciles the Drive folder against the database.\n//\n// Emits one SQL statement (as $json.query) that sweeps orphaned rows and\n// returns the files still needing (re)processing. One row per live file:\n// { file_id, file_name, last_modified }, where last_modified is\n// max(createdTime, modifiedTime) as reported by the Drive API.\n\n// Dollar-quoting: SQL-injection-proof escaping for PostgreSQL.\nfunction dollarQuote(s) {\n  let tag = 'q';\n  while (s.includes('$' + tag + '$')) tag += '_';\n  return '$' + tag + '$' + s + '$' + tag + '$';\n}\n\nconst FOLDER_MIME = 'application/vnd.google-apps.folder';\n\nconst files = $input.all()\n  .map(i => i.json)\n  .filter(f => f && f.id && f.mimeType !== FOLDER_MIME && f.trashed !== true);\n\n// An empty listing is far likelier to be an API or permission failure than a\n// genuinely empty folder, and the sweep below would delete every knowledge_base\n// row. Refuse rather than wipe the knowledge base.\nif (files.length === 0) {\n  throw new Error('Drive listing returned 0 usable files for the knowledge base folder. Refusing to run the orphan sweep, which would delete every knowledge_base row. Check the Drive credential, the folder ID, and that \"Return All\" is enabled.');\n}\n\nconst manifest = files.map(f => {\n  const created = f.createdTime || null;\n  const modified = f.modifiedTime || null;\n  if (!created && !modified) {\n    throw new Error('Drive file \"' + (f.name || f.id) + '\" returned neither createdTime nor modifiedTime. Set the Google Drive node option Fields to [All] — without it the API omits both timestamps and every file would look changed on every run.');\n  }\n  const last = (created && modified)\n    ? (new Date(modified) > new Date(created) ? modified : created)\n    : (modified || created);\n  return { file_id: f.id, file_name: f.name || f.id, last_modified: last };\n});\n\n// NOT EXISTS rather than NOT IN: NOT IN against a set containing any NULL\n// evaluates to NULL and would silently delete nothing.\n// IS DISTINCT FROM rather than <>: last_modified is nullable, and <> against\n// NULL yields NULL, which would mark a file up-to-date and never reprocess it.\n// All CTEs read one snapshot, so the DELETE in `orphans` does not perturb what\n// `kb` sees; the work list is still computed against pre-delete state.\nconst query = [\n  'WITH drive AS (',\n  '  SELECT * FROM jsonb_to_recordset(' + dollarQuote(JSON.stringify(manifest)) + '::jsonb)',\n  '    AS x(file_id text, file_name text, last_modified timestamptz)',\n  '),',\n  'kb AS (',\n  \"  SELECT metadata->>'file_id' AS file_id, max(last_modified) AS last_modified\",\n  '  FROM documents',\n  \"  WHERE metadata->>'source' = 'knowledge_base'\",\n  '  GROUP BY 1',\n  '),',\n  'orphans AS (',\n  '  DELETE FROM documents d',\n  \"   WHERE d.metadata->>'source' = 'knowledge_base'\",\n  \"     AND NOT EXISTS (SELECT 1 FROM drive WHERE drive.file_id = d.metadata->>'file_id')\",\n  '  RETURNING 1',\n  ')',\n  'SELECT drive.file_id AS id, drive.file_name AS name, drive.last_modified',\n  'FROM drive',\n  'LEFT JOIN kb ON kb.file_id = drive.file_id',\n  'WHERE kb.file_id IS NULL',\n  '   OR kb.last_modified IS DISTINCT FROM drive.last_modified'\n].join('\\n');\n\nconsole.log('Drive manifest: ' + manifest.length + ' file(s) in the knowledge base folder');\n\nreturn [{ json: { query: query, drive_file_count: manifest.length } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        -352
+      ],
+      "id": "65f2d4b5-3ca3-44e6-aa5f-23e7a3ad7970",
+      "name": "Build Drive Manifest"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3200,
+        -352
+      ],
+      "id": "99865b66-a295-44ac-aba8-b75769bfde32",
+      "name": "Sync Check",
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Generate Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Format for Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert Into Postgres Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparing Chunks": {
+      "main": [
+        [
+          {
+            "node": "Generate Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process One File": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Download Knowledge Base File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gemini Request": {
+      "main": [
+        [
+          {
+            "node": "Gemini Text Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Text Extraction": {
+      "main": [
+        [
+          {
+            "node": "Format Gemini Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Gemini Result": {
+      "main": [
+        [
+          {
+            "node": "Preparing Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embeddings1": {
+      "main": [
+        [
+          {
+            "node": "Format for Insert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Insert1": {
+      "main": [
+        [
+          {
+            "node": "Insert into Postgres Expert Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparing Chunks1": {
+      "main": [
+        [
+          {
+            "node": "Generate Embeddings1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process One File1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Download File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gemini Request1": {
+      "main": [
+        [
+          {
+            "node": "Gemini Text Extraction1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Text Extraction1": {
+      "main": [
+        [
+          {
+            "node": "Format Gemini Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Gemini Result1": {
+      "main": [
+        [
+          {
+            "node": "Preparing Chunks1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gemini Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive: Expert Feedback": {
+      "main": [
+        [
+          {
+            "node": "Process One File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive: Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "Build Drive Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Knowledge Base File": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gemini Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Into Postgres Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "Process One File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert into Postgres Expert Feedback": {
+      "main": [
+        [
+          {
+            "node": "Process One File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Trigger": {
+      "main": [
+        [
+          {
+            "node": "Drive: Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Drive Manifest": {
+      "main": [
+        [
+          {
+            "node": "Sync Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Check": {
+      "main": [
+        [
+          {
+            "node": "Process One File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "AGFSdnvZqj8t51tt",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "323a0f2e-fc75-4b7a-8f9a-586bf604fd13",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b29154469c7b6048a4af2059dfbd9d8d6409b5084188c0b838fb358a4b152054"
+  },
+  "nodeGroups": [],
+  "id": "BeVNE4OtqP44fP8j",
+  "tags": []
+}
