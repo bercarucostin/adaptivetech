@@ -1,0 +1,89 @@
+-- =====================================================================
+-- demo_hybrid_search -- session-scoped exact cosine + FTS, fused with RRF
+-- Run after db/demo_schema.sql.
+--
+-- There is deliberately no `filter jsonb` parameter. hybrid_search()'s
+-- filter defaults to '{}' meaning "search everything"; a function whose
+-- unsafe mode is its default is the wrong shape for per-visitor
+-- isolation. p_session_id is required, so the dangerous call is
+-- unrepresentable rather than merely discouraged.
+-- =====================================================================
+
+create or replace function public.demo_hybrid_search(
+  query_text       text,
+  query_embedding  vector(1536),
+  p_session_id     uuid,
+  match_count      integer          default 8,
+  semantic_weight  double precision default 0.5,
+  full_text_weight double precision default 0.5,
+  rrf_k            integer          default 50
+)
+returns table (
+  id         bigint,
+  content    text,
+  metadata   jsonb,
+  similarity float
+)
+language plpgsql
+stable
+parallel safe
+set search_path = public
+as $$
+declare
+  -- Must match demo_documents.fts -- a 'simple' query against a
+  -- 'romanian' index silently returns almost nothing.
+  ts_query tsquery := websearch_to_tsquery('romanian', coalesce(query_text, ''));
+
+  n     integer := greatest(coalesce(match_count, 8), 1);
+  pool  integer := least(greatest(n * 4, 50), 500);
+
+  k     integer          := greatest(coalesce(rrf_k, 50), 1);
+  w_sem double precision := coalesce(semantic_weight, 0);
+  w_fts double precision := coalesce(full_text_weight, 0);
+begin
+  if p_session_id is null then
+    raise exception 'demo_hybrid_search requires a session_id';
+  end if;
+
+  return query
+  -- Semantic branch: EXACT cosine over this session's rows only. No ANN.
+  -- One session holds one document (150-400 chunks), so the btree scan
+  -- plus exact distance beats an approximate index and cannot under-recall.
+  with semantic as (
+    select c.doc_id, row_number() over (order by c.dist, c.doc_id) as rank_ix
+    from (
+      select d.id as doc_id, d.embedding <=> query_embedding as dist
+      from demo_documents d
+      where d.session_id = p_session_id
+      order by d.embedding <=> query_embedding
+      limit pool
+    ) c
+  ),
+  -- Lexical branch. ALSO scoped: fusing a scoped semantic branch with an
+  -- unscoped lexical one would leak other sessions' content through RRF.
+  full_text as (
+    select c.doc_id, row_number() over (order by c.ts_score desc, c.doc_id) as rank_ix
+    from (
+      select d.id as doc_id, ts_rank(d.fts, ts_query) as ts_score
+      from demo_documents d
+      where d.session_id = p_session_id
+        and d.fts @@ ts_query
+      order by ts_rank(d.fts, ts_query) desc, d.id
+      limit pool
+    ) c
+  ),
+  fused as (
+    select
+      coalesce(s.doc_id, f.doc_id) as doc_id,
+      coalesce(w_sem / (k + s.rank_ix), 0.0)
+      + coalesce(w_fts / (k + f.rank_ix), 0.0) as score
+    from semantic s
+    full outer join full_text f on f.doc_id = s.doc_id
+  )
+  select d.id, d.content, d.metadata, fu.score::float
+  from fused fu
+  join demo_documents d on d.id = fu.doc_id
+  order by fu.score desc, d.id
+  limit n;
+end;
+$$;
