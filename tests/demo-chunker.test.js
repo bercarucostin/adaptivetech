@@ -42,9 +42,22 @@ test('content before the first heading is kept under the document title', () => 
 test('a long section is windowed at 350 tokens with 75 tokens of overlap', () => {
   const out = chunkDocument('M.pdf', words(800));
   assert.strictEqual(out.length, 3);
-  // Second window starts 350-75 = 275 tokens in.
-  assert.ok(out[1].text.includes('w275'), 'overlap start is wrong');
-  assert.ok(out[1].text.includes('w274'), 'the 75-token overlap is missing');
+
+  // The window is the text after the "title — heading" prefix.
+  const win = (c) => c.text.split('\n\n')[1].split(' ');
+  const w0 = win(out[0]);
+  const w1 = win(out[1]);
+
+  assert.strictEqual(w0.length, 350, 'first window must be exactly the token limit');
+  assert.strictEqual(w0[0], 'w0');
+  assert.strictEqual(w1.length, 350, 'second window must be exactly the token limit');
+  assert.strictEqual(w1[0], 'w275', 'second window starts 350 - 75 = 275 tokens in');
+
+  // The overlap is the tokens the two windows share — 75 of them, by
+  // definition. Asserting the shared count is what makes this a test of
+  // the contract rather than of one hand-computed token name.
+  const shared = w0.filter((t) => w1.includes(t));
+  assert.strictEqual(shared.length, 75, 'windows must share exactly 75 tokens');
 });
 
 test('chunk_index increases across sections, not within them', () => {
