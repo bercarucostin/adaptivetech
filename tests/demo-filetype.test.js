@@ -44,3 +44,17 @@ test('empty and non-buffer input is rejected without throwing', () => {
 test('a PDF signature that is not at offset 0 is rejected', () => {
   assert.strictEqual(detectFileType(Buffer.from('   %PDF-1.7')), 'txt');
 });
+
+test('binary past the 8 KB sample still disqualifies a file as text', () => {
+  // Clean ASCII well past the sampling window, then a NUL. Sampling only the
+  // first 8 KB would call this text and hand the whole buffer to extraction.
+  const buf = Buffer.concat([
+    Buffer.from('a'.repeat(10000), 'utf8'),
+    Buffer.from([0x00, 0xff, 0xfe]),
+  ]);
+  assert.strictEqual(detectFileType(buf), null);
+});
+
+test('a large clean text file is still accepted', () => {
+  assert.strictEqual(detectFileType(Buffer.from('a'.repeat(100000), 'utf8')), 'txt');
+});
