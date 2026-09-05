@@ -17,9 +17,12 @@
   --ink-soft: #16406B;
   --ink-mute: #506883;    /* 4.57:1 on Sand and Surface, 5.76:1 on White */
   --line: #D9D9D7;
-  --line-2: #949494;      /* derived: darkened from #CBCECF (1.58:1 on white) to
+  --line-2: #808080;      /* derived: darkened from #CBCECF (1.58:1 on white) to
                              clear the 3:1 WCAG 1.4.11 non-text floor -- this is
-                             on form input borders -- 3.03:1 on white. */
+                             on form input borders -- 3.95:1 on white, 3.67:1
+                             on Surface (cream-2), 3.14:1 on Sand. The earlier
+                             #949494 cleared only white (3.03:1); it failed on
+                             Surface (2.82:1) and Sand (2.41:1). */
   --white: #FFFFFF;
 
   /* derived: this page's only new colour pair, for form/network errors.
@@ -422,3 +425,28 @@ button[type="submit"]:disabled {
   .demo__panel--chat { height: min(78vh, 720px); }
   .demo__msg { max-width: 92%; }
 }
+
+/* ─────────── FOOTER ─────────── */
+/* This page had no footer at all, and the consent checkbox's own privacy
+   link (see index.html) is the only other route to the policy from here --
+   worth a second, more visible one regardless of that link's placement. */
+.demo__footer {
+  border-top: 1px solid var(--line);
+  padding: 1.5rem var(--pad);
+}
+.demo__footer-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink-mute);
+}
+.demo__footer-inner a {
+  color: var(--gold-ink);
+  border-bottom: 1px solid rgba(138, 93, 7, 0.4);
+}
+.demo__footer-inner a:hover { border-bottom-color: var(--gold-ink); }

@@ -59,10 +59,14 @@
     --ink-soft: #16406B;    /* 8.42:1 on Sand */
     --ink-mute: #506883;    /* derived: 4.57:1 on Sand. Steel fails at 2.39. */
     --line: #D9D9D7;        /* derived: Sand + 15% Steel */
-    --line-2: #949494;      /* derived: darkened from Sand + 30% Steel (#CBCECF,
+    --line-2: #808080;      /* derived: darkened from Sand + 30% Steel (#CBCECF,
                                1.58:1 on white) to clear the 3:1 WCAG 1.4.11
                                non-text floor now that it's on form input
-                               borders -- 3.03:1 on white. */
+                               borders and on .btn-ghost, which sits on Sand --
+                               3.95:1 on white, 3.67:1 on Surface (cream-2),
+                               3.14:1 on Sand. The earlier #949494 cleared only
+                               the white case (3.03:1); it failed on Surface
+                               (2.82:1) and Sand (2.41:1). */
     --white: #FFFFFF;
 
     /* Two typefaces: a geometric sans for everything people read, and a
@@ -734,7 +738,11 @@
     flex-wrap: wrap;
     gap: 0.5rem;
   }
-  .case-stack span {
+  /* Direct-child selector: a stack pill's own text can now be a bilingual
+     span[data-ro]/span[data-en] pair (see the "Frontier LLMs" pill below), and
+     an unscoped descendant selector would re-apply this same pill styling to
+     that inner span too -- padding and a border nested inside a border. */
+  .case-stack > span {
     font-family: var(--font-mono);
     font-size: 0.78rem;
     padding: 5px 12px;
@@ -1481,7 +1489,7 @@
         <p class="tier-body"><span data-ro>AI care citește, înțelege și răspunde — chatboți RAG, inteligență documentară, interogări în limbaj natural.</span><span data-en>AI that reads, understands, and responds — RAG chatbots, document intelligence, natural language queries.</span></p>
         <div class="tier-meta">
           <span class="tier-tag">RAG</span>
-          <span class="tier-tag">GPT-4</span>
+          <span class="tier-tag"><span data-ro>LLM de top</span><span data-en>Frontier LLMs</span></span>
           <span class="tier-tag">pgvector</span>
         </div>
       </div>
@@ -1573,7 +1581,7 @@
         <span>n8n</span>
         <span>Supabase + pgvector</span>
         <span>WhatsApp API</span>
-        <span>GPT-4</span>
+        <span><span data-ro>LLM-uri de top</span><span data-en>Frontier LLMs</span></span>
       </div>
     </div>
 
@@ -1587,8 +1595,8 @@
         <span data-en>How do I reset Partner 300 after error 47?</span>
       </div>
       <div class="chat-msg chat-bot">
-        <span data-ro>Eroarea 47 indică o problemă cu memoria fiscală. Pași: 1) Opriți casa, 2) Țineți apăsat butonul MOD timp de 5 secunde, 3) Introduceți codul de service 9999...</span>
-        <span data-en>Error 47 indicates a fiscal memory issue. Steps: 1) Power off, 2) Hold MOD button for 5 seconds, 3) Enter service code 9999...</span>
+        <span data-ro>Eroarea 47 indică o problemă cu memoria fiscală. Opriți aparatul, așteptați 10 secunde, apoi reporniți-l. Dacă eroarea reapare, memoria fiscală trebuie verificată de un tehnician autorizat — nu încercați să o resetați singur.</span>
+        <span data-en>Error 47 indicates a fiscal memory issue. Power the unit off, wait 10 seconds, then turn it back on. If the error comes back, the fiscal memory needs to be checked by an authorised technician — don't attempt to reset it yourself.</span>
         <div class="chat-bot-source">
           <span data-ro>Sursă: Manual Partner 300, secțiunea 8.4</span>
           <span data-en>Source: Partner 300 Manual, section 8.4</span>
@@ -1945,7 +1953,11 @@
         <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true" style="flex:none;"><path fill="var(--amber)" d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
         <span><strong style="color: var(--cream);">Adaptive Technologies S.R.L.</strong> · București, România · © <span id="year"></span></span>
       </div>
-      <div>
+      <div style="display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap;">
+        <a href="/politica-de-confidentialitate.html">
+          <span data-ro>Politica de confidențialitate</span>
+          <span data-en>Privacy policy</span>
+        </a>
         <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
       </div>
     </div>

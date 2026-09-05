@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Politica de Confidențialitate — Adaptive Technologies</title>
+<meta name="description" content="Ce date colectăm, cui le trimitem, cât timp le păstrăm și ce drepturi aveți — pentru site-ul Adaptive Technologies și demo-ul RAG." />
+
+<!-- Fonts — same stack as the main site -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<!-- Favicon — same inline Adaptive "A" mark as the main site, no extra request -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/png/app-icon-1024.png" />
+<meta name="theme-color" content="#0C3054" />
+
+<style>
+  /* ── Brand tokens ──────────────────────────────────────────────────
+     Copied verbatim from website/index.html's :root -- same source of
+     truth, same convention: values marked "derived" are not brand
+     colours, they are ramp steps and accessible variants, each carrying
+     the contrast that forced it. Keep this block in sync with index.html
+     if either changes.
+     ------------------------------------------------------------------ */
+  :root {
+    --navy: #0C3054;
+    --navy-2: #16406B;
+    --navy-3: #32567B;
+    --amber: #F2A91E;
+    --amber-2: #D5951A;
+    --gold-ink: #8A5D07;
+    --amber-soft: #FDF1DB;
+    --cream: #E7E5DF;
+    --cream-2: #F4F7FA;
+    --ink: #0C3054;
+    --ink-soft: #16406B;
+    --ink-mute: #506883;
+    --line: #D9D9D7;
+    --line-2: #808080;      /* 3.95:1 on white, 3.67:1 on Surface (cream-2), 3.14:1 on Sand */
+    --white: #FFFFFF;
+
+    --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+    --maxw: 1240px;
+    --pad: clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+  :focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  footer :focus-visible { outline-color: var(--amber); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  .container {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 var(--pad);
+  }
+
+  /* ─────────── NAV (copied from index.html) ─────────── */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(231, 229, 223, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem var(--pad);
+    max-width: var(--maxw);
+    margin: 0 auto;
+  }
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    color: var(--navy);
+  }
+  .logo-mark {
+    width: 22px;
+    height: 22px;
+    align-self: center;
+    margin-right: 0.1rem;
+    fill: var(--amber);
+    transition: fill 0.2s, transform 0.2s;
+  }
+  .logo:hover .logo-mark { fill: var(--amber-2); transform: translateY(-1px); }
+  .logo-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--amber);
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .logo-sub {
+    font-weight: 400;
+    color: var(--ink-soft);
+    letter-spacing: 0;
+  }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+  .nav-links a {
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--navy); }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .lang-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--white);
+  }
+  .lang-toggle button {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--ink-mute);
+    transition: all 0.2s;
+  }
+  .lang-toggle button.active {
+    background: var(--navy);
+    color: var(--cream);
+  }
+  .btn-cta {
+    background: var(--navy);
+    color: var(--cream);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .btn-cta:hover {
+    background: var(--amber);
+    color: var(--navy);
+    transform: translateY(-1px);
+  }
+  .btn-cta-amber {
+    background: var(--amber);
+    color: var(--navy);
+  }
+  .btn-cta-amber:hover {
+    background: var(--navy);
+    color: var(--cream);
+  }
+
+  .mobile-toggle { display: none; }
+
+  @media (max-width: 860px) {
+    .nav-links { display: none; }
+    .nav-links.open {
+      display: flex;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      background: var(--cream);
+      padding: 1.5rem var(--pad);
+      gap: 1.2rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .mobile-toggle {
+      display: flex;
+      width: 38px;
+      height: 38px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+    }
+    .btn-cta-nav { display: none; }
+  }
+
+  /* ─────────── POLICY HERO ─────────── */
+  .policy-hero {
+    padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(1.5rem, 4vw, 2.5rem);
+  }
+  .policy-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .policy-eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--amber);
+  }
+  .policy-hero h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 0.9rem;
+  }
+  .policy-updated {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ─────────── DRAFT NOTICE ─────────── */
+  .policy-notice {
+    background: var(--amber-soft);
+    border: 1px solid var(--amber-2);
+    border-left: 4px solid var(--amber-2);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin: 1.75rem 0 0;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--gold-ink);
+  }
+  .policy-notice strong { color: var(--navy); }
+
+  /* ─────────── POLICY BODY ─────────── */
+  .policy-body { padding: clamp(1.5rem, 4vw, 2.5rem) 0 clamp(4rem, 8vw, 6rem); }
+  .policy-section {
+    max-width: 760px;
+    margin-bottom: clamp(2.25rem, 5vw, 3rem);
+  }
+  .policy-section h2 {
+    font-size: clamp(1.3rem, 2.5vw, 1.6rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--navy);
+    margin-bottom: 0.9rem;
+  }
+  .policy-section h3 {
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin: 1.3rem 0 0.5rem;
+  }
+  .policy-section p {
+    color: var(--ink-soft);
+    margin-bottom: 0.9rem;
+    line-height: 1.65;
+  }
+  .policy-section p:last-child { margin-bottom: 0; }
+  .policy-list {
+    list-style: none;
+    margin: 0.9rem 0;
+    display: grid;
+    gap: 0.7rem;
+  }
+  .policy-list li {
+    color: var(--ink-soft);
+    line-height: 1.6;
+    padding-left: 1.2rem;
+    position: relative;
+  }
+  .policy-list li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--gold-ink);
+  }
+  .policy-list li strong { color: var(--navy); }
+  .policy-section a {
+    color: var(--gold-ink);
+    border-bottom: 1px solid rgba(138, 93, 7, 0.4);
+  }
+  .policy-section a:hover { border-bottom-color: var(--gold-ink); }
+
+  /* ─────────── FOOTER (copied from index.html) ─────────── */
+  footer {
+    background: var(--navy);
+    color: rgba(231, 229, 223, 0.7);
+    padding: 2.5rem 0;
+    border-top: 1px solid var(--navy-3);
+  }
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+  }
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .footer-inner a { color: var(--amber); }
+  .footer-inner a:hover { text-decoration: underline; }
+
+  /* ─────────── BILINGUAL ─────────── */
+  /* Scoped to span[...], matching index.html — see that file's comment for
+     why the bare attribute selector is wrong (it would also match the
+     contact form's <option data-ro data-en> elements on the main site). */
+  span[data-en] { display: none; }
+  html[lang="en"] span[data-ro] { display: none; }
+  html[lang="en"] span[data-en] { display: inline; }
+</style>
+</head>
+<body>
+
+<!-- ─────────── NAV ─────────── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="logo">
+      <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
+      adaptive<span class="logo-dot"></span><span class="logo-sub">technologies</span>
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="/#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
+      <a href="/#demo">Demo</a>
+      <a href="/#cum-lucram"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
+      <a href="/#despre"><span data-ro>Despre</span><span data-en>About</span></a>
+      <a href="/#contact"><span data-ro>Contact</span><span data-en>Contact</span></a>
+    </div>
+    <div class="nav-right">
+      <div class="lang-toggle">
+        <button id="lang-ro" class="active" onclick="setLang('ro')">RO</button>
+        <button id="lang-en" onclick="setLang('en')">EN</button>
+      </div>
+      <a href="/#contact" class="btn-cta btn-cta-nav">
+        <span data-ro>Consultație gratuită</span>
+        <span data-en>Free consultation</span>
+      </a>
+      <button class="mobile-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ─────────── POLICY HERO ─────────── -->
+<section class="policy-hero">
+  <div class="container">
+    <div class="policy-eyebrow">
+      <span data-ro>Legal</span>
+      <span data-en>Legal</span>
+    </div>
+    <h1>
+      <span data-ro>Politica de Confidențialitate</span>
+      <span data-en>Privacy Policy</span>
+    </h1>
+    <div class="policy-updated">
+      <span data-ro>Ultima actualizare: 5 septembrie 2026</span>
+      <span data-en>Last updated: September 5, 2026</span>
+    </div>
+
+    <p class="policy-notice">
+      <span data-ro><strong>Notă:</strong> acesta este un document în lucru (draft), care descrie ce fac efectiv sistemele noastre, așa cum sunt detaliate mai jos. Nu constituie consultanță juridică. Înainte ca site-ul să devină public, acest document trebuie verificat de o persoană calificată (jurist / consultant GDPR).</span>
+      <span data-en><strong>Note:</strong> this is a draft document, describing what our systems actually do, as detailed below. It does not constitute legal advice. Before the site goes live, this document should be reviewed by someone qualified (a lawyer / GDPR consultant).</span>
+    </p>
+  </div>
+</section>
+
+<!-- ─────────── POLICY BODY ─────────── -->
+<section class="policy-body">
+  <div class="container">
+
+    <div class="policy-section">
+      <h2><span data-ro>1. Cine suntem</span><span data-en>1. Who we are</span></h2>
+      <p>
+        <span data-ro>Adaptive Technologies este operatorul datelor cu caracter personal colectate prin acest site și prin demo-ul RAG descris mai jos. Suntem o companie română, cu sediul în București, România. Pentru orice întrebare legată de datele dumneavoastră, ne puteți scrie oricând la <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>.</span>
+        <span data-en>Adaptive Technologies is the controller of the personal data collected through this website and the RAG demo described below. We are a Romanian company based in Bucharest, Romania. For any question about your data, you can write to us at any time at <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>.</span>
+      </p>
+    </div>
+
+    <div class="policy-section">
+      <h2><span data-ro>2. Ce date colectăm</span><span data-en>2. What data we collect</span></h2>
+
+      <h3><span data-ro>2.1 Formularul de contact</span><span data-en>2.1 The contact form</span></h3>
+      <p>
+        <span data-ro>Formularul de contact de pe acest site colectează numele dumneavoastră, compania (opțional), adresa de email, domeniul de interes și un mesaj (opțional). Aceste date nu sunt trimise către niciun server al nostru: la trimitere, formularul deschide clientul dumneavoastră de email (link <code>mailto:</code>) cu datele precompletate, iar mesajul pleacă direct de la adresa dumneavoastră de email către <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>.</span>
+        <span data-en>The contact form on this site collects your name, company (optional), email address, area of interest, and a message (optional). This data is never sent to any server of ours: on submit, the form opens your own email client (a <code>mailto:</code> link) with the fields pre-filled, and the message is sent directly from your own email address to <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>.</span>
+      </p>
+
+      <h3><span data-ro>2.2 Demo-ul RAG</span><span data-en>2.2 The RAG demo</span></h3>
+      <p>
+        <span data-ro>La data acestui document, demo-ul RAG nu este încă disponibil public — secțiunea de mai jos descrie ce se întâmplă cu datele dumneavoastră odată ce va fi lansat.</span>
+        <span data-en>As of this document, the RAG demo is not yet publicly available — the section below describes what happens to your data once it launches.</span>
+      </p>
+      <p>
+        <span data-ro>Demo-ul colectează: adresa dumneavoastră de email (confirmată printr-un cod din 6 cifre), conținutul documentului pe care îl încărcați, întrebările pe care le puneți despre acel document și adresa dumneavoastră IP.</span>
+        <span data-en>The demo collects: your email address (verified with a 6-digit code), the content of the document you upload, the questions you ask about that document, and your IP address.</span>
+      </p>
+    </div>
+
+    <div class="policy-section">
+      <h2><span data-ro>3. Cui trimitem datele</span><span data-en>3. Who we share data with</span></h2>
+      <p>
+        <span data-ro>Pentru a funcționa, sistemele noastre trimit o parte din datele dumneavoastră către următorii furnizori, fiecare cu un rol clar definit:</span>
+        <span data-en>To function, our systems send part of your data to the following providers, each with a clearly defined role:</span>
+      </p>
+      <ul class="policy-list">
+        <li>
+          <span data-ro><strong>Google (Gemini)</strong> — extrage textul din documentul pe care îl încărcați și generează reprezentările vectoriale (embeddings) folosite pentru căutare. Conținutul documentului dumneavoastră este trimis către Google în acest scop.</span>
+          <span data-en><strong>Google (Gemini)</strong> — extracts text from the document you upload and generates the vector embeddings used for search. Your document's content is sent to Google for this purpose.</span>
+        </li>
+        <li>
+          <span data-ro><strong>Anthropic (Claude)</strong> — generează răspunsurile pe care le primiți în conversație, pe baza fragmentelor relevante din documentul dumneavoastră. Fragmentele relevante ale documentului sunt trimise către Anthropic în acest scop.</span>
+          <span data-en><strong>Anthropic (Claude)</strong> — generates the answers you receive in the conversation, based on the relevant fragments of your document. The relevant document fragments are sent to Anthropic for this purpose.</span>
+        </li>
+        <li>
+          <span data-ro><strong>Cloudflare</strong> — verifică, prin Turnstile, că sunteți o persoană reală și nu un program automat, și furnizează infrastructura de CDN/proxy prin care trece traficul site-ului.</span>
+          <span data-en><strong>Cloudflare</strong> — verifies through Turnstile that you're a real person rather than an automated script, and provides the CDN/proxy infrastructure the site's traffic passes through.</span>
+        </li>
+        <li>
+          <span data-ro><strong>Supabase</strong> — găzduiește baza de date în care sunt stocate temporar documentele, fragmentele extrase și întrebările puse.</span>
+          <span data-en><strong>Supabase</strong> — hosts the database that temporarily stores documents, extracted chunks, and the questions asked.</span>
+        </li>
+        <li>
+          <span data-ro><strong>Hetzner</strong> — găzduiește serverele pe care rulează aplicația.</span>
+          <span data-en><strong>Hetzner</strong> — hosts the servers the application runs on.</span>
+        </li>
+      </ul>
+      <p>
+        <span data-ro>Menționăm explicit, pentru că este relevant înainte de a încărca orice: conținutul documentului pe care îl încărcați este trimis către Google și Anthropic pentru a fi procesat. Vă rugăm să nu încărcați un document pe care nu ați dori să îl împărtășiți acestor furnizori — de exemplu, un contract cu informații extrem de sensibile.</span>
+        <span data-en>To be explicit, because it matters before you upload anything: the content of the document you upload is sent to Google and Anthropic for processing. Please don't upload a document you wouldn't want shared with those providers — for example, a contract containing highly sensitive information.</span>
+      </p>
+    </div>
+
+    <div class="policy-section">
+      <h2><span data-ro>4. Cât timp păstrăm datele</span><span data-en>4. How long we keep data</span></h2>
+      <ul class="policy-list">
+        <li>
+          <span data-ro>Documentele încărcate și fragmentele extrase din ele sunt șterse automat la expirarea sesiunii, la 2 ore de la încărcare. Ștergerea propriu-zisă rulează o dată pe oră, deci, în practică, un document poate rămâne stocat până la 3 ore.</span>
+          <span data-en>Uploaded documents and the chunks extracted from them are deleted automatically when the session expires, 2 hours after upload. The actual purge job runs once an hour, so in practice a document can remain stored for up to 3 hours.</span>
+        </li>
+        <li>
+          <span data-ro>Întrebările puse în demo sunt păstrate 30 de zile, complet separate de sesiune — nu mai pot fi asociate cu documentul sau cu dumneavoastră după fereastra de mai sus.</span>
+          <span data-en>Questions asked in the demo are kept for 30 days, fully detached from the session — they can no longer be linked back to the document or to you after the window above.</span>
+        </li>
+        <li>
+          <span data-ro>Adresa dumneavoastră de email și numărul de interacțiuni sunt păstrate până când vă dezabonați. Fiecare email cu cod de confirmare conține un link de dezabonare semnat, utilizabil oricând.</span>
+          <span data-en>Your email address and interaction counts are kept until you unsubscribe. Every code email includes a signed unsubscribe link, usable at any time.</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="policy-section">
+      <h2><span data-ro>5. Temeiul legal</span><span data-en>5. Legal basis</span></h2>
+      <p>
+        <span data-ro>Temeiul legal pentru prelucrarea datelor dumneavoastră este consimțământul, exprimat prin bifarea casetei de acord din formular sau din demo. Vă puteți retrage consimțământul oricând, fără a afecta legalitatea prelucrării efectuate înainte de retragere.</span>
+        <span data-en>The legal basis for processing your data is consent, given by checking the agreement box on the form or in the demo. You can withdraw your consent at any time, without affecting the lawfulness of processing carried out before the withdrawal.</span>
+      </p>
+    </div>
+
+    <div class="policy-section">
+      <h2><span data-ro>6. Drepturile dumneavoastră</span><span data-en>6. Your rights</span></h2>
+      <p>
+        <span data-ro>Conform Regulamentului General privind Protecția Datelor (GDPR), aveți dreptul la:</span>
+        <span data-en>Under the General Data Protection Regulation (GDPR), you have the right to:</span>
+      </p>
+      <ul class="policy-list">
+        <li><span data-ro><strong>Acces</strong> — să aflați ce date deținem despre dumneavoastră.</span><span data-en><strong>Access</strong> — to find out what data we hold about you.</span></li>
+        <li><span data-ro><strong>Rectificare</strong> — să corectați date incorecte sau incomplete.</span><span data-en><strong>Rectification</strong> — to correct inaccurate or incomplete data.</span></li>
+        <li><span data-ro><strong>Ștergere</strong> — să cereți ștergerea datelor dumneavoastră ("dreptul de a fi uitat").</span><span data-en><strong>Erasure</strong> — to request deletion of your data (the "right to be forgotten").</span></li>
+        <li><span data-ro><strong>Portabilitate</strong> — să primiți datele dumneavoastră într-un format structurat și utilizabil.</span><span data-en><strong>Portability</strong> — to receive your data in a structured, usable format.</span></li>
+        <li><span data-ro><strong>Opoziție</strong> — să vă opuneți prelucrării datelor dumneavoastră.</span><span data-en><strong>Objection</strong> — to object to the processing of your data.</span></li>
+        <li><span data-ro><strong>Retragerea consimțământului</strong> — oricând, fără efect retroactiv.</span><span data-en><strong>Withdrawal of consent</strong> — at any time, with no retroactive effect.</span></li>
+      </ul>
+      <p>
+        <span data-ro>Pentru a exercita oricare dintre aceste drepturi, scrieți-ne la <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>. Vă vom răspunde în termenul prevăzut de lege.</span>
+        <span data-en>To exercise any of these rights, write to us at <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>. We will respond within the timeframe required by law.</span>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────── FOOTER ─────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true" style="flex:none;"><path fill="var(--amber)" d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
+        <span><strong style="color: var(--cream);">Adaptive Technologies S.R.L.</strong> · București, România · © <span id="year"></span></span>
+      </div>
+      <div class="footer-links">
+        <a href="/politica-de-confidentialitate.html">
+          <span data-ro>Politica de confidențialitate</span>
+          <span data-en>Privacy policy</span>
+        </a>
+        <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Language toggle — same mechanism and same localStorage key as the main
+  // site and the demo, so a visitor's language choice carries across pages.
+  function setLang(lang) {
+    document.documentElement.lang = lang;
+    document.getElementById('lang-ro').classList.toggle('active', lang === 'ro');
+    document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+    try { localStorage.setItem('adaptive-lang', lang); } catch (e) {}
+  }
+
+  try {
+    const saved = localStorage.getItem('adaptive-lang');
+    if (saved === 'en') setLang('en');
+    else setLang('ro');
+  } catch (e) { setLang('ro'); }
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.addEventListener('click', () => document.getElementById('navLinks').classList.remove('open'));
+  });
+</script>
+
+</body>
+</html>

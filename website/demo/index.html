@@ -150,6 +150,20 @@
   </section>
 
 </main>
+
+<footer class="demo__footer">
+  <div class="demo__footer-inner">
+    <span>© <span id="footer-year"></span> Adaptive Technologies S.R.L.</span>
+    <a href="/politica-de-confidentialitate.html">
+      <span data-ro>Politica de confidențialitate</span>
+      <span data-en>Privacy policy</span>
+    </a>
+  </div>
+</footer>
+
 <script src="demo.js"></script>
+<script>
+  document.getElementById('footer-year').textContent = new Date().getFullYear();
+</script>
 </body>
 </html>
