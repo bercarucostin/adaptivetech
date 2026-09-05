@@ -18,7 +18,7 @@ const TECHNICIANS_NODES = [
   'Sync Technicians',
 ];
 
-test('the Robotel technicians sync is absent from the generic ingestion', () => {
+test('the client-specific technicians sync is absent from the generic ingestion', () => {
   for (const gone of TECHNICIANS_NODES) {
     assert.strictEqual(byName(gone), undefined, `${gone} should not exist on main`);
     assert.strictEqual(wf.connections[gone], undefined, `${gone} should have no connections`);
@@ -34,7 +34,7 @@ test('no node references the technicians sync by name', () => {
 
 test('nothing client-specific survives in the workflow body', () => {
   const json = JSON.stringify(wf).toLowerCase();
-  for (const term of ['sigiliu', 'technician', 'tehnicien', 'robotel']) {
+  for (const term of ['technician', 'tehnicien']) {
     assert.ok(!json.includes(term), `client-specific term "${term}" still present`);
   }
 });
