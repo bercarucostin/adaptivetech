@@ -39,7 +39,11 @@ git switch main
 git log --oneline -1
 ```
 
-Expected: `git status --porcelain` prints nothing. `git log` shows `571b4fa initial commit`. If the working tree is dirty, stop and ask the user — do not stash.
+Expected: `git status --porcelain` prints nothing. `git log` shows `33f72e9 Create README.md with project overview and setup instructions.` — `main` holds that one commit and nothing else, and it is in sync with `origin/main`, so no pull is needed.
+
+(Do not expect `571b4fa`. That commit is the tip of `origin/prod`, an unrelated line, and it is not an ancestor of `main`.)
+
+If the working tree is dirty, stop and ask the user — do not stash.
 
 - [ ] **Step 2: Create the working branch**
 
