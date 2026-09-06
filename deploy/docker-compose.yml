@@ -66,6 +66,20 @@ services:
       DB_POSTGRESDB_USER: n8n
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # n8n blocks $env inside Code nodes by default, which fails as
+      # "access to env vars denied". The demo's Code nodes need three
+      # secrets that cannot live in a credential -- an HMAC key, a hash
+      # pepper and the Turnstile secret are used in raw JS, not by a node
+      # that carries a credential -- so the block is lifted here.
+      #
+      # The tradeoff, stated plainly: any Code node can now read any of
+      # this container's env vars, including N8N_ENCRYPTION_KEY and the
+      # Postgres password. That is acceptable only because anyone who can
+      # author a Code node already has the editor, and from there can use
+      # every stored credential and exfiltrate through an HTTP node anyway.
+      # The editor being a trusted surface is the assumption; if that ever
+      # stops being true, these secrets need a different home.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Required by lib/demo-session.js and the unsubscribe token.
       # Without it every Code node calling require('crypto') fails at runtime.
       NODE_FUNCTION_ALLOW_BUILTIN: crypto

@@ -166,6 +166,22 @@ session cookie (visitors just re-verify their email); rotating
 `N8N_ENCRYPTION_KEY` requires n8n's own credential re-encryption process —
 don't rotate it casually.
 
+## Two Code-node settings that are load-bearing
+
+`N8N_BLOCK_ENV_ACCESS_IN_NODE=false` lifts n8n's default block on `$env`
+inside Code nodes. Without it every workflow that reads a secret fails with
+`access to env vars denied`. The demo needs three secrets in raw JS -- the
+HMAC session key, the code pepper and the Turnstile secret -- none of which
+can live in an n8n credential, because credentials are consumed by nodes,
+not readable from script.
+
+The cost, stated plainly: any Code node can then read any env var on the
+container, including `N8N_ENCRYPTION_KEY` and the Postgres password. That is
+acceptable only because the editor is already a trusted surface -- anyone who
+can author a Code node can use every stored credential and exfiltrate through
+an HTTP node regardless. If the editor ever stops being trusted, these three
+secrets need a different home.
+
 ## Why `NODE_FUNCTION_ALLOW_BUILTIN=crypto` is load-bearing
 
 `lib/demo-session.js` calls `require('crypto')` inside a block marked
