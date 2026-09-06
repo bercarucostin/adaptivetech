@@ -7,14 +7,11 @@
 # `trusted_proxies private_ranges` tells Caddy to believe the forwarding
 # header when it arrives from a private address -- which is what the Coolify
 # proxy is, over the compose network. Cloudflare's own ranges are NOT listed
-# here any more: Caddy never sees Cloudflare directly, so listing them would
-# match nothing.
+# here: Caddy never sees Cloudflare directly, so listing them would match
+# nothing.
 #
-# The consequence for `client_ip` below: it is only as accurate as the chain
-# above it. Coolify's proxy must itself be configured to trust Cloudflare's
-# forwarding header, or the address Caddy reads is a Cloudflare edge IP
-# rather than the admin's. Treat the IP allowlist on the editor as one factor
-# and the basic_auth beneath it as the one that actually holds.
+# This affects the client address in the access logs, not access control --
+# nothing here gates on IP.
 {
 	# Caddy terminates no TLS here -- Coolify's proxy already did. Both site
 	# blocks below are http:// for the same reason; without that, Caddy would
@@ -53,23 +50,15 @@ http://{$DEMO_DOMAIN} {
 
 # The n8n editor on its own hostname, never the public one.
 http://{$N8N_HOST} {
-	# client_ip, not remote_ip: the direct peer is Coolify's proxy, so
-	# remote_ip would compare a private container address against ADMIN_IPS
-	# and never once match the real admin -- locking the editor out entirely.
-	# client_ip walks the forwarding header instead, trusted per the
-	# trusted_proxies block above.
+	# There is deliberately NO IP allowlist here. Several people need to reach
+	# this editor from different connections, and an allowlist across three
+	# proxies is both fragile and a maintenance tax -- it locks out whoever's
+	# address moved rather than whoever shouldn't be here.
 	#
-	# Across three hops this is genuinely best-effort. If the editor 403s
-	# when it should not, check what Coolify's proxy is forwarding before
-	# widening ADMIN_IPS -- widening it to make a symptom go away removes the
-	# factor rather than fixing it.
-	@notallowed not client_ip {$ADMIN_IPS}
-	respond @notallowed 403
-
-	# The factor that actually holds, and the reason the allowlist being
-	# best-effort is tolerable. Generate the hash with `caddy hash-password`
-	# and set N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH in Coolify's
-	# environment variables -- see deploy/README.md.
+	# Two layers guard it instead: this password, and n8n's own user accounts
+	# behind it. Generate the hash with `caddy hash-password` and set
+	# N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH in Coolify's environment
+	# variables -- see deploy/README.md.
 	basic_auth {
 		{$N8N_ADMIN_USER} {$N8N_ADMIN_PASSWORD_HASH}
 	}

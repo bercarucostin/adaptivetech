@@ -28,7 +28,7 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
   cross-origin API could not receive it under those settings.
 - n8n publishes no ports of its own. It is reachable only via Caddy on the
   compose network, except for the editor, which Caddy exposes on the
-  separate `N8N_HOST` hostname and restricts to `ADMIN_IPS`.
+  separate `N8N_HOST` hostname behind HTTP basic auth.
 - Postgres holds only n8n's workflow/execution state. It is **not** where
   demo documents, chunks, embeddings, leads or messages live — that data
   lives in a dedicated Supabase project, isolated from both this box and
@@ -152,9 +152,9 @@ done
 | `TURNSTILE_SECRET` | Server-side secret to verify Turnstile tokens. | Cloudflare Turnstile dashboard (paired with the site key — see Turnstile, below). Not locally generated. |
 | `N8N_ADMIN_PASSWORD_HASH` | Basic-auth password hash Caddy checks before proxying to the n8n editor. | `caddy hash-password` — see "Cloudflare + the n8n editor", below. |
 
-`DEMO_DOMAIN`, `N8N_HOST` and `ADMIN_IPS` in `.env.example` are not secrets;
-they're deployment-specific values (the demo's public hostname, the n8n
-editor's own hostname, and the admin IPs allowed to reach it) that ship with
+`DEMO_DOMAIN` and `N8N_HOST` in `.env.example` are not secrets;
+they're deployment-specific values (the demo's public hostname and the n8n
+editor's own hostname) that ship with
 sane placeholders for you to replace.
 
 Losing or rotating `DEMO_SESSION_SECRET` invalidates every outstanding
@@ -210,14 +210,12 @@ even see Cloudflare: Caddy's direct peer is Coolify's proxy, on the compose
 network. So the Caddyfile uses `client_ip` and trusts `private_ranges`, which
 is what that peer is.
 
-**Be honest about what this buys.** Across three hops the allowlist is only as
-accurate as the weakest forwarder in the chain — Coolify's proxy must itself be
-trusting Cloudflare's header, or the address Caddy reads is a Cloudflare edge
-IP rather than yours. Treat `ADMIN_IPS` as one factor and the basic auth
-beneath it as the one that actually holds. If the editor 403s when it should
-not, inspect what Coolify's proxy forwards before widening `ADMIN_IPS` —
-widening it to make the symptom go away deletes the factor rather than fixing
-it.
+**There is deliberately no IP allowlist on the editor.** Several people need to
+reach it from different connections, and an allowlist across three proxies
+locks out whoever's address moved rather than whoever should not be there. The
+editor is guarded by HTTP basic auth in Caddy, with n8n's own user accounts
+behind that as a second layer. `client_ip` and `private_ranges` therefore
+affect only what shows up in the access logs, not who gets in.
 
 1. DNS: point `DEMO_DOMAIN` and `N8N_HOST` at Cloudflare with the proxy
    (orange cloud) on.
@@ -231,10 +229,11 @@ it.
    Cloudflare directly, so listing them would match nothing. You still need
    Cloudflare's ranges for the firewall step below — that one is about the
    host, not about Caddy.
-4. **Set basic auth on the n8n editor.** `ADMIN_IPS` is one factor; the
-   Caddyfile also expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH`, set in
-   Coolify. Generate the hash (needs the `caddy` binary — run it inside the
-   `caddy` container if you don't have one on the host):
+4. **Set basic auth on the n8n editor.** This is the gate on the editor —
+   share the username and password with whoever needs access. The Caddyfile
+   expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH`, set in Coolify.
+   Generate the hash (needs the `caddy` binary — run it inside the `caddy`
+   container if you don't have one on the host):
 
 ```bash
 docker compose run --rm --no-deps caddy caddy hash-password
@@ -256,17 +255,22 @@ ufw --force enable
 ufw status numbered
 ```
 
-   Replace `<YOUR_ADMIN_IP>` with the same address(es) you put in
-   `ADMIN_IPS`. `ufw allow 22/tcp` (no `from`) opens SSH to the entire
-   internet, not just your own admin IP — the `from` form above is what
-   actually restricts SSH to your admin IP, as the paragraph above promises.
+   Replace `<YOUR_ADMIN_IP>` with your own address, and **add a second rule
+   for Coolify's own IP** or it can no longer deploy to this box:
+
+```bash
+ufw allow proto tcp from <COOLIFY_IP> to any port 22
+```
+
+   `ufw allow 22/tcp` (no `from`) opens SSH to the entire internet, not just
+   your own admin IP — the `from` form above is what actually restricts it.
 
 Cloudflare's IP ranges change occasionally — re-run step 3 after any
 Cloudflare network change, and periodically re-diff against
 `https://www.cloudflare.com/ips-v4` / `-v6`.
 
 6. **Verify the lock actually blocks a direct connection**, from a machine
-   that is neither Cloudflare nor in `ADMIN_IPS`:
+   that is not Cloudflare:
 
 ```bash
 curl -sv --connect-timeout 5 https://<HETZNER_IP>/ 2>&1 | tail -5
