@@ -1,0 +1,236 @@
+{
+  "name": "demo-unsubscribe",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "demo/unsubscribe",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "885b3dc8-c421-4cb1-8a0c-84f3e55cba20",
+      "name": "Webhook",
+      "webhookId": "a64e028f-0075-44cf-a07c-802f8ec90463"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst token = String((($('Webhook').first().json.query) || {}).t || '');\n\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\n\nfunction fail() {\n  return [{ json: { ok: false, email: null } }];\n}\n\n// <base64url(email)>.<mac>, minted by demo-request-code's Generate Code node.\nconst parts = token.split('.');\nif (parts.length !== 2 || !parts[0] || !parts[1]) return fail();\n\nlet email;\ntry {\n  email = Buffer.from(parts[0], 'base64url').toString('utf8');\n} catch (e) {\n  return fail();\n}\nif (!email || email.length > 320) return fail();\n\nconst expected = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n\nconst a = Buffer.from(parts[1]);\nconst b = Buffer.from(expected);\n// Length first: timingSafeEqual throws on a mismatch, and the MAC is a fixed\n// width, so its length is not a secret.\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fail();\n\nreturn [{ json: { ok: true, email: email } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "be615cd5-abcd-480d-9326-f0d12872507e",
+      "name": "Verify Token"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "beed8cee-d991-4c1f-ba5f-793aa95e6ce0",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f4cac9fc-f66f-41d6-8ffb-5a59b692ed04",
+      "name": "Token Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH s AS (\n  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n  ON CONFLICT (email) DO NOTHING\n)\nDELETE FROM demo_leads WHERE email = $1::citext",
+        "options": {
+          "queryReplacement": "={{ [$json.email] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "3db692b6-482f-4b1a-a6d2-7e50e0f4bff5",
+      "name": "Suppress Address",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Te-am dezabonat — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Te-am dezabonat</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Nu îți vom mai trimite emailuri. Adresa ta a fost ștearsă din lista noastră.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        -192
+      ],
+      "id": "e0864733-82bc-4c0b-ad48-dd72bf836e35",
+      "name": "Respond Done"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Ceva n-a mers — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Ceva n-a mers</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Nu am putut procesa dezabonarea acum. Scrie-ne la contact@adaptivetech.ro și o rezolvăm manual.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        0
+      ],
+      "id": "abe7a5df-bf5f-476b-858a-6d1450a3b7ed",
+      "name": "Respond Failed"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Link invalid — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Link invalid</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Linkul de dezabonare nu este valid sau a fost modificat. Folosește linkul din cel mai recent email primit de la noi.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        128
+      ],
+      "id": "9053751c-58f7-41d8-b0b8-5ab51f80196e",
+      "name": "Respond Invalid"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Token": {
+      "main": [
+        [
+          {
+            "node": "Token Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Valid?": {
+      "main": [
+        [
+          {
+            "node": "Suppress Address",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suppress Address": {
+      "main": [
+        [
+          {
+            "node": "Respond Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

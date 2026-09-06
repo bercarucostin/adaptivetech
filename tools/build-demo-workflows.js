@@ -1586,10 +1586,16 @@ const seen = new Set();
 const sources = [];
 for (const r of hits) {
   const m = r.metadata || {};
-  const key = (m.file_name || '') + '|' + (m.section_heading || '');
+  const file = m.file_name || 'document';
+  let section = m.section_heading || '';
+  // The chunker falls back to the document title when a file has no "##"
+  // headings, which renders as "notes.txt — notes". Drop the section in that
+  // case; the frontend already shows the filename alone when section is ''.
+  if (section && section === file.replace(/\\.[^.]+$/, '')) section = '';
+  const key = file + '|' + section;
   if (seen.has(key)) continue;
   seen.add(key);
-  sources.push({ file: m.file_name || 'document', section: m.section_heading || '' });
+  sources.push({ file: file, section: section });
 }
 
 return [{
@@ -1865,6 +1871,231 @@ const chat = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// demo-cleanup
+//
+// The workflow that makes the privacy policy true. Every interval below is a
+// published commitment on /politica-de-confidentialitate, not a preference:
+//
+//   "Documentele încărcate si fragmentele extrase din ele sunt sterse automat
+//    la expirarea sesiunii, la 2 ore de la incarcare. Stergerea propriu-zisa
+//    ruleaza o data pe ora, deci un document poate ramane stocat pana la 3 ore."
+//   "Intrebarile puse in demo sunt pastrate 30 de zile, complet separate de
+//    sesiune."
+//
+// Hence hourly, not daily: the policy promises a 3 hour worst case, and a
+// daily job would make that 26.
+// ---------------------------------------------------------------------------
+
+// Deleting the session is the whole document purge. demo_uploads and
+// demo_documents cascade from it; demo_messages does NOT -- its FK is
+// ON DELETE SET NULL, so questions survive detached, which is exactly the
+// 30-day tier below.
+const purgeSessionsSql =
+  'DELETE FROM demo_sessions WHERE expires_at < now()\n' +
+  'RETURNING id';
+
+// Codes are single-use and expire in 10 minutes; a day is generous headroom
+// for anyone debugging. They hold an email address, so they do not linger.
+const purgeCodesSql =
+  "DELETE FROM demo_email_codes WHERE created_at < now() - interval '1 day'\n" +
+  'RETURNING id';
+
+const purgeMessagesSql =
+  "DELETE FROM demo_messages WHERE created_at < now() - interval '30 days'\n" +
+  'RETURNING id';
+
+const cleanup = workflow(
+  'demo-cleanup',
+  [
+    node('Every Hour', 'n8n-nodes-base.scheduleTrigger', 1.3,
+      { rule: { interval: [{ field: 'hours', hoursInterval: 1 }] } }, [0, 0]),
+
+    node('Purge Expired Sessions', 'n8n-nodes-base.postgres', 2.6,
+      { operation: 'executeQuery', query: purgeSessionsSql, options: {} },
+      [208, 0],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true, retryOnFail: true }),
+
+    node('Purge Old Codes', 'n8n-nodes-base.postgres', 2.6,
+      { operation: 'executeQuery', query: purgeCodesSql, options: {} },
+      [416, 0],
+      {
+        credentials: { postgres: PG_CRED },
+        alwaysOutputData: true,
+        retryOnFail: true,
+        // Nothing to delete is the normal case on a quiet hour, and each step
+        // must run regardless of what the one before it found.
+        executeOnce: true,
+      }),
+
+    node('Purge Old Messages', 'n8n-nodes-base.postgres', 2.6,
+      { operation: 'executeQuery', query: purgeMessagesSql, options: {} },
+      [624, 0],
+      {
+        credentials: { postgres: PG_CRED },
+        alwaysOutputData: true,
+        retryOnFail: true,
+        executeOnce: true,
+      }),
+  ],
+  {
+    'Every Hour': { main: [[{ node: 'Purge Expired Sessions', type: 'main', index: 0 }]] },
+    'Purge Expired Sessions': { main: [[{ node: 'Purge Old Codes', type: 'main', index: 0 }]] },
+    'Purge Old Codes': { main: [[{ node: 'Purge Old Messages', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
+// demo-unsubscribe
+//
+// The link at the bottom of every code email. It is a GET clicked from a mail
+// client, so it answers HTML rather than JSON, and it is reached WITHOUT a
+// session -- the token in the URL is the whole authorisation.
+//
+// That token is HMAC-signed over the address, so it cannot be edited into
+// someone else's unsubscribe, and the address cannot be recovered from it
+// without the key. Without the signature this endpoint would be a way to
+// unsubscribe any address you can guess, and a way to test whether an
+// address is in the database.
+// ---------------------------------------------------------------------------
+const verifyUnsubCode = `const crypto = require('crypto');
+
+const token = String((($('Webhook').first().json.query) || {}).t || '');
+
+const secret = $env.DEMO_SESSION_SECRET;
+if (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');
+
+function fail() {
+  return [{ json: { ok: false, email: null } }];
+}
+
+// <base64url(email)>.<mac>, minted by demo-request-code's Generate Code node.
+const parts = token.split('.');
+if (parts.length !== 2 || !parts[0] || !parts[1]) return fail();
+
+let email;
+try {
+  email = Buffer.from(parts[0], 'base64url').toString('utf8');
+} catch (e) {
+  return fail();
+}
+if (!email || email.length > 320) return fail();
+
+const expected = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')
+  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+
+const a = Buffer.from(parts[1]);
+const b = Buffer.from(expected);
+// Length first: timingSafeEqual throws on a mismatch, and the MAC is a fixed
+// width, so its length is not a secret.
+if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fail();
+
+return [{ json: { ok: true, email: email } }];
+`;
+
+// Suppression is recorded and the lead row is removed in one statement, so a
+// suppressed address cannot survive as a lead if the second half failed.
+// ON CONFLICT DO NOTHING makes a second click idempotent rather than an error.
+const suppressSql =
+  'WITH s AS (\n' +
+  '  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n' +
+  '  ON CONFLICT (email) DO NOTHING\n' +
+  ')\n' +
+  'DELETE FROM demo_leads WHERE email = $1::citext';
+
+// Served as a whole page because a mail client opens this in a browser tab.
+// Inline styles only: this response does not pass through Caddy's file server
+// and has no stylesheet to link to.
+function unsubPage(title, body) {
+  return (
+    '<!doctype html><html lang="ro"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="noindex">' +
+    '<title>' + title + ' — Adaptive Technologies</title></head>' +
+    '<body style="margin:0;background:#E7E5DF;color:#0C3054;' +
+    'font:17px/1.6 system-ui,-apple-system,sans-serif">' +
+    '<main style="max-width:34rem;margin:12vh auto;padding:2.5rem;' +
+    'background:#fff;border-radius:14px">' +
+    '<h1 style="margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em">' +
+    title + '</h1>' +
+    '<p style="margin:0 0 1.5rem;color:#16406B">' + body + '</p>' +
+    '<a href="https://adaptivetech.ro/" style="display:inline-block;' +
+    'background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;' +
+    'text-decoration:none">adaptivetech.ro</a>' +
+    '</main></body></html>'
+  );
+}
+
+function unsubRespondNode(name, html, statusCode, position) {
+  return node(name, 'n8n-nodes-base.respondToWebhook', 1.5,
+    {
+      respondWith: 'text',
+      responseBody: html,
+      options: {
+        responseCode: statusCode,
+        responseHeaders: {
+          entries: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }],
+        },
+      },
+    },
+    position);
+}
+
+const unsubscribe = workflow(
+  'demo-unsubscribe',
+  [
+    webhookNode('Webhook', 'GET', 'unsubscribe', [0, 0]),
+    node('Verify Token', 'n8n-nodes-base.code', 2,
+      { jsCode: verifyUnsubCode }, [208, 0]),
+    ifBooleanNode('Token Valid?', '={{ $json.ok }}', [416, 0]),
+
+    node('Suppress Address', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: suppressSql,
+        options: { queryReplacement: '={{ [$json.email] }}' },
+      },
+      [624, -96],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true,
+        onError: 'continueErrorOutput' }),
+
+    unsubRespondNode('Respond Done',
+      unsubPage('Te-am dezabonat',
+        'Nu îți vom mai trimite emailuri. Adresa ta a fost ștearsă din lista noastră.'),
+      200, [832, -192]),
+
+    unsubRespondNode('Respond Failed',
+      unsubPage('Ceva n-a mers',
+        'Nu am putut procesa dezabonarea acum. Scrie-ne la contact@adaptivetech.ro ' +
+        'și o rezolvăm manual.'),
+      500, [832, 0]),
+
+    // Deliberately the same page for a malformed token and a forged one --
+    // and it never says whether the address exists.
+    unsubRespondNode('Respond Invalid',
+      unsubPage('Link invalid',
+        'Linkul de dezabonare nu este valid sau a fost modificat. ' +
+        'Folosește linkul din cel mai recent email primit de la noi.'),
+      400, [624, 128]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Verify Token', type: 'main', index: 0 }]] },
+    'Verify Token': { main: [[{ node: 'Token Valid?', type: 'main', index: 0 }]] },
+    'Token Valid?': {
+      main: [
+        [{ node: 'Suppress Address', type: 'main', index: 0 }],
+        [{ node: 'Respond Invalid', type: 'main', index: 0 }],
+      ],
+    },
+    'Suppress Address': {
+      main: [
+        [{ node: 'Respond Done', type: 'main', index: 0 }],
+        [{ node: 'Respond Failed', type: 'main', index: 0 }],
+      ],
+    },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
@@ -1874,6 +2105,8 @@ const built = [
   ['demo-verify-code.json', verifyCode],
   ['demo-upload.json', upload],
   ['demo-chat.json', chat],
+  ['demo-cleanup.json', cleanup],
+  ['demo-unsubscribe.json', unsubscribe],
 ];
 
 for (const [file, wf] of built) {

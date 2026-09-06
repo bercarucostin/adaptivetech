@@ -1,0 +1,138 @@
+{
+  "name": "demo-cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "96fc69a9-1555-450f-a74c-b868b7713aaa",
+      "name": "Every Hour"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM demo_sessions WHERE expires_at < now()\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "dee76bc2-757c-4cd0-ae6b-f492b0673157",
+      "name": "Purge Expired Sessions",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM demo_email_codes WHERE created_at < now() - interval '1 day'\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f35e1650-79be-4246-bea7-7d16f0127ce8",
+      "name": "Purge Old Codes",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM demo_messages WHERE created_at < now() - interval '30 days'\nRETURNING id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "id": "edde4d77-3595-4adf-a1c7-d252348b537a",
+      "name": "Purge Old Messages",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "executeOnce": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Purge Expired Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purge Expired Sessions": {
+      "main": [
+        [
+          {
+            "node": "Purge Old Codes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purge Old Codes": {
+      "main": [
+        [
+          {
+            "node": "Purge Old Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
