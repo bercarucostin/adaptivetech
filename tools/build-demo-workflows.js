@@ -25,6 +25,11 @@ const OUT = path.join(ROOT, 'workflows');
 const PG_CRED = { id: '1Ig8IigY7ugDJKhy', name: 'Supabase' };
 const SMTP_CRED = { id: 'BI2J0KgYoH5uWjln', name: 'SMTP account' };
 
+// n8n's PREDEFINED Gemini credential, not a generic Query Auth one. The two
+// are wired differently on an HTTP Request node -- see geminiNode below --
+// and this is the one that exists on the instance.
+const GEMINI_CRED = { id: 'b4Za1yxMULpynxXY', name: 'Google Gemini(PaLM) Api account' };
+
 // Real ids read back from n8n exports, so a rebuild produces the files that
 // are already deployed rather than a set that has to be re-wired by hand.
 //
@@ -52,6 +57,10 @@ const N8N_IDS = {
   'demo-upload': {
     id: 'qBScjzp3KtIuZJhy',
     webhooks: { Webhook: 'b8066e2c-cbdc-4e31-9e0f-68c61f40636a' },
+  },
+  'demo-chat': {
+    id: 'EVSG42B2rszYbvID',
+    webhooks: { Webhook: '7fb4e91f-4842-4e94-9394-f92f439495ec' },
   },
   'demo-upload-status': {
     id: 'NjQwVYmXFTdJQACc',
@@ -418,6 +427,34 @@ function ifBooleanNode(name, leftValue, position) {
       options: {},
     },
     position);
+}
+
+/** An HTTP Request node calling a Gemini endpoint.
+ *
+ *  authentication: 'predefinedCredentialType' with nodeCredentialType, NOT
+ *  the genericCredentialType/genericAuthType pair a Query Auth credential
+ *  needs. Mixing the two leaves the node unauthenticated and Gemini answers
+ *  403 with no hint that the credential was simply ignored.
+ *
+ *  The body is always JSON.stringify($json.requestBody), so every payload
+ *  decision lives in a Code node where it can be read and reasoned about
+ *  rather than in an expression field.
+ */
+function geminiNode(name, model, method, position, options, extra) {
+  return node(name, 'n8n-nodes-base.httpRequest', 4.2,
+    {
+      method: 'POST',
+      url: 'https://generativelanguage.googleapis.com/v1beta/models/' +
+           model + ':' + method,
+      authentication: 'predefinedCredentialType',
+      nodeCredentialType: 'googlePalmApi',
+      sendBody: true,
+      specifyBody: 'json',
+      jsonBody: '={{ JSON.stringify($json.requestBody) }}',
+      options: options || {},
+    },
+    position,
+    Object.assign({ credentials: { googlePalmApi: GEMINI_CRED } }, extra || {}));
 }
 
 /** Calls demo-verify-session with the request's Cookie header.
@@ -960,15 +997,15 @@ return [{
 }];
 `;
 
-// Pinned from ingestion.json's working nodes, not from memory. The Gemini
-// credential is deliberately NOT attached to either node below: it is wired
-// in the n8n UI, and this generator has no id for it to pin.
-const GEMINI_EXTRACT_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/' +
-  'gemini-2.5-flash-lite:generateContent';
-const GEMINI_EMBED_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/' +
-  'gemini-embedding-001:batchEmbedContents';
+// Models. Extraction and embedding are pinned from ingestion.json's working
+// nodes rather than written from memory.
+//
+// ANSWER_MODEL is the one to change if the account 404s on it: extraction is
+// mechanical and runs on the cheap lite model, but the answer is the thing
+// the demo is actually selling, so it gets the full flash model.
+const EXTRACT_MODEL = 'gemini-2.5-flash-lite';
+const EMBED_MODEL = 'gemini-embedding-001';
+const ANSWER_MODEL = 'gemini-2.5-flash';
 
 // gemini-embedding-001 caps a batchEmbedContents call at 100 requests, and
 // this is also the insert batch: one HTTP call, one INSERT, per group.
@@ -1257,21 +1294,10 @@ const upload = workflow(
       { jsCode: shared('demo-extraction-prompt.js') + prepareExtractionGlue },
       [1872, -192]),
 
-    node('Gemini Extract', 'n8n-nodes-base.httpRequest', 4.2,
-      {
-        method: 'POST',
-        url: GEMINI_EXTRACT_URL,
-        authentication: 'genericCredentialType',
-        genericAuthType: 'httpQueryAuth',
-        sendBody: true,
-        specifyBody: 'json',
-        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
-        // 10 minutes, matching ingestion.json. A long PDF genuinely takes
-        // minutes, and the client is polling rather than waiting on a socket.
-        options: { timeout: 600000 },
-      },
-      [2080, -192],
-      { onError: 'continueErrorOutput' }),
+    // 10 minutes, matching ingestion.json. A long PDF genuinely takes
+    // minutes, and the client is polling rather than waiting on a socket.
+    geminiNode('Gemini Extract', EXTRACT_MODEL, 'generateContent',
+      [2080, -192], { timeout: 600000 }, { onError: 'continueErrorOutput' }),
 
     node('Parse Extraction', 'n8n-nodes-base.code', 2,
       { jsCode: parseExtractionCode }, [2288, -192],
@@ -1282,23 +1308,10 @@ const upload = workflow(
 
     ifBooleanNode('Has Chunks?', '={{ $json.ok }}', [2704, -288]),
 
-    node('Embed Chunks', 'n8n-nodes-base.httpRequest', 4.2,
-      {
-        method: 'POST',
-        url: GEMINI_EMBED_URL,
-        authentication: 'genericCredentialType',
-        genericAuthType: 'httpQueryAuth',
-        sendBody: true,
-        specifyBody: 'json',
-        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
-        // One batch at a time with a gap between them: the free tier's rate
-        // limit is the binding constraint, not throughput.
-        options: {
-          timeout: 120000,
-          batching: { batch: { batchSize: 1, batchInterval: 2000 } },
-        },
-      },
-      [2912, -400],
+    // One batch at a time with a gap between them: the free tier's rate
+    // limit is the binding constraint, not throughput.
+    geminiNode('Embed Chunks', EMBED_MODEL, 'batchEmbedContents', [2912, -400],
+      { timeout: 120000, batching: { batch: { batchSize: 1, batchInterval: 2000 } } },
       { onError: 'continueErrorOutput' }),
 
     node('Format For Insert', 'n8n-nodes-base.code', 2,
@@ -1549,11 +1562,22 @@ const context = hits.map(function (r, i) {
 
 // Oldest first: the history query orders newest first so LIMIT takes the
 // most recent, and the model needs them the other way round.
-const history = $input.all()
+//
+// Gemini names the assistant turn 'model', not 'assistant', and rejects the
+// Anthropic spelling. It also requires the conversation to START on a user
+// turn, so any leading model turn is dropped -- that can only happen if a
+// write was interrupted mid-pair, but it would 400 the whole request.
+let history = $input.all()
   .map(function (i) { return i.json; })
   .filter(function (r) { return r && r.role && r.content; })
   .reverse()
-  .map(function (r) { return { role: r.role, content: String(r.content) }; });
+  .map(function (r) {
+    return {
+      role: r.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(r.content) }],
+    };
+  });
+while (history.length && history[0].role !== 'user') history.shift();
 
 const question = $('Prepare Query').first().json.query;
 
@@ -1573,10 +1597,19 @@ return [{
     grounded: true,
     sources: sources,
     requestBody: {
-      model: 'claude-sonnet-5',
-      max_tokens: 1024,
-      system: SYSTEM + '\\n\\nExcerpts from the document:\\n\\n' + context,
-      messages: history.concat([{ role: 'user', content: question }]),
+      contents: history.concat([{ role: 'user', parts: [{ text: question }] }]),
+      // The excerpts ride in the system instruction rather than in the user
+      // turn, so a visitor's question can never be mistaken for part of the
+      // document -- or the other way round.
+      systemInstruction: {
+        parts: [{ text: SYSTEM + '\\n\\nExcerpts from the document:\\n\\n' + context }],
+      },
+      generationConfig: {
+        maxOutputTokens: 1024,
+        // Grounded answering, not writing. Higher and it starts smoothing
+        // over gaps in the excerpts with plausible invention.
+        temperature: 0.2,
+      },
     },
   },
 }];
@@ -1584,25 +1617,31 @@ return [{
 
 const parseAnswerCode = `const res = $input.first().json || {};
 
-// Claude returns content as a list of blocks. Join the text ones; taking
-// [0].text alone drops the rest of a multi-block answer.
-const blocks = Array.isArray(res.content) ? res.content : [];
-const answer = blocks
-  .filter(function (b) { return b && b.type === 'text'; })
-  .map(function (b) { return b.text || ''; })
-  .join('')
-  .trim();
-
-if (!answer) {
-  throw new Error('Claude returned no text: ' + JSON.stringify(res).slice(0, 400));
+const candidate = (res.candidates || [])[0];
+if (!candidate) {
+  // No candidate at all means a safety block or a quota refusal. The reason
+  // is in promptFeedback, which is worth keeping in the execution log.
+  throw new Error('Gemini returned no candidate: ' + JSON.stringify(res).slice(0, 400));
 }
 
-const usage = res.usage || {};
+// Gemini splits an answer across parts. Join them; taking parts[0] alone
+// truncates a long answer to its first fragment.
+const parts = (candidate.content && candidate.content.parts) || [];
+const answer = parts.map(function (p) { return p.text || ''; }).join('').trim();
+
+if (!answer) {
+  throw new Error('Gemini returned an empty answer (finishReason: ' +
+    (candidate.finishReason || 'unknown') + ')');
+}
+
+// promptTokenCount / candidatesTokenCount, not Anthropic's input_tokens /
+// output_tokens. Reading the wrong names records every turn as costing zero.
+const usage = res.usageMetadata || {};
 return [{
   json: {
     answer: answer,
-    input_tokens: usage.input_tokens || 0,
-    output_tokens: usage.output_tokens || 0,
+    input_tokens: usage.promptTokenCount || 0,
+    output_tokens: usage.candidatesTokenCount || 0,
   },
 }];
 `;
@@ -1663,20 +1702,8 @@ const chat = workflow(
       { jsCode: prepareQueryCode }, [1040, -192],
       { onError: 'continueErrorOutput' }),
 
-    node('Embed Query', 'n8n-nodes-base.httpRequest', 4.2,
-      {
-        method: 'POST',
-        url: 'https://generativelanguage.googleapis.com/v1beta/models/' +
-             'gemini-embedding-001:embedContent',
-        authentication: 'genericCredentialType',
-        genericAuthType: 'httpQueryAuth',
-        sendBody: true,
-        specifyBody: 'json',
-        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
-        options: { timeout: 30000 },
-      },
-      [1248, -192],
-      { onError: 'continueErrorOutput' }),
+    geminiNode('Embed Query', EMBED_MODEL, 'embedContent', [1248, -192],
+      { timeout: 30000 }, { onError: 'continueErrorOutput' }),
 
     node('Normalise Query', 'n8n-nodes-base.code', 2,
       { jsCode: normaliseQueryCode }, [1456, -192],
@@ -1724,25 +1751,8 @@ const chat = workflow(
 
     ifBooleanNode('Grounded?', '={{ $json.grounded }}', [2288, -192]),
 
-    node('Claude', 'n8n-nodes-base.httpRequest', 4.2,
-      {
-        method: 'POST',
-        url: 'https://api.anthropic.com/v1/messages',
-        authentication: 'genericCredentialType',
-        genericAuthType: 'httpHeaderAuth',
-        // The API version is a required header and is not part of the
-        // credential, which carries only x-api-key.
-        sendHeaders: true,
-        headerParameters: {
-          parameters: [{ name: 'anthropic-version', value: '2023-06-01' }],
-        },
-        sendBody: true,
-        specifyBody: 'json',
-        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
-        options: { timeout: 120000 },
-      },
-      [2496, -288],
-      { onError: 'continueErrorOutput' }),
+    geminiNode('Generate Answer', ANSWER_MODEL, 'generateContent',
+      [2496, -288], { timeout: 120000 }, { onError: 'continueErrorOutput' }),
 
     node('Parse Answer', 'n8n-nodes-base.code', 2,
       { jsCode: parseAnswerCode }, [2704, -288],
@@ -1833,11 +1843,11 @@ const chat = workflow(
     },
     'Grounded?': {
       main: [
-        [{ node: 'Claude', type: 'main', index: 0 }],
+        [{ node: 'Generate Answer', type: 'main', index: 0 }],
         [{ node: 'Answer Not Found', type: 'main', index: 0 }],
       ],
     },
-    'Claude': {
+    'Generate Answer': {
       main: [
         [{ node: 'Parse Answer', type: 'main', index: 0 }],
         [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
