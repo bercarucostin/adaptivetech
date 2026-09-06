@@ -79,12 +79,12 @@ test('the 1536-dimension contract agrees across schema, function and workflows',
   const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
   // The column type is the real dimension guard.
-  assert.match(read('db/documents.sql'), /embedding\s+vector\(1536\)/,
-    'documents.embedding must be vector(1536)');
+  assert.match(read('db/demo_schema.sql'), /embedding\s+vector\(1536\)/,
+    'demo_documents.embedding must be vector(1536)');
 
   // The search function must take the same width.
-  assert.match(read('db/hybrid_search.sql'), /query_embedding\s+vector\(1536\)/,
-    'hybrid_search must accept vector(1536)');
+  assert.match(read('db/demo_hybrid_search.sql'), /query_embedding\s+vector\(1536\)/,
+    'demo_hybrid_search must accept vector(1536)');
 
   // Ingestion must request that width from the embedding API.
   assert.match(read('workflows/ingestion.json'), /outputDimensionality[^0-9]{0,12}1536/,

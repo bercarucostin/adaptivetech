@@ -23,16 +23,22 @@ on failure — so the set lands together when that work happens.
 
 ### Database (`db/`)
 
+This branch carries only the **demo's** schema. The WhatsApp bot's own SQL
+(`documents.sql`, `hybrid_search.sql`, `match_documents.sql`,
+`n8n_chat_histories.sql` and its trigger) lives on `main` and was removed here —
+`website` and `main` are separate products and do not merge back into each
+other.
+
 | File | Purpose |
 |---|---|
-| `documents.sql` | Chunk store — 1536-dim pgvector embeddings, generated Romanian `tsvector`, HNSW + GIN + btree indexes |
-| `hybrid_search.sql` | pgvector ANN fused with Postgres FTS via reciprocal rank fusion |
-| `match_documents.sql` | Pure-semantic search, kept for LangChain-node compatibility |
-| `cleanup_n8n_chat_histories_after_insert.sql` | Trigger run after each insert into `n8n_chat_histories`. It is a message-type filter, not a length cap: it never looks at `session_id`, and deletes the just-inserted row unless it is a `human` message or an `ai` message with no `tool_calls`. History is bounded instead by `db-cleanup.json`'s weekly sweep |
-| `n8n_chat_histories.sql` | Per-user conversation memory. Its `CREATE TRIGGER` references `cleanup_n8n_chat_histories_after_insert()`, which is resolved at creation time — apply that file first |
+| `demo_schema.sql` | The demo's seven tables. Session-scoped chunk store with no HNSW index, three retention tiers, and RLS enabled with zero policies |
+| `demo_hybrid_search.sql` | Session-scoped RRF search. Requires `p_session_id`, scopes **both** branches, and returns a real `best_similarity` alongside the fused rank |
+| `demo_verify.sql` | Nine checks proving retention, cross-session isolation, and the high/low similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
 
-Apply `documents.sql` before `hybrid_search.sql` — the function depends on the
-table's `vector(1536)` typmod and on the `romanian` FTS configuration.
+Apply in that order. Each sets `search_path = public, extensions`, because
+Supabase installs pgvector into `extensions` rather than `public` — without it
+the `vector` type does not resolve and the schema fails on its first vector
+column.
 
 ### Workflows (`workflows/`)
 

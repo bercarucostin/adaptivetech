@@ -1,0 +1,56 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "201c6c62-3de0-4f4c-85bf-ca43c23d3274",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nreturn [{ json: { ok: crypto.createHmac('sha256','k').update('x').digest('hex').slice(0,8) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "949da4aa-8fee-4223-ae76-7785142262aa",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4caf292b-e472-49e6-b429-81c4107fe59a",
+  "meta": {
+    "instanceId": "9ec0140e31c7c709448ced9ed884df1d2fa5ac7bb9583a2c68049624a9c12c68"
+  },
+  "nodeGroups": [],
+  "id": "mbuQUEIfcw9xu5es",
+  "tags": []
+}
