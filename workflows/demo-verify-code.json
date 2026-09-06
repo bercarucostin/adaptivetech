@@ -130,9 +130,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO demo_leads (email, consent_at, sessions_count, last_ip)\nSELECT $1::citext, now(), 1, $2::inet\n-- Canonical: someone who unsubscribed me@gmail.com asked not to be\n-- contacted, and me+demo@gmail.com is the same inbox. Matching the\n-- exact string would keep mailing them under any alias.\nWHERE NOT EXISTS (\n  SELECT 1 FROM demo_suppressions\n  WHERE email_canonical = public.demo_canonical_email($1::text)\n)\nON CONFLICT (email) DO UPDATE\nSET last_seen_at = now(),\n    sessions_count = demo_leads.sessions_count + 1,\n    last_ip = excluded.last_ip",
+        "query": "INSERT INTO demo_leads (email, consent_at, sessions_count)\nSELECT $1::citext, now(), 1\n-- Canonical: someone who unsubscribed me@gmail.com asked not to be\n-- contacted, and me+demo@gmail.com is the same inbox. Matching the\n-- exact string would keep mailing them under any alias.\nWHERE NOT EXISTS (\n  SELECT 1 FROM demo_suppressions\n  WHERE email_canonical = public.demo_canonical_email($1::text)\n)\nON CONFLICT (email) DO UPDATE\nSET last_seen_at = now(),\n    sessions_count = demo_leads.sessions_count + 1",
         "options": {
-          "queryReplacement": "={{ [$('Webhook').first().json.body.email, $('Webhook').first().json.headers['cf-connecting-ip'] || null] }}"
+          "queryReplacement": "={{ [$('Webhook').first().json.body.email] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",

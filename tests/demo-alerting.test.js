@@ -97,7 +97,7 @@ test('no business rejection reaches the alert', () => {
     'demo-chat.json': ['Respond', 'Respond Session Invalid', 'Respond Message Limit'],
     'demo-upload.json': [
       'Respond Accepted', 'Respond Upload Limit', 'Respond Session Invalid',
-      'Respond Bad File', 'Mark Ready', 'Mark Failed No Text',
+      'Respond Bad File', 'Mark Ready', 'Mark Failed Content',
     ],
     'demo-upload-status.json': ['Respond', 'Respond Unauthorized'],
     // The GET only offers; it has no alert path and nothing to suppress.
@@ -125,7 +125,7 @@ test('nothing that can throw on a webhook route is left unhandled', () => {
     // Everything past Respond Accepted in demo-upload runs after the 202.
     'demo-upload.json': [
       'Mark Extracting', 'Use Plain Text', 'Chunk Document', 'Mark Ready',
-      'Mark Failed No Text', 'Mark Failed Unavailable', ALERT,
+      'Mark Failed Content', 'Mark Failed Unavailable', ALERT,
     ],
     'demo-chat.json': [ALERT],
     'demo-request-code.json': [ALERT],

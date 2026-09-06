@@ -48,6 +48,7 @@ increments, so parallel requests cannot outrun it.
 | `demo_schema.sql` | Seven tables. Session-scoped chunk store, three retention tiers, RLS enabled with zero policies |
 | `demo_hybrid_search.sql` | Session-scoped RRF search. `p_session_id` is required and scopes **both** branches |
 | `demo_email_canonical.sql` | The quota identity: a generated `email_canonical` column on three tables, so `you+1@gmail.com` and `y.o.u@gmail.com` cannot buy a second quota |
+| `demo_lead_ip_retention.sql` | Drops `demo_leads.last_ip`. The session-scoped copy in `demo_sessions.ip` stays; a second one kept until unsubscribe did not |
 | `demo_verify.sql` | Nine checks proving retention, cross-session isolation and the similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
 
 Apply in that order — `demo_email_canonical.sql` after `demo_schema.sql`, since it

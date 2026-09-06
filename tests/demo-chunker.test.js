@@ -86,3 +86,16 @@ test('a filename with no extension is used as the title unchanged', () => {
   const out = chunkDocument('README', 'text');
   assert.strictEqual(out[0].section_heading, 'README');
 });
+
+test('the size ceiling is tagged, so the caller can tell it from an empty document', () => {
+  // Two failures that look identical to a caller matching on the message: a
+  // scanned PDF yields no chunks, an oversized one throws. They need different
+  // copy -- telling the owner of a 400-page document that it "appears to be
+  // scanned" sends them after a problem that is not there.
+  const huge = Array.from({ length: 400000 }, (_, i) => 'w' + i).join(' ');
+  assert.throws(
+    () => chunkDocument('big.pdf', huge),
+    (err) => err.code === 'DOCUMENT_TOO_LONG',
+    'the ceiling must throw an error tagged DOCUMENT_TOO_LONG'
+  );
+});

@@ -916,9 +916,15 @@ return [{ json: { ok: true, session_id: row.session_id, token, expires_ms: expir
 
 // Skipped for suppressed addresses: unsubscribing means "stop contacting me",
 // not "revoke my access", so the session is still issued above.
+// No IP here, deliberately. demo_sessions.ip records the address for the
+// two hours a session lives, which is what abuse investigation needs;
+// demo_leads is aggregates-only and kept until someone unsubscribes. An IP
+// held indefinitely beside a named person is the part of this a GDPR
+// reviewer picks at, and the privacy policy scopes only the address and
+// the interaction counts to that retention tier.
 const upsertLeadSql =
-  'INSERT INTO demo_leads (email, consent_at, sessions_count, last_ip)\n' +
-  'SELECT $1::citext, now(), 1, $2::inet\n' +
+  'INSERT INTO demo_leads (email, consent_at, sessions_count)\n' +
+  'SELECT $1::citext, now(), 1\n' +
   '-- Canonical: someone who unsubscribed me@gmail.com asked not to be\n' +
   '-- contacted, and me+demo@gmail.com is the same inbox. Matching the\n' +
   '-- exact string would keep mailing them under any alias.\n' +
@@ -928,8 +934,7 @@ const upsertLeadSql =
   ')\n' +
   'ON CONFLICT (email) DO UPDATE\n' +
   'SET last_seen_at = now(),\n' +
-  '    sessions_count = demo_leads.sessions_count + 1,\n' +
-  '    last_ip = excluded.last_ip';
+  '    sessions_count = demo_leads.sessions_count + 1';
 
 const countAttemptSql =
   'UPDATE demo_email_codes SET attempts = attempts + 1\n' +
@@ -978,7 +983,7 @@ const verifyCode = workflow(
         query: upsertLeadSql,
         options: {
           queryReplacement:
-            "={{ [$('Webhook').first().json.body.email, $('Webhook').first().json.headers['cf-connecting-ip'] || null] }}",
+            "={{ [$('Webhook').first().json.body.email] }}",
         },
       },
       [1248, -96],
@@ -1225,9 +1230,11 @@ let chunks;
 try {
   chunks = chunkDocument(file.filename, text);
 } catch (e) {
-  // chunkDocument throws past MAX_CHUNKS. A scanned PDF is the common case
-  // for empty output; an oversized one is the common case for this.
-  return fail('NO_TEXT_LAYER');
+  // Two different outcomes wearing one throw. A scanned PDF yields no text;
+  // a 400-page one yields too much. Telling the second visitor their file
+  // "appears to be scanned" sends them hunting for a problem that is not
+  // there, and the suggested fix cannot help them.
+  return fail(e.code === 'DOCUMENT_TOO_LONG' ? 'DOCUMENT_TOO_LONG' : 'NO_TEXT_LAYER');
 }
 
 // A document that produced text but no chunks is text-free in every way
@@ -1497,13 +1504,16 @@ const upload = workflow(
     // Two failure writers rather than one, so neither has to read the shape
     // of an n8n error item -- which differs by node type and is not worth
     // guessing. Which node failed decides which code the visitor sees.
-    node('Mark Failed No Text', 'n8n-nodes-base.postgres', 2.6,
+    // The code comes from Chunk Document rather than being hard-coded here,
+    // because this one node now reports two distinct outcomes.
+    node('Mark Failed Content', 'n8n-nodes-base.postgres', 2.6,
       {
         operation: 'executeQuery',
         query: markFailedSql,
         options: {
           queryReplacement:
-            "={{ [$('Claim Upload Slot').first().json.upload_id, 'NO_TEXT_LAYER'] }}",
+            "={{ [$('Claim Upload Slot').first().json.upload_id, " +
+            "$('Chunk Document').first().json.code || 'NO_TEXT_LAYER'] }}",
         },
       },
       [2912, -160],
@@ -1521,8 +1531,8 @@ const upload = workflow(
       [3120, 0],
       { credentials: { postgres: PG_CRED }, executeOnce: true, alwaysOutputData: true }),
 
-    // Only the UNAVAILABLE writer raises. Mark Failed No Text is a scanned
-    // PDF -- the demo working correctly on a document it cannot read.
+    // Only the UNAVAILABLE writer raises. Mark Failed Content is a scanned or
+    // oversized document -- the demo working correctly on a file it cannot use.
     raiseForAlertNode('demo-upload failed while processing an upload', [3328, 0]),
   ],
   {
@@ -1576,7 +1586,7 @@ const upload = workflow(
     'Has Chunks?': {
       main: [
         [{ node: 'Embed Chunks', type: 'main', index: 0 }],
-        [{ node: 'Mark Failed No Text', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Content', type: 'main', index: 0 }],
       ],
     },
     'Embed Chunks': {

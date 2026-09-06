@@ -2,6 +2,10 @@
 
 const API = '/api/demo';
 const POLL_MS = 5000;
+// Mirrors MAX_UPLOAD_BYTES in tools/build-demo-workflows.js and the figure
+// the FILE_TOO_LARGE copy promises. The server's check is the real one --
+// this only avoids sending the bytes to be rejected.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const POLL_MAX_ATTEMPTS = 60; // 60 x 5s = 5 minutes; extraction is normally 30-90s
 const REQUEST_TIMEOUT_MS = 45000;
 // Must match the server's own limit check (messages_used < 10). The chat
@@ -57,6 +61,7 @@ const STRINGS = {
       FILE_TOO_LARGE: 'Fișierul depășește 10 MB.',
       UNSUPPORTED_TYPE: 'Acceptăm doar PDF, DOCX sau TXT.',
       NO_TEXT_LAYER: 'Documentul pare scanat și nu conține text. Încearcă unul cu text selectabil.',
+      DOCUMENT_TOO_LONG: 'Documentul este prea lung pentru demo. Încearcă unul mai scurt, sau doar capitolul care te interesează.',
       MESSAGE_LIMIT: 'Ai folosit toate întrebările din acest demo.',
       UNAVAILABLE: 'Demo-ul este temporar indisponibil. Scrie-ne și îți arătăm live.',
       NETWORK: 'Conexiune întreruptă. Încearcă din nou.',
@@ -85,6 +90,7 @@ const STRINGS = {
       FILE_TOO_LARGE: 'The file is over 10 MB.',
       UNSUPPORTED_TYPE: 'We only accept PDF, DOCX, or TXT.',
       NO_TEXT_LAYER: 'This document looks scanned and has no text layer. Try one with selectable text.',
+      DOCUMENT_TOO_LONG: 'This document is too long for the demo. Try a shorter one, or just the chapter you care about.',
       MESSAGE_LIMIT: 'You’ve used all the questions in this demo.',
       UNAVAILABLE: 'The demo is temporarily unavailable. Message us and we’ll show you live.',
       NETWORK: 'Connection lost. Try again.',
@@ -207,6 +213,12 @@ $('upload-form').addEventListener('submit', async (e) => {
   clearError('upload-error');
   const file = $('file').files[0];
   if (!file) return;
+
+  // accept=".pdf,.docx,.txt" is a picker hint the browser does not enforce,
+  // and the server cannot see the size until the whole body has arrived.
+  // Without this a 300 MB file uploads in full and is then rejected, on the
+  // visitor's connection and our ingress.
+  if (file.size > MAX_UPLOAD_BYTES) return fail('upload-error', explain('FILE_TOO_LARGE'));
 
   state.filename = file.name;
   const form = new FormData();
