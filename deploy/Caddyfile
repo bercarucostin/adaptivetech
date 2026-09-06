@@ -54,6 +54,16 @@ http://{$DEMO_DOMAIN} {
 	}
 }
 
+# www -> apex. The site block above matches {$DEMO_DOMAIN} exactly, so without
+# this a request for www lands on no site block and Caddy answers 404 -- which
+# is what any existing link or bookmark using www would get after cutover.
+#
+# Harmless when unused: with no www DNS record this block simply never matches.
+# 308 rather than 302, so the redirect is cached and the method is preserved.
+http://www.{$DEMO_DOMAIN} {
+	redir https://{$DEMO_DOMAIN}{uri} 308
+}
+
 # The n8n editor on its own hostname, never the public one.
 http://{$N8N_HOST} {
 	# No IP allowlist and no basic auth here, deliberately. n8n's own user
