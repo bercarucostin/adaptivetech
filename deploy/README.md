@@ -45,8 +45,29 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | The three services and their volumes. |
-| `Caddyfile` | Routing, TLS (automatic via Caddy), security headers. |
-| `.env.example` | Template for the real `.env` (never committed). |
+| `Caddyfile` | Routing, security headers. TLS is Coolify's proxy, not Caddy's. |
+| `caddy.Dockerfile` | Bakes the Caddyfile and the site into the Caddy image. |
+| `.env.example` | The list of variables to set in Coolify. |
+
+### Why the Caddy image is built rather than pulled
+
+There are deliberately **no relative bind mounts** in the compose file. Coolify
+rewrites them to paths under its own application directory
+(`/data/coolify/applications/<uuid>/…`) and creates missing targets as
+*directories*. Mounting `./Caddyfile` that way fails outright —
+
+```
+error mounting ".../Caddyfile" to rootfs at "/etc/caddy/Caddyfile":
+not a directory: Are you trying to mount a directory onto a file?
+```
+
+— and `../website` would silently become an empty directory, so Caddy would
+start cleanly and serve nothing, which is the worse of the two failures.
+
+`caddy.Dockerfile` copies both into the image instead, with the build context
+set to the repository root because the site lives outside `deploy/`. A useful
+side effect: the served site is exactly what the deployed commit contains, so a
+deploy and the content it publishes cannot drift apart.
 
 ## Order of operations
 

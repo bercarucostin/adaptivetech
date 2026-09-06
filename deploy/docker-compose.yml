@@ -1,6 +1,15 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    # Built rather than pulled, so the Caddyfile and the site are baked in.
+    # Coolify rewrites relative bind mounts into its own application directory
+    # and creates missing targets as DIRECTORIES -- which makes mounting a
+    # single file (./Caddyfile) fail outright, and would turn ../website into
+    # an empty directory that Caddy serves as nothing. See caddy.Dockerfile.
+    #
+    # Context is the repository root because the site lives outside deploy/.
+    build:
+      context: ..
+      dockerfile: deploy/caddy.Dockerfile
     restart: unless-stopped
     # NO published ports, deliberately. Coolify's proxy owns :80 and :443 on
     # the host and terminates TLS; Caddy sits behind it on the compose network
@@ -28,9 +37,10 @@ services:
       ADMIN_IPS: ${ADMIN_IPS}
       N8N_ADMIN_USER: ${N8N_ADMIN_USER}
       N8N_ADMIN_PASSWORD_HASH: ${N8N_ADMIN_PASSWORD_HASH}
+    # Only named volumes here. The Caddyfile and the site are in the image;
+    # these two hold Caddy's own state (certificates, autosaved config), which
+    # must survive a redeploy.
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../website:/srv/site:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
