@@ -99,7 +99,16 @@ services:
       EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: false
       EXECUTIONS_DATA_PRUNE: true
       EXECUTIONS_DATA_MAX_AGE: 72
-      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 250
+      # Raised from 250. At that ceiling the history covered roughly two
+      # uploads -- demo-upload-status is polled ~60 times per upload and each
+      # poll also runs demo-verify-session -- so by the time anyone went
+      # looking for a failed execution it had already been evicted.
+      #
+      # Affordable now only because those three workflows no longer archive
+      # their successful runs (WORKFLOW_SETTINGS in the generator). Without
+      # that, raising this would multiply the disk written per upload rather
+      # than lengthen the useful history.
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 2000
       N8N_DEFAULT_BINARY_DATA_MODE: filesystem
       N8N_ENABLED_MODULES: data-table
       N8N_DATA_TABLES_MAX_SIZE_BYTES: 104857600      

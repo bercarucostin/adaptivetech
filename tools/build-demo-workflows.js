@@ -77,6 +77,29 @@ const N8N_IDS = {
 // demo-chat. Read from the table above so it cannot drift from it.
 const VERIFY_SESSION_WORKFLOW_ID = N8N_IDS['demo-verify-session'].id;
 
+// Per-workflow execution retention.
+//
+// n8n archives EVERY node's output for a saved execution, and three of these
+// workflows make that ruinous in different ways:
+//
+//   demo-upload         one 10 MB PDF becomes a 13 MB base64 string plus
+//                       ~18 MB of embedding vectors, carried across 25 nodes
+//                       -- tens of megabytes written to Postgres per upload,
+//                       for data nothing ever reads back.
+//   demo-upload-status  polled every 5s for up to 5 minutes, so ~60
+//                       executions per upload, each of them trivial.
+//   demo-verify-session called by every authenticated route, and once more
+//                       for each of those polls.
+//
+// Between them they evict the executions that are actually worth reading.
+// Errors still save in full on all three -- that is the half you would ever
+// open -- and every other workflow keeps n8n's default.
+const WORKFLOW_SETTINGS = {
+  'demo-upload': { saveDataSuccessExecution: 'none', saveDataErrorExecution: 'all' },
+  'demo-upload-status': { saveDataSuccessExecution: 'none', saveDataErrorExecution: 'all' },
+  'demo-verify-session': { saveDataSuccessExecution: 'none', saveDataErrorExecution: 'all' },
+};
+
 /** Pull the ---8<--- SHARED block out of a lib module, verbatim. */
 function shared(libFile) {
   const src = fs.readFileSync(path.join(ROOT, 'lib', libFile), 'utf8');
@@ -148,6 +171,8 @@ const workflow = (name, nodes, connections) => {
   if (errorWorkflowId && name !== 'error-handling-demo') {
     settings.errorWorkflow = errorWorkflowId;
   }
+
+  Object.assign(settings, WORKFLOW_SETTINGS[name] || {});
 
   const wf = {
     name,

@@ -220,6 +220,34 @@ test('per-address limits count the inbox, not the alias', () => {
   }
 });
 
+test('the three noisy workflows do not archive successful runs', () => {
+  // n8n saves EVERY node's output for a saved execution. demo-upload carries
+  // a 13 MB base64 string and ~18 MB of vectors across 25 nodes, and
+  // demo-upload-status plus demo-verify-session run ~120 times per upload
+  // between them. Left on, they write tens of megabytes per upload for data
+  // nothing reads, and evict the executions worth keeping.
+  for (const file of ['demo-upload.json', 'demo-upload-status.json', 'demo-verify-session.json']) {
+    const wf = JSON.parse(fs.readFileSync(path.join(ROOT, 'workflows', file), 'utf8'));
+    assert.strictEqual(
+      wf.settings.saveDataSuccessExecution, 'none',
+      file + ' archives successful runs it has no use for'
+    );
+  }
+});
+
+test('no workflow ever stops saving failed runs', () => {
+  // The half you would actually open. Turning this off anywhere would make a
+  // failure unreadable after the fact, which is when you need it.
+  const dir = path.join(ROOT, 'workflows');
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+    const wf = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+    assert.notStrictEqual(
+      wf.settings.saveDataErrorExecution, 'none',
+      file + ' discards failed executions'
+    );
+  }
+});
+
 test('the canonicalisation is derived by the database, not by a workflow', () => {
   // A workflow can forget to canonicalise; a generated column cannot, and no
   // caller can supply a value for one. That is the whole reason this lives in

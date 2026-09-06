@@ -176,7 +176,9 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "errorWorkflow": "GaXoZRqkR8ghodgY"
+    "errorWorkflow": "GaXoZRqkR8ghodgY",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
   },
   "tags": [],
   "id": "NjQwVYmXFTdJQACc"
