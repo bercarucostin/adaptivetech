@@ -28,8 +28,19 @@ http://{$DEMO_DOMAIN} {
 
 	# The demo API. Same origin as the site, which is what lets the
 	# session ride in an httpOnly SameSite=Strict cookie.
-	handle /api/demo/* {
-		uri strip_prefix /api/demo
+	#
+	# handle_path, NOT handle. Caddy runs the directives inside a handle block
+	# in its own fixed order rather than the order they are written, and
+	# `rewrite` sorts before `uri`. So `uri strip_prefix` written above a
+	# `rewrite` runs AFTER it: the rewrite fires on the untouched path,
+	# producing /webhook/demo/api/demo/request-code, and strip_prefix then
+	# finds no /api/demo at the front of that and silently does nothing.
+	#
+	# handle_path strips its own matched prefix as part of entering the block,
+	# before anything inside runs, so the order is not in question. The result
+	# here is /api/demo/request-code -> /webhook/demo/request-code.
+	# {uri} rather than {path} so query strings survive.
+	handle_path /api/demo/* {
 		rewrite * /webhook/demo{uri}
 		reverse_proxy n8n:5678
 	}
