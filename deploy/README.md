@@ -50,6 +50,10 @@ Internet -> Cloudflare (proxy, TLS, Turnstile)
 | `caddy.Dockerfile` | Bakes the Caddyfile and the site into the Caddy image. |
 | `.env.example` | The list of variables to set in Coolify. |
 
+The demo's SQL lives in `db/`: apply `demo_schema.sql`, then
+`demo_hybrid_search.sql`, then run `demo_verify.sql` and read its verdict
+column. All three paste straight into Supabase's SQL editor.
+
 ### Why the Caddy image is built rather than pulled
 
 There are deliberately **no relative bind mounts** in the compose file. Coolify
