@@ -817,7 +817,8 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "errorWorkflow": "GaXoZRqkR8ghodgY"
   },
   "tags": [],
   "id": "qBScjzp3KtIuZJhy"

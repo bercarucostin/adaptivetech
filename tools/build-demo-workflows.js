@@ -46,6 +46,7 @@ const GEMINI_CRED = { id: 'b4Za1yxMULpynxXY', name: 'Google Gemini(PaLM) Api acc
 // repo instead of churning on every rebuild.
 const N8N_IDS = {
   'demo-verify-session': { id: 'QWICxTnfbkvLtmFQ' },
+  'error-handling-demo': { id: 'GaXoZRqkR8ghodgY' },
   'demo-request-code': {
     id: '5ZNd32OKMgsNX2nE',
     webhooks: { Webhook: '239e6594-8140-4ed5-ad7b-9340452f7a51' },
