@@ -219,6 +219,316 @@
       ],
       "id": "8425b213-aa1a-4e51-934c-f29646b1f8e8",
       "name": "Respond Bad File"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_uploads SET status = 'extracting' WHERE id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$json.upload_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1456,
+        -288
+      ],
+      "id": "4b810b47-334e-4b9d-82e3-ab3532d9d791",
+      "name": "Mark Extracting",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f81ccadb-c467-46a7-aa6c-14c62c31ee9e",
+              "leftValue": "={{ $('Validate Upload').first().json.file_type === 'txt' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1664,
+        -288
+      ],
+      "id": "c9e23aee-f55b-4408-a2ca-73e53f30e76e",
+      "name": "Is Plain Text?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Already decoded in Validate Upload. No model call for a .txt file:\n// it costs tokens and can only lose fidelity against bytes we can read.\nreturn [{ json: { text: $('Validate Upload').first().json.text || '' } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        -400
+      ],
+      "id": "73bc26ba-73bc-4c65-8e82-63f8c2691991",
+      "name": "Use Plain Text"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\r\n// Copied verbatim into the \"Prepare Gemini Request\" Code node in\r\n// workflows/demo-upload.json.\r\n// tests/demo-workflow.test.js fails if they drift apart.\r\n\r\nconst EXTRACTION_PROMPT = [\r\n  'You are a content extractor. The text you produce will be indexed for a',\r\n  'retrieval system that answers questions about this document, so it must be',\r\n  'complete and faithful rather than readable prose.',\r\n  '',\r\n  'EXTRACTION RULES:',\r\n  '',\r\n  '1. Process every page from the first to the last, including front matter.',\r\n  '   Specifications, safety notices, requirements, operating modes and',\r\n  '   manufacturer details are frequently what people ask about. Do not skip them.',\r\n  '',\r\n  '2. SECTIONS: before each section or chapter, write its title on its own line',\r\n  '   prefixed with \"## \" (for example: \"## 5. Reset procedure\"). Detect titles',\r\n  '   from the layout -- numbered, bold, or set in a larger face -- and mark them',\r\n  '   this way. This is the most important rule: the indexer splits the document',\r\n  '   on these headings, and text with no headings is indexed as one block.',\r\n  '',\r\n  '3. TABLES: rewrite every table row as a standalone sentence. Instead of a',\r\n  '   table with \"code | description\" columns, write each row as',\r\n  '   \"Code [code]: [description]\". Each row must be intelligible on its own,',\r\n  '   because rows are retrieved individually and without their header.',\r\n  '',\r\n  '4. IMAGES: describe only images carrying information not present in the text',\r\n  '   (diagrams, component locations, wiring). Two sentences at most. Ignore',\r\n  '   logos, watermarks and decorative images.',\r\n  '',\r\n  '5. FIDELITY: reproduce exactly all codes, passwords, key sequences, serial',\r\n  '   numbers, menu names, and specifications (dimensions, voltages, speeds,',\r\n  '   capacities). These are the details people ask about, and an approximation',\r\n  '   is worse than an omission.',\r\n  '',\r\n  \"6. Use the document's original language. Do not translate, do not summarise,\",\r\n  '   and do not add commentary of your own.',\r\n  '',\r\n  '7. TABLE OF CONTENTS: skip only pages that are a table of contents -- lists of',\r\n  '   titles followed by page numbers and dot leaders. Do not reproduce them. The',\r\n  '   pages around a table of contents are ordinary content and must be extracted.',\r\n  '',\r\n  '8. Omit page numbers, repeated headers and footers, and watermarks.',\r\n  '',\r\n  'COMPLETION RULES:',\r\n  '- This is a single request. There is no follow-up message and no continuation.',\r\n  '- Do not write phrases such as \"continued below\" or \"the rest of the document\".',\r\n  '- Produce the extraction and nothing else: no preamble, no closing remark.',\r\n].join('\\n');\r\n\n// --- node glue below the shared block -------------------------------------\nconst file = $('Validate Upload').first().json;\n\n// Gemini's inline_data takes the base64 Validate Upload already produced.\n// DOCX is sent with its real Office mime type; if the model rejects it the\n// error output marks the upload failed rather than half-succeeding.\nconst MIME = {\n  pdf: 'application/pdf',\n  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n};\n\nreturn [{\n  json: {\n    requestBody: {\n      contents: [{\n        parts: [\n          { inline_data: { mime_type: MIME[file.file_type] || 'application/pdf',\n                           data: file.content_b64 } },\n          { text: 'Extract the contents of this document following the system instructions.' },\n        ],\n      }],\n      systemInstruction: { parts: [{ text: EXTRACTION_PROMPT }] },\n      generationConfig: {\n        maxOutputTokens: 65536,\n        // Extraction, not authorship. Anything higher invents structure.\n        temperature: 0.1,\n        thinkingConfig: { thinkingLevel: 'minimal' },\n      },\n    },\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        -192
+      ],
+      "id": "0c84307f-5f72-4d5c-ae25-35507a9495ea",
+      "name": "Prepare Extraction"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        -192
+      ],
+      "id": "726b4d3f-2ef2-40a0-9cf2-12b66ce5cbe2",
+      "name": "Gemini Extract",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gemini returns the text split across parts. Joining every part matters:\n// taking parts[0] alone silently truncates a long document to its first\n// fragment, and the loss looks exactly like a short source file.\nconst res = $input.first().json || {};\n\nconst candidate = (res.candidates || [])[0];\nif (!candidate) {\n  // A safety block or a quota refusal lands here with no candidate at all.\n  throw new Error('Gemini returned no candidate: ' + JSON.stringify(res).slice(0, 400));\n}\n\nconst parts = (candidate.content && candidate.content.parts) || [];\nconst text = parts.map(function (p) { return p.text || ''; }).join('');\n\nreturn [{ json: { text: text } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        -192
+      ],
+      "id": "d57eb056-cbc7-462e-bebd-96cb3ae01350",
+      "name": "Parse Extraction",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\r\n// Copied verbatim into the \"Prepare Chunks\" Code node in\r\n// workflows/demo-upload.json.\r\n// tests/demo-workflow.test.js fails if they drift apart.\r\n//\r\n// Generalised from the ingestion workflow's chunker: no Drive file_id,\r\n// no last_modified, plus a hard ceiling so one dense document cannot\r\n// exhaust the embedding budget.\r\n\r\nconst TOKEN_LIMIT = 350;\r\nconst OVERLAP_TOKENS = 75;\r\nconst MAX_CHUNKS = 600;\r\n\r\nfunction toTokens(text) {\r\n  return text.split(/\\s+/).filter(Boolean);\r\n}\r\n\r\nfunction chunkDocument(fileName, text, options) {\r\n  const opts = options || {};\r\n  const tokenLimit = opts.tokenLimit || TOKEN_LIMIT;\r\n  const overlap = opts.overlap === undefined ? OVERLAP_TOKENS : opts.overlap;\r\n  const maxChunks = opts.maxChunks || MAX_CHUNKS;\r\n\r\n  const name = String(fileName || 'document');\r\n  const title = name.replace(/\\.[^.]+$/, '');\r\n  const body = typeof text === 'string' ? text : '';\r\n  if (!body.trim()) return [];\r\n\r\n  // Split on \"## \" headings emitted by the extraction prompt. Content\r\n  // before the first heading belongs to the document itself.\r\n  const sections = [];\r\n  let heading = title;\r\n  let buffer = [];\r\n  for (const line of body.split('\\n')) {\r\n    const match = line.match(/^##\\s+(.+)$/);\r\n    if (match) {\r\n      if (buffer.length) {\r\n        sections.push({ heading: heading, content: buffer.join('\\n') });\r\n        buffer = [];\r\n      }\r\n      heading = match[1].trim();\r\n    } else {\r\n      buffer.push(line);\r\n    }\r\n  }\r\n  if (buffer.length) sections.push({ heading: heading, content: buffer.join('\\n') });\r\n\r\n  const chunks = [];\r\n  const seen = new Set();\r\n  let chunkIndex = 0;\r\n\r\n  for (const section of sections) {\r\n    const sectionText = section.content.trim();\r\n    if (!sectionText) continue;\r\n\r\n    const tokens = toTokens(sectionText);\r\n    if (!tokens.length) continue;\r\n\r\n    let idx = 0;\r\n    while (idx < tokens.length) {\r\n      const window = tokens.slice(idx, idx + tokenLimit).join(' ');\r\n\r\n      // Prefix with title and heading so a retrieved chunk carries its\r\n      // own context -- the same trick the ingestion chunker uses.\r\n      const embeddingText = title + ' — ' + section.heading + '\\n\\n' + window;\r\n\r\n      // De-duplicate on content, not on the heading-prefixed text: the\r\n      // same paragraph repeated under two different headings is still\r\n      // the same fact, and indexing it twice wastes embedding budget.\r\n      if (!seen.has(window)) {\r\n        seen.add(window);\r\n        chunks.push({\r\n          text: embeddingText,\r\n          section_heading: section.heading,\r\n          chunk_index: chunkIndex,\r\n          original_file_name: name,\r\n        });\r\n        chunkIndex++;\r\n\r\n        if (chunks.length > maxChunks) {\r\n          throw new Error(\r\n            'Document is too large for the demo: over ' + maxChunks +\r\n            ' chunks. Try a shorter document.'\r\n          );\r\n        }\r\n      }\r\n\r\n      // Last window: stop. Otherwise advance by the non-overlapping span.\r\n      idx += (tokens.length - idx <= tokenLimit) ? tokens.length : (tokenLimit - overlap);\r\n    }\r\n  }\r\n\r\n  return chunks;\r\n}\r\n\n// --- node glue below the shared block -------------------------------------\n// Reached from either extraction branch, which both hand over { text }.\nconst text = ($input.first().json || {}).text || '';\nconst file = $('Validate Upload').first().json;\nconst sessionId = $('Verify Session').first().json.session_id;\n\n// Returned, not thrown, so the caller routes through an If rather than\n// depending on the shape of an n8n error item.\nfunction fail(code) {\n  return [{ json: { ok: false, code: code, total_chunks: 0 } }];\n}\n\nif (!text.trim()) return fail('NO_TEXT_LAYER');\n\nlet chunks;\ntry {\n  chunks = chunkDocument(file.filename, text);\n} catch (e) {\n  // chunkDocument throws past MAX_CHUNKS. A scanned PDF is the common case\n  // for empty output; an oversized one is the common case for this.\n  return fail('NO_TEXT_LAYER');\n}\n\n// A document that produced text but no chunks is text-free in every way\n// that matters here -- whitespace, or headings with nothing under them.\nif (!chunks.length) return fail('NO_TEXT_LAYER');\n\n// One item per batch: each becomes one embed call and one INSERT.\nconst out = [];\nfor (let i = 0; i < chunks.length; i += 100) {\n  const batch = chunks.slice(i, i + 100);\n  out.push({\n    json: {\n      ok: true,\n      session_id: sessionId,\n      total_chunks: chunks.length,\n      chunks: batch,\n      requestBody: {\n        requests: batch.map(function (c) {\n          return {\n            model: 'models/gemini-embedding-001',\n            content: { parts: [{ text: c.text }] },\n            // RETRIEVAL_DOCUMENT, paired with RETRIEVAL_QUERY at search\n            // time. Mismatching the two costs real retrieval quality.\n            taskType: 'RETRIEVAL_DOCUMENT',\n            title: c.original_file_name.replace(/\\.[^.]+$/, '') + ' \\u2014 ' + c.section_heading,\n            outputDimensionality: 1536,\n          };\n        }),\n      },\n    },\n  });\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        -288
+      ],
+      "id": "48cd15de-0249-44fe-bb19-bb158e09d911",
+      "name": "Chunk Document"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3bd0728a-7f7a-4f5d-98de-9d5193095ad8",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2704,
+        -288
+      ],
+      "id": "e78ddd89-8c6d-4d8b-9e4e-e03fad053e23",
+      "name": "Has Chunks?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2912,
+        -400
+      ],
+      "id": "e72bdf8f-af7e-4da2-a282-ab2f0a79f79f",
+      "name": "Embed Chunks",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pairs each embedding back with its chunk and hands the batch over as a\n// single JSON parameter.\n//\n// L2 normalisation is NOT optional: gemini-embedding-001 returns\n// pre-normalised vectors only at 3072 dimensions. At the 1536 used here the\n// vectors come back unnormalised, and demo_hybrid_search assumes unit length\n// -- skip this and cosine distance silently ranks by magnitude.\nfunction l2normalize(v) {\n  let norm = 0;\n  for (const x of v) norm += x * x;\n  norm = Math.sqrt(norm);\n  return norm > 0 ? v.map(function (x) { return x / norm; }) : v;\n}\n\n// This node runs ONCE for all items, not once per item, so it must loop.\n// Chunk Document emits one item per batch and Embed Chunks preserves that\n// count, so the two lists line up index for index -- the same pairing\n// ingestion.json's own Format for Insert does.\nconst items = $input.all();\nconst batches = $('Chunk Document').all();\nconst out = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const res = items[i].json || {};\n  const embeddings = res.embeddings;\n  if (!Array.isArray(embeddings)) {\n    throw new Error('Embedding response ' + i + ' had no embeddings array: ' +\n      JSON.stringify(res).slice(0, 400));\n  }\n\n  const src = batches[i].json;\n  const chunks = src.chunks;\n\n  if (embeddings.length !== chunks.length) {\n    // Silently zipping mismatched arrays would attach each chunk's text to\n    // another chunk's vector -- retrieval would then return confidently\n    // wrong passages with nothing in the data to show why.\n    throw new Error('Batch ' + i + ': embedding count ' + embeddings.length +\n      ' does not match chunk count ' + chunks.length);\n  }\n\n  const rows = chunks.map(function (c, j) {\n    const vec = l2normalize(embeddings[j].values);\n    return {\n      content: c.text,\n      metadata: {\n        file_name: c.original_file_name,\n        section_heading: c.section_heading,\n        chunk_index: c.chunk_index,\n      },\n      // pgvector's text input format.\n      embedding: '[' + vec.join(',') + ']',\n    };\n  });\n\n  out.push({ json: { session_id: src.session_id, rows_json: JSON.stringify(rows) } });\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -400
+      ],
+      "id": "5e7000ff-f71a-434a-997c-2ceca8007d8e",
+      "name": "Format For Insert",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO demo_documents (session_id, content, metadata, embedding)\nSELECT $1::uuid,\n       r->>'content',\n       (r->'metadata')::jsonb,\n       (r->>'embedding')::vector\nFROM jsonb_array_elements($2::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [$json.session_id, $json.rows_json] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3328,
+        -400
+      ],
+      "id": "8369c089-2612-41da-af82-80a87e361b93",
+      "name": "Insert Chunks",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_uploads SET status = 'ready', chunk_count = $2::int\nWHERE id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$('Claim Upload Slot').first().json.upload_id, $('Chunk Document').first().json.total_chunks] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3536,
+        -400
+      ],
+      "id": "7650988e-9be1-449f-af5d-e3a078d241f0",
+      "name": "Mark Ready",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_uploads SET status = 'failed', error = $2::text\nWHERE id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$('Claim Upload Slot').first().json.upload_id, 'NO_TEXT_LAYER'] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2912,
+        -160
+      ],
+      "id": "0da91be5-9072-49da-be50-2a05252229bc",
+      "name": "Mark Failed No Text",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_uploads SET status = 'failed', error = $2::text\nWHERE id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$('Claim Upload Slot').first().json.upload_id, 'UNAVAILABLE'] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3120,
+        0
+      ],
+      "id": "b8c21f70-dcfe-4782-9122-4b8a14e05475",
+      "name": "Mark Failed Unavailable",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
     }
   ],
   "pinData": {},
@@ -304,6 +614,187 @@
         [
           {
             "node": "Respond Upload Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Accepted": {
+      "main": [
+        [
+          {
+            "node": "Mark Extracting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Extracting": {
+      "main": [
+        [
+          {
+            "node": "Is Plain Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Plain Text?": {
+      "main": [
+        [
+          {
+            "node": "Use Plain Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Plain Text": {
+      "main": [
+        [
+          {
+            "node": "Chunk Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Extraction": {
+      "main": [
+        [
+          {
+            "node": "Gemini Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Extract": {
+      "main": [
+        [
+          {
+            "node": "Parse Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extraction": {
+      "main": [
+        [
+          {
+            "node": "Chunk Document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Document": {
+      "main": [
+        [
+          {
+            "node": "Has Chunks?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Chunks?": {
+      "main": [
+        [
+          {
+            "node": "Embed Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed No Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Chunks": {
+      "main": [
+        [
+          {
+            "node": "Format For Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format For Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Chunks": {
+      "main": [
+        [
+          {
+            "node": "Mark Ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Unavailable",
             "type": "main",
             "index": 0
           }

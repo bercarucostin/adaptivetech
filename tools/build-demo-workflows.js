@@ -960,6 +960,206 @@ return [{
 }];
 `;
 
+// Pinned from ingestion.json's working nodes, not from memory. The Gemini
+// credential is deliberately NOT attached to either node below: it is wired
+// in the n8n UI, and this generator has no id for it to pin.
+const GEMINI_EXTRACT_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/' +
+  'gemini-2.5-flash-lite:generateContent';
+const GEMINI_EMBED_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/' +
+  'gemini-embedding-001:batchEmbedContents';
+
+// gemini-embedding-001 caps a batchEmbedContents call at 100 requests, and
+// this is also the insert batch: one HTTP call, one INSERT, per group.
+const EMBED_BATCH_SIZE = 100;
+
+const prepareExtractionGlue = `
+// --- node glue below the shared block -------------------------------------
+const file = $('Validate Upload').first().json;
+
+// Gemini's inline_data takes the base64 Validate Upload already produced.
+// DOCX is sent with its real Office mime type; if the model rejects it the
+// error output marks the upload failed rather than half-succeeding.
+const MIME = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+return [{
+  json: {
+    requestBody: {
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: MIME[file.file_type] || 'application/pdf',
+                           data: file.content_b64 } },
+          { text: 'Extract the contents of this document following the system instructions.' },
+        ],
+      }],
+      systemInstruction: { parts: [{ text: EXTRACTION_PROMPT }] },
+      generationConfig: {
+        maxOutputTokens: 65536,
+        // Extraction, not authorship. Anything higher invents structure.
+        temperature: 0.1,
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      },
+    },
+  },
+}];
+`;
+
+const parseExtractionCode = `// Gemini returns the text split across parts. Joining every part matters:
+// taking parts[0] alone silently truncates a long document to its first
+// fragment, and the loss looks exactly like a short source file.
+const res = $input.first().json || {};
+
+const candidate = (res.candidates || [])[0];
+if (!candidate) {
+  // A safety block or a quota refusal lands here with no candidate at all.
+  throw new Error('Gemini returned no candidate: ' + JSON.stringify(res).slice(0, 400));
+}
+
+const parts = (candidate.content && candidate.content.parts) || [];
+const text = parts.map(function (p) { return p.text || ''; }).join('');
+
+return [{ json: { text: text } }];
+`;
+
+const chunkDocumentGlue = `
+// --- node glue below the shared block -------------------------------------
+// Reached from either extraction branch, which both hand over { text }.
+const text = ($input.first().json || {}).text || '';
+const file = $('Validate Upload').first().json;
+const sessionId = $('Verify Session').first().json.session_id;
+
+// Returned, not thrown, so the caller routes through an If rather than
+// depending on the shape of an n8n error item.
+function fail(code) {
+  return [{ json: { ok: false, code: code, total_chunks: 0 } }];
+}
+
+if (!text.trim()) return fail('NO_TEXT_LAYER');
+
+let chunks;
+try {
+  chunks = chunkDocument(file.filename, text);
+} catch (e) {
+  // chunkDocument throws past MAX_CHUNKS. A scanned PDF is the common case
+  // for empty output; an oversized one is the common case for this.
+  return fail('NO_TEXT_LAYER');
+}
+
+// A document that produced text but no chunks is text-free in every way
+// that matters here -- whitespace, or headings with nothing under them.
+if (!chunks.length) return fail('NO_TEXT_LAYER');
+
+// One item per batch: each becomes one embed call and one INSERT.
+const out = [];
+for (let i = 0; i < chunks.length; i += ${EMBED_BATCH_SIZE}) {
+  const batch = chunks.slice(i, i + ${EMBED_BATCH_SIZE});
+  out.push({
+    json: {
+      ok: true,
+      session_id: sessionId,
+      total_chunks: chunks.length,
+      chunks: batch,
+      requestBody: {
+        requests: batch.map(function (c) {
+          return {
+            model: 'models/gemini-embedding-001',
+            content: { parts: [{ text: c.text }] },
+            // RETRIEVAL_DOCUMENT, paired with RETRIEVAL_QUERY at search
+            // time. Mismatching the two costs real retrieval quality.
+            taskType: 'RETRIEVAL_DOCUMENT',
+            title: c.original_file_name.replace(/\\.[^.]+$/, '') + ' \\u2014 ' + c.section_heading,
+            outputDimensionality: 1536,
+          };
+        }),
+      },
+    },
+  });
+}
+
+return out;
+`;
+
+const formatForInsertCode = `// Pairs each embedding back with its chunk and hands the batch over as a
+// single JSON parameter.
+//
+// L2 normalisation is NOT optional: gemini-embedding-001 returns
+// pre-normalised vectors only at 3072 dimensions. At the 1536 used here the
+// vectors come back unnormalised, and demo_hybrid_search assumes unit length
+// -- skip this and cosine distance silently ranks by magnitude.
+function l2normalize(v) {
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm);
+  return norm > 0 ? v.map(function (x) { return x / norm; }) : v;
+}
+
+// This node runs ONCE for all items, not once per item, so it must loop.
+// Chunk Document emits one item per batch and Embed Chunks preserves that
+// count, so the two lists line up index for index -- the same pairing
+// ingestion.json's own Format for Insert does.
+const items = $input.all();
+const batches = $('Chunk Document').all();
+const out = [];
+
+for (let i = 0; i < items.length; i++) {
+  const res = items[i].json || {};
+  const embeddings = res.embeddings;
+  if (!Array.isArray(embeddings)) {
+    throw new Error('Embedding response ' + i + ' had no embeddings array: ' +
+      JSON.stringify(res).slice(0, 400));
+  }
+
+  const src = batches[i].json;
+  const chunks = src.chunks;
+
+  if (embeddings.length !== chunks.length) {
+    // Silently zipping mismatched arrays would attach each chunk's text to
+    // another chunk's vector -- retrieval would then return confidently
+    // wrong passages with nothing in the data to show why.
+    throw new Error('Batch ' + i + ': embedding count ' + embeddings.length +
+      ' does not match chunk count ' + chunks.length);
+  }
+
+  const rows = chunks.map(function (c, j) {
+    const vec = l2normalize(embeddings[j].values);
+    return {
+      content: c.text,
+      metadata: {
+        file_name: c.original_file_name,
+        section_heading: c.section_heading,
+        chunk_index: c.chunk_index,
+      },
+      // pgvector's text input format.
+      embedding: '[' + vec.join(',') + ']',
+    };
+  });
+
+  out.push({ json: { session_id: src.session_id, rows_json: JSON.stringify(rows) } });
+}
+
+return out;
+`;
+
+// One statement per batch, and both parameters are scalars -- the batch
+// travels as a single jsonb value rather than as an array parameter or as
+// interpolated SQL. Nothing from the document is ever concatenated into the
+// query text.
+const insertChunksSql =
+  'INSERT INTO demo_documents (session_id, content, metadata, embedding)\n' +
+  "SELECT $1::uuid,\n" +
+  "       r->>'content',\n" +
+  "       (r->'metadata')::jsonb,\n" +
+  "       (r->>'embedding')::vector\n" +
+  'FROM jsonb_array_elements($2::jsonb) AS r';
+
+const markFailedSql =
+  "UPDATE demo_uploads SET status = 'failed', error = $2::text\n" +
+  'WHERE id = $1::uuid';
+
 // One statement, so the limit check and the increment cannot be separated by
 // a concurrent request. A second upload finds files_uploaded already at 1,
 // `claimed` is empty, the INSERT..SELECT inserts nothing, and no upload_id
@@ -1022,6 +1222,147 @@ const upload = workflow(
     // no internal message can reach the client through here.
     respondNode('Respond Bad File',
       '={{ JSON.stringify({ code: $json.code }) }}', 400, [624, 224]),
+
+    // --- part 2: everything below runs AFTER the client has its 202 -------
+    //
+    // n8n keeps executing past Respond to Webhook, so this is the whole
+    // point of the 202: the browser is already polling upload-status while
+    // this runs. Nothing down here can talk to the client, so every failure
+    // path must WRITE demo_uploads.status -- an unhandled throw would leave
+    // the row on 'pending' and the visitor watching a spinner for five
+    // minutes before the frontend gives up with STALLED.
+
+    node('Mark Extracting', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: "UPDATE demo_uploads SET status = 'extracting' WHERE id = $1::uuid",
+        options: { queryReplacement: '={{ [$json.upload_id] }}' },
+      },
+      [1456, -288],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    ifBooleanNode('Is Plain Text?',
+      "={{ $('Validate Upload').first().json.file_type === 'txt' }}", [1664, -288]),
+
+    node('Use Plain Text', 'n8n-nodes-base.code', 2,
+      {
+        jsCode:
+          '// Already decoded in Validate Upload. No model call for a .txt file:\n' +
+          '// it costs tokens and can only lose fidelity against bytes we can read.\n' +
+          "return [{ json: { text: $('Validate Upload').first().json.text || '' } }];\n",
+      },
+      [1872, -400]),
+
+    node('Prepare Extraction', 'n8n-nodes-base.code', 2,
+      { jsCode: shared('demo-extraction-prompt.js') + prepareExtractionGlue },
+      [1872, -192]),
+
+    node('Gemini Extract', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: GEMINI_EXTRACT_URL,
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpQueryAuth',
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
+        // 10 minutes, matching ingestion.json. A long PDF genuinely takes
+        // minutes, and the client is polling rather than waiting on a socket.
+        options: { timeout: 600000 },
+      },
+      [2080, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Parse Extraction', 'n8n-nodes-base.code', 2,
+      { jsCode: parseExtractionCode }, [2288, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Chunk Document', 'n8n-nodes-base.code', 2,
+      { jsCode: shared('demo-chunker.js') + chunkDocumentGlue }, [2496, -288]),
+
+    ifBooleanNode('Has Chunks?', '={{ $json.ok }}', [2704, -288]),
+
+    node('Embed Chunks', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: GEMINI_EMBED_URL,
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpQueryAuth',
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
+        // One batch at a time with a gap between them: the free tier's rate
+        // limit is the binding constraint, not throughput.
+        options: {
+          timeout: 120000,
+          batching: { batch: { batchSize: 1, batchInterval: 2000 } },
+        },
+      },
+      [2912, -400],
+      { onError: 'continueErrorOutput' }),
+
+    node('Format For Insert', 'n8n-nodes-base.code', 2,
+      { jsCode: formatForInsertCode }, [3120, -400],
+      { onError: 'continueErrorOutput' }),
+
+    node('Insert Chunks', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: insertChunksSql,
+        options: {
+          queryReplacement: '={{ [$json.session_id, $json.rows_json] }}',
+        },
+      },
+      [3328, -400],
+      { credentials: { postgres: PG_CRED }, onError: 'continueErrorOutput' }),
+
+    node('Mark Ready', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query:
+          "UPDATE demo_uploads SET status = 'ready', chunk_count = $2::int\n" +
+          'WHERE id = $1::uuid',
+        options: {
+          queryReplacement:
+            "={{ [$('Claim Upload Slot').first().json.upload_id, " +
+            "$('Chunk Document').first().json.total_chunks] }}",
+        },
+      },
+      [3536, -400],
+      {
+        credentials: { postgres: PG_CRED },
+        // Insert Chunks emits one item per batch; the row is marked ready
+        // once, not once per batch.
+        executeOnce: true,
+        alwaysOutputData: true,
+      }),
+
+    // Two failure writers rather than one, so neither has to read the shape
+    // of an n8n error item -- which differs by node type and is not worth
+    // guessing. Which node failed decides which code the visitor sees.
+    node('Mark Failed No Text', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: markFailedSql,
+        options: {
+          queryReplacement:
+            "={{ [$('Claim Upload Slot').first().json.upload_id, 'NO_TEXT_LAYER'] }}",
+        },
+      },
+      [2912, -160],
+      { credentials: { postgres: PG_CRED }, executeOnce: true, alwaysOutputData: true }),
+
+    node('Mark Failed Unavailable', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: markFailedSql,
+        options: {
+          queryReplacement:
+            "={{ [$('Claim Upload Slot').first().json.upload_id, 'UNAVAILABLE'] }}",
+        },
+      },
+      [3120, 0],
+      { credentials: { postgres: PG_CRED }, executeOnce: true, alwaysOutputData: true }),
   ],
   {
     Webhook: { main: [[{ node: 'Validate Upload', type: 'main', index: 0 }]] },
@@ -1043,6 +1384,56 @@ const upload = workflow(
       main: [
         [{ node: 'Respond Accepted', type: 'main', index: 0 }],
         [{ node: 'Respond Upload Limit', type: 'main', index: 0 }],
+      ],
+    },
+    // Part 2 hangs off Respond Accepted, so the client is never waiting on it.
+    'Respond Accepted': { main: [[{ node: 'Mark Extracting', type: 'main', index: 0 }]] },
+    'Mark Extracting': { main: [[{ node: 'Is Plain Text?', type: 'main', index: 0 }]] },
+    'Is Plain Text?': {
+      main: [
+        [{ node: 'Use Plain Text', type: 'main', index: 0 }],
+        [{ node: 'Prepare Extraction', type: 'main', index: 0 }],
+      ],
+    },
+    // Both extraction routes converge on the chunker: whichever branch ran,
+    // it hands over the same { text } shape.
+    'Use Plain Text': { main: [[{ node: 'Chunk Document', type: 'main', index: 0 }]] },
+    'Prepare Extraction': { main: [[{ node: 'Gemini Extract', type: 'main', index: 0 }]] },
+    'Gemini Extract': {
+      main: [
+        [{ node: 'Parse Extraction', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Parse Extraction': {
+      main: [
+        [{ node: 'Chunk Document', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Chunk Document': { main: [[{ node: 'Has Chunks?', type: 'main', index: 0 }]] },
+    'Has Chunks?': {
+      main: [
+        [{ node: 'Embed Chunks', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed No Text', type: 'main', index: 0 }],
+      ],
+    },
+    'Embed Chunks': {
+      main: [
+        [{ node: 'Format For Insert', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Format For Insert': {
+      main: [
+        [{ node: 'Insert Chunks', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Insert Chunks': {
+      main: [
+        [{ node: 'Mark Ready', type: 'main', index: 0 }],
+        [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
       ],
     },
   }
