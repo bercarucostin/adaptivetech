@@ -470,6 +470,43 @@ function geminiNode(name, model, method, position, options, extra) {
     Object.assign({ credentials: { googlePalmApi: GEMINI_CRED } }, extra || {}));
 }
 
+/** Fails the execution on purpose, AFTER the caller has been answered.
+ *
+ *  This exists because of a real conflict between two things the routes both
+ *  need. `onError: continueErrorOutput` is mandatory on a webhook route --
+ *  without it a thrown error ends the execution, Respond to Webhook never
+ *  runs, and the caller gets an empty body with no status. But it also marks
+ *  the execution SUCCESSFUL, and n8n only invokes settings.errorWorkflow for
+ *  a failed one. So handling an error well is precisely what stopped it from
+ *  ever being reported.
+ *
+ *  Placing this after the responder gets both: the client already has its
+ *  status and body, and the throw then fails the execution so the alert
+ *  fires. Nothing downstream of a responder can affect the response.
+ *
+ *  It is wired ONLY to genuine failures. Business rejections -- a forged
+ *  cookie, a spent quota, a scanned PDF, an exhausted message limit -- reach
+ *  their own responders and end there, because a demo working exactly as
+ *  designed must not page anyone.
+ */
+function raiseForAlertNode(where, position) {
+  return node('Raise For Alert', 'n8n-nodes-base.code', 2,
+    {
+      jsCode:
+        '// The caller already has its response; this only fails the execution\n' +
+        '// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\n' +
+        'const item = $input.first().json || {};\n' +
+        '// The error item\'s shape varies by node type, so read it defensively\n' +
+        '// and fall back to naming the stage. The alert email links to this\n' +
+        '// execution, where the untruncated error already is.\n' +
+        'const raw = item.error;\n' +
+        "const detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n" +
+        "  'see the failed node in this execution';\n" +
+        "throw new Error(" + JSON.stringify(where) + " + ': ' + detail);\n",
+    },
+    position);
+}
+
 /** Calls demo-verify-session with the request's Cookie header.
  *
  *  onError: continueErrorOutput is not optional on a webhook route. Without
@@ -603,9 +640,15 @@ const body = $('Webhook').first().json.body || {};
 const email = String(body.email || '').trim().toLowerCase();
 const consent = body.consent === true || body.consent === 'true';
 
+// Returned, not thrown. A malformed address and a missing tick are the
+// visitor getting it wrong; a missing pepper below is us getting it wrong.
+// Throwing for both would put them on the same wire, and the alert hanging
+// off this node's error output would page someone every time somebody
+// mistypes their email address.
+//
 // Shape check only. Deliverability is proven by the code arriving.
-if (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) throw new Error('INVALID_EMAIL');
-if (!consent) throw new Error('CONSENT_REQUIRED');
+if (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) return [{ json: { ok: false } }];
+if (!consent) return [{ json: { ok: false } }];
 
 // randomInt is uniform and unpredictable; Math.random() is neither.
 const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
@@ -622,7 +665,7 @@ const unsubMac = crypto.createHmac('sha256', secret).update('unsub:' + email).di
   .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
 const unsubToken = Buffer.from(email).toString('base64url') + '.' + unsubMac;
 
-return [{ json: { email, code, code_hash: codeHash, unsub_token: unsubToken } }];
+return [{ json: { ok: true, email, code, code_hash: codeHash, unsub_token: unsubToken } }];
 `;
 
 const storeCodeSql =
@@ -696,15 +739,30 @@ const requestCode = workflow(
     // failure, over quota, bad email shape, missing consent -- all the same.
     respondNode('Respond Accepted (rejected)',
       '={{ JSON.stringify({ ok: true }) }}', 202, [1664, 96]),
+
+    ifBooleanNode('Input OK?', '={{ $json.ok }}', [1144, -192]),
+
+    // Byte-identical to the rejection response above. A caller still cannot
+    // tell a broken Turnstile call from a spent quota from a mistyped
+    // address -- that indistinguishability is the whole design. The only
+    // difference is that this branch wakes someone up.
+    respondNode('Respond Accepted (failed)',
+      '={{ JSON.stringify({ ok: true }) }}', 202, [1664, 240]),
+
+    raiseForAlertNode('demo-request-code could not issue a code', [1872, 240]),
   ],
   {
     Webhook: { main: [[{ node: 'Verify Turnstile', type: 'main', index: 0 }]] },
+    // Throughout: output 0 is the business path, output 1 is the node
+    // FAILING. Those are different events wearing the same 202, and only the
+    // second one is worth waking someone for.
     'Verify Turnstile': {
       main: [
         [{ node: 'Turnstile OK?', type: 'main', index: 0 }],
-        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (failed)', type: 'main', index: 0 }],
       ],
     },
+    // A visitor who fails the challenge is the gate working.
     'Turnstile OK?': {
       main: [
         [{ node: 'Check Quota', type: 'main', index: 0 }],
@@ -714,23 +772,36 @@ const requestCode = workflow(
     'Check Quota': {
       main: [
         [{ node: 'Within Quota?', type: 'main', index: 0 }],
-        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (failed)', type: 'main', index: 0 }],
       ],
     },
+    // A spent quota is the limit working.
     'Within Quota?': {
       main: [
         [{ node: 'Generate Code', type: 'main', index: 0 }],
         [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
       ],
     },
+    // Output 1 here is now only a missing DEMO_CODE_PEPPER or
+    // DEMO_SESSION_SECRET -- a misconfiguration that silently sends nobody
+    // an email, which is exactly the failure this alerting exists for.
     'Generate Code': {
+      main: [
+        [{ node: 'Input OK?', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (failed)', type: 'main', index: 0 }],
+      ],
+    },
+    'Input OK?': {
       main: [
         [{ node: 'Store Code', type: 'main', index: 0 }],
         [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
       ],
     },
+    // Store Code and Send Code Email carry no onError at all, so a database
+    // or SMTP failure fails the execution by itself and already alerts.
     'Store Code': { main: [[{ node: 'Send Code Email', type: 'main', index: 0 }]] },
     'Send Code Email': { main: [[{ node: 'Respond Accepted', type: 'main', index: 0 }]] },
+    'Respond Accepted (failed)': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
   }
 );
 
@@ -793,8 +864,12 @@ const signTokenGlue = `
 // --- node glue below the shared block -------------------------------------
 const row = $input.first().json || {};
 if (!row.session_id) {
-  // The code was already consumed by a concurrent request. Fail closed.
-  throw new Error('CODE_ALREADY_USED');
+  // The code was already consumed by a concurrent request. Fail closed --
+  // but RETURN rather than throw, so this node's error output carries only
+  // real misconfiguration. A missing DEMO_SESSION_SECRET below would
+  // otherwise be indistinguishable from a replayed code, and would 401
+  // every visitor on the site while alerting nobody.
+  return [{ json: { ok: false } }];
 }
 
 const secret = $env.DEMO_SESSION_SECRET;
@@ -805,7 +880,7 @@ if (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n containe
 const expiresMs = Number(row.expires_ms);
 const token = signToken(row.session_id, expiresMs, secret);
 
-return [{ json: { session_id: row.session_id, token, expires_ms: expiresMs } }];
+return [{ json: { ok: true, session_id: row.session_id, token, expires_ms: expiresMs } }];
 `;
 
 // Skipped for suppressed addresses: unsubscribing means "stop contacting me",
@@ -904,6 +979,15 @@ const verifyCode = workflow(
 
     respondNode('Respond Bad Code',
       '={{ JSON.stringify({ code: "BAD_CODE" }) }}', 401, [1040, 128]),
+
+    ifBooleanNode('Token Signed?', '={{ $json.ok }}', [1144, -96]),
+
+    // Same 401 the caller would get for a bad code -- they learn nothing
+    // extra from our configuration being broken.
+    respondNode('Respond Bad Code (failed)',
+      '={{ JSON.stringify({ code: "BAD_CODE" }) }}', 401, [1040, 272]),
+
+    raiseForAlertNode('demo-verify-code could not sign a session token', [1248, 272]),
   ],
   {
     Webhook: { main: [[{ node: 'Load Latest Code', type: 'main', index: 0 }]] },
@@ -916,12 +1000,21 @@ const verifyCode = workflow(
       ],
     },
     'Consume And Create Session': { main: [[{ node: 'Sign Token', type: 'main', index: 0 }]] },
+    // Output 1 is now only a missing DEMO_SESSION_SECRET, never a replayed
+    // code -- so it can alert without paging on ordinary replay attempts.
     'Sign Token': {
+      main: [
+        [{ node: 'Token Signed?', type: 'main', index: 0 }],
+        [{ node: 'Respond Bad Code (failed)', type: 'main', index: 0 }],
+      ],
+    },
+    'Token Signed?': {
       main: [
         [{ node: 'Upsert Lead', type: 'main', index: 0 }],
         [{ node: 'Respond Bad Code', type: 'main', index: 0 }],
       ],
     },
+    'Respond Bad Code (failed)': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
     'Upsert Lead': { main: [[{ node: 'Respond With Cookie', type: 'main', index: 0 }]] },
     'Count Attempt': { main: [[{ node: 'Respond Bad Code', type: 'main', index: 0 }]] },
   }
@@ -1390,6 +1483,10 @@ const upload = workflow(
       },
       [3120, 0],
       { credentials: { postgres: PG_CRED }, executeOnce: true, alwaysOutputData: true }),
+
+    // Only the UNAVAILABLE writer raises. Mark Failed No Text is a scanned
+    // PDF -- the demo working correctly on a document it cannot read.
+    raiseForAlertNode('demo-upload failed while processing an upload', [3328, 0]),
   ],
   {
     Webhook: { main: [[{ node: 'Validate Upload', type: 'main', index: 0 }]] },
@@ -1463,6 +1560,9 @@ const upload = workflow(
         [{ node: 'Mark Failed Unavailable', type: 'main', index: 0 }],
       ],
     },
+    // The row is already marked failed and the client is already polling it;
+    // this only fails the execution so the alert fires.
+    'Mark Failed Unavailable': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
   }
 );
 
@@ -1813,6 +1913,8 @@ const chat = workflow(
     // would hand an attacker an unlimited retry loop.
     respondNode('Respond Unavailable',
       '={{ JSON.stringify({ code: "UNAVAILABLE" }) }}', 503, [2704, 128]),
+
+    raiseForAlertNode('demo-chat failed after answering the caller', [2912, 128]),
   ],
   {
     Webhook: { main: [[{ node: 'Shape Cookie', type: 'main', index: 0 }]] },
@@ -1881,6 +1983,10 @@ const chat = workflow(
     },
     'Answer Not Found': { main: [[{ node: 'Record Turn', type: 'main', index: 0 }]] },
     'Record Turn': { main: [[{ node: 'Respond', type: 'main', index: 0 }]] },
+    // The caller has its 503 by now; this only fails the execution so the
+    // error workflow is invoked. Session and limit rejections do NOT come
+    // through here -- they have their own responders and end there.
+    'Respond Unavailable': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
   }
 );
 
@@ -2083,6 +2189,8 @@ const unsubscribe = workflow(
         'și o rezolvăm manual.'),
       500, [832, 0]),
 
+    raiseForAlertNode('demo-unsubscribe could not record a suppression', [1040, 0]),
+
     // Deliberately the same page for a malformed token and a forged one --
     // and it never says whether the address exists.
     unsubRespondNode('Respond Invalid',
@@ -2106,6 +2214,9 @@ const unsubscribe = workflow(
         [{ node: 'Respond Failed', type: 'main', index: 0 }],
       ],
     },
+    // A failed unsubscribe is a legal obligation not met. It alerts; an
+    // invalid or forged token does not.
+    'Respond Failed': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
   }
 );
 

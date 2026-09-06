@@ -115,7 +115,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ---8<--- SHARED START ---8<---\r\n// Copied verbatim into the \"Verify Token\" Code node in\r\n// workflows/demo-verify-session.json and the \"Sign Token\" Code node in\r\n// workflows/demo-verify-code.json.\r\n// tests/demo-workflow.test.js fails if they drift apart.\r\n//\r\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=crypto on the n8n container.\r\n\r\nconst crypto = require('crypto');\r\n\r\nfunction base64url(buf) {\r\n  return Buffer.from(buf)\r\n    .toString('base64')\r\n    .replace(/\\+/g, '-')\r\n    .replace(/\\//g, '_')\r\n    .replace(/=+$/, '');\r\n}\r\n\r\n// A real token is ~94 chars (uuid + '.' + ms timestamp + '.' + base64url mac).\r\n// The cap is generous but bounded: sessionId is attacker-controlled, and\r\n// without it an arbitrarily large string reaches the HMAC.\r\nconst MAX_TOKEN_LENGTH = 512;\r\n\r\nfunction signToken(sessionId, expiresAtMs, secret) {\r\n  if (!sessionId) throw new Error('signToken requires a sessionId');\r\n  if (!secret) throw new Error('signToken requires a secret');\r\n  if (typeof secret !== 'string' && !Buffer.isBuffer(secret)) {\r\n    throw new Error('signToken requires a string or Buffer secret');\r\n  }\r\n  // Postgres `extract(epoch from ...) * 1000` yields a NUMERIC with a\r\n  // fractional part, and String(1788695089121.642) is \"1788695089121.642\".\r\n  // verifyToken requires /^\\d+$/ on the expiry segment, so a float here mints\r\n  // a token that can never verify -- a silent, and very confusing, failure.\r\n  // Fail at the point of the mistake instead.\r\n  if (!Number.isInteger(expiresAtMs)) {\r\n    throw new Error('signToken requires an integer expiresAtMs (got ' + expiresAtMs + ')');\r\n  }\r\n  const payload = String(sessionId) + '.' + String(expiresAtMs);\r\n  const mac = crypto.createHmac('sha256', secret).update(payload).digest();\r\n  return payload + '.' + base64url(mac);\r\n}\r\n\r\nfunction verifyToken(token, secret, nowMs) {\r\n  if (typeof token !== 'string') return null;\r\n  // A truthy non-string secret would throw inside createHmac rather than\r\n  // reject here -- in a Code node that is a 500 instead of a clean refusal.\r\n  if (typeof secret !== 'string' && !Buffer.isBuffer(secret)) return null;\r\n  if (!secret.length) return null;\r\n  if (token.length > MAX_TOKEN_LENGTH) return null;\r\n\r\n  const parts = token.split('.');\r\n  if (parts.length !== 3) return null;\r\n\r\n  const sessionId = parts[0];\r\n  const expiresRaw = parts[1];\r\n  const providedMac = parts[2];\r\n  if (!sessionId || !expiresRaw) return null;\r\n\r\n  // Reject before doing crypto work on obviously bad input.\r\n  if (!/^\\d+$/.test(expiresRaw)) return null;\r\n  const expiresAtMs = Number(expiresRaw);\r\n  if (!Number.isFinite(expiresAtMs)) return null;\r\n\r\n  const expectedMac = base64url(\r\n    crypto.createHmac('sha256', secret).update(sessionId + '.' + expiresRaw).digest()\r\n  );\r\n\r\n  const a = Buffer.from(providedMac);\r\n  const b = Buffer.from(expectedMac);\r\n  // timingSafeEqual throws on a length mismatch, so check length first.\r\n  // Length is not a secret -- the MAC is a fixed width.\r\n  if (a.length !== b.length) return null;\r\n  if (!crypto.timingSafeEqual(a, b)) return null;\r\n\r\n  // Signature is good; now check the claim it protects.\r\n  if (expiresAtMs <= nowMs) return null;\r\n\r\n  return { sessionId: sessionId, expiresAtMs: expiresAtMs };\r\n}\r\n\n// --- node glue below the shared block -------------------------------------\nconst row = $input.first().json || {};\nif (!row.session_id) {\n  // The code was already consumed by a concurrent request. Fail closed.\n  throw new Error('CODE_ALREADY_USED');\n}\n\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\n\n// expires_ms arrives floored from SQL; Number() keeps signToken's integer\n// guard satisfied whether the driver hands back a bigint as string or number.\nconst expiresMs = Number(row.expires_ms);\nconst token = signToken(row.session_id, expiresMs, secret);\n\nreturn [{ json: { session_id: row.session_id, token, expires_ms: expiresMs } }];\n"
+        "jsCode": "// ---8<--- SHARED START ---8<---\r\n// Copied verbatim into the \"Verify Token\" Code node in\r\n// workflows/demo-verify-session.json and the \"Sign Token\" Code node in\r\n// workflows/demo-verify-code.json.\r\n// tests/demo-workflow.test.js fails if they drift apart.\r\n//\r\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=crypto on the n8n container.\r\n\r\nconst crypto = require('crypto');\r\n\r\nfunction base64url(buf) {\r\n  return Buffer.from(buf)\r\n    .toString('base64')\r\n    .replace(/\\+/g, '-')\r\n    .replace(/\\//g, '_')\r\n    .replace(/=+$/, '');\r\n}\r\n\r\n// A real token is ~94 chars (uuid + '.' + ms timestamp + '.' + base64url mac).\r\n// The cap is generous but bounded: sessionId is attacker-controlled, and\r\n// without it an arbitrarily large string reaches the HMAC.\r\nconst MAX_TOKEN_LENGTH = 512;\r\n\r\nfunction signToken(sessionId, expiresAtMs, secret) {\r\n  if (!sessionId) throw new Error('signToken requires a sessionId');\r\n  if (!secret) throw new Error('signToken requires a secret');\r\n  if (typeof secret !== 'string' && !Buffer.isBuffer(secret)) {\r\n    throw new Error('signToken requires a string or Buffer secret');\r\n  }\r\n  // Postgres `extract(epoch from ...) * 1000` yields a NUMERIC with a\r\n  // fractional part, and String(1788695089121.642) is \"1788695089121.642\".\r\n  // verifyToken requires /^\\d+$/ on the expiry segment, so a float here mints\r\n  // a token that can never verify -- a silent, and very confusing, failure.\r\n  // Fail at the point of the mistake instead.\r\n  if (!Number.isInteger(expiresAtMs)) {\r\n    throw new Error('signToken requires an integer expiresAtMs (got ' + expiresAtMs + ')');\r\n  }\r\n  const payload = String(sessionId) + '.' + String(expiresAtMs);\r\n  const mac = crypto.createHmac('sha256', secret).update(payload).digest();\r\n  return payload + '.' + base64url(mac);\r\n}\r\n\r\nfunction verifyToken(token, secret, nowMs) {\r\n  if (typeof token !== 'string') return null;\r\n  // A truthy non-string secret would throw inside createHmac rather than\r\n  // reject here -- in a Code node that is a 500 instead of a clean refusal.\r\n  if (typeof secret !== 'string' && !Buffer.isBuffer(secret)) return null;\r\n  if (!secret.length) return null;\r\n  if (token.length > MAX_TOKEN_LENGTH) return null;\r\n\r\n  const parts = token.split('.');\r\n  if (parts.length !== 3) return null;\r\n\r\n  const sessionId = parts[0];\r\n  const expiresRaw = parts[1];\r\n  const providedMac = parts[2];\r\n  if (!sessionId || !expiresRaw) return null;\r\n\r\n  // Reject before doing crypto work on obviously bad input.\r\n  if (!/^\\d+$/.test(expiresRaw)) return null;\r\n  const expiresAtMs = Number(expiresRaw);\r\n  if (!Number.isFinite(expiresAtMs)) return null;\r\n\r\n  const expectedMac = base64url(\r\n    crypto.createHmac('sha256', secret).update(sessionId + '.' + expiresRaw).digest()\r\n  );\r\n\r\n  const a = Buffer.from(providedMac);\r\n  const b = Buffer.from(expectedMac);\r\n  // timingSafeEqual throws on a length mismatch, so check length first.\r\n  // Length is not a secret -- the MAC is a fixed width.\r\n  if (a.length !== b.length) return null;\r\n  if (!crypto.timingSafeEqual(a, b)) return null;\r\n\r\n  // Signature is good; now check the claim it protects.\r\n  if (expiresAtMs <= nowMs) return null;\r\n\r\n  return { sessionId: sessionId, expiresAtMs: expiresAtMs };\r\n}\r\n\n// --- node glue below the shared block -------------------------------------\nconst row = $input.first().json || {};\nif (!row.session_id) {\n  // The code was already consumed by a concurrent request. Fail closed --\n  // but RETURN rather than throw, so this node's error output carries only\n  // real misconfiguration. A missing DEMO_SESSION_SECRET below would\n  // otherwise be indistinguishable from a replayed code, and would 401\n  // every visitor on the site while alerting nobody.\n  return [{ json: { ok: false } }];\n}\n\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\n\n// expires_ms arrives floored from SQL; Number() keeps signToken's integer\n// guard satisfied whether the driver hands back a bigint as string or number.\nconst expiresMs = Number(row.expires_ms);\nconst token = signToken(row.session_id, expiresMs, secret);\n\nreturn [{ json: { ok: true, session_id: row.session_id, token, expires_ms: expiresMs } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -215,6 +215,70 @@
       ],
       "id": "a7a95897-baeb-43ad-a0f4-313ec55a34f7",
       "name": "Respond Bad Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2c6ae8bb-155e-434e-b444-d52ba897b524",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1144,
+        -96
+      ],
+      "id": "4bbf5d1c-3548-4ebe-9f97-1008ba502f58",
+      "name": "Token Signed?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ code: \"BAD_CODE\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1040,
+        272
+      ],
+      "id": "a9344af4-61dd-43a0-8ddd-8d7d32710c37",
+      "name": "Respond Bad Code (failed)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-verify-code could not sign a session token\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        272
+      ],
+      "id": "74b87a21-9efc-4f80-a2bd-7b2fbb7e8fe7",
+      "name": "Raise For Alert"
     }
   ],
   "pinData": {},
@@ -285,6 +349,24 @@
       "main": [
         [
           {
+            "node": "Token Signed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Bad Code (failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Signed?": {
+      "main": [
+        [
+          {
             "node": "Upsert Lead",
             "type": "main",
             "index": 0
@@ -293,6 +375,17 @@
         [
           {
             "node": "Respond Bad Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Bad Code (failed)": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }

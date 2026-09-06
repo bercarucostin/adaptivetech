@@ -541,6 +541,19 @@
       },
       "executeOnce": true,
       "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-upload failed while processing an upload\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3328,
+        0
+      ],
+      "id": "ef66f24e-286f-40d9-89ef-49e7b8cd2c28",
+      "name": "Raise For Alert"
     }
   ],
   "pinData": {},
@@ -807,6 +820,17 @@
         [
           {
             "node": "Mark Failed Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed Unavailable": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }

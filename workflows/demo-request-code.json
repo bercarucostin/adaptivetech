@@ -134,7 +134,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst body = $('Webhook').first().json.body || {};\nconst email = String(body.email || '').trim().toLowerCase();\nconst consent = body.consent === true || body.consent === 'true';\n\n// Shape check only. Deliverability is proven by the code arriving.\nif (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) throw new Error('INVALID_EMAIL');\nif (!consent) throw new Error('CONSENT_REQUIRED');\n\n// randomInt is uniform and unpredictable; Math.random() is neither.\nconst code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');\n\nconst pepper = $env.DEMO_CODE_PEPPER;\nif (!pepper) throw new Error('DEMO_CODE_PEPPER is not set on the n8n container');\nconst codeHash = crypto.createHmac('sha256', pepper).update(code).digest('hex');\n\n// The unsubscribe link is signed so it cannot be used to remove, or\n// enumerate, anyone else's address.\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\nconst unsubMac = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\nconst unsubToken = Buffer.from(email).toString('base64url') + '.' + unsubMac;\n\nreturn [{ json: { email, code, code_hash: codeHash, unsub_token: unsubToken } }];\n"
+        "jsCode": "const crypto = require('crypto');\n\nconst body = $('Webhook').first().json.body || {};\nconst email = String(body.email || '').trim().toLowerCase();\nconst consent = body.consent === true || body.consent === 'true';\n\n// Returned, not thrown. A malformed address and a missing tick are the\n// visitor getting it wrong; a missing pepper below is us getting it wrong.\n// Throwing for both would put them on the same wire, and the alert hanging\n// off this node's error output would page someone every time somebody\n// mistypes their email address.\n//\n// Shape check only. Deliverability is proven by the code arriving.\nif (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) return [{ json: { ok: false } }];\nif (!consent) return [{ json: { ok: false } }];\n\n// randomInt is uniform and unpredictable; Math.random() is neither.\nconst code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');\n\nconst pepper = $env.DEMO_CODE_PEPPER;\nif (!pepper) throw new Error('DEMO_CODE_PEPPER is not set on the n8n container');\nconst codeHash = crypto.createHmac('sha256', pepper).update(code).digest('hex');\n\n// The unsubscribe link is signed so it cannot be used to remove, or\n// enumerate, anyone else's address.\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\nconst unsubMac = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\nconst unsubToken = Buffer.from(email).toString('base64url') + '.' + unsubMac;\n\nreturn [{ json: { ok: true, email, code, code_hash: codeHash, unsub_token: unsubToken } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -227,6 +227,70 @@
       ],
       "id": "8859f991-f838-4bb5-8c28-faf29fb717c1",
       "name": "Respond Accepted (rejected)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "deb26824-cd2c-451f-b988-fe1d3b8ed175",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1144,
+        -192
+      ],
+      "id": "79718f72-1544-43e6-b72e-ca0610d55a2f",
+      "name": "Input OK?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1664,
+        240
+      ],
+      "id": "a2ed2755-bc68-48ee-a898-75f318815197",
+      "name": "Respond Accepted (failed)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-request-code could not issue a code\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        240
+      ],
+      "id": "6d660005-5336-455a-a072-40c991ad0164",
+      "name": "Raise For Alert"
     }
   ],
   "pinData": {},
@@ -253,7 +317,7 @@
         ],
         [
           {
-            "node": "Respond Accepted (rejected)",
+            "node": "Respond Accepted (failed)",
             "type": "main",
             "index": 0
           }
@@ -289,7 +353,7 @@
         ],
         [
           {
-            "node": "Respond Accepted (rejected)",
+            "node": "Respond Accepted (failed)",
             "type": "main",
             "index": 0
           }
@@ -315,6 +379,24 @@
       ]
     },
     "Generate Code": {
+      "main": [
+        [
+          {
+            "node": "Input OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input OK?": {
       "main": [
         [
           {
@@ -348,6 +430,17 @@
         [
           {
             "node": "Respond Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Accepted (failed)": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }

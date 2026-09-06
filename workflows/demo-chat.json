@@ -418,6 +418,19 @@
       ],
       "id": "c5014214-fca4-497c-946b-b6db437f2ad1",
       "name": "Respond Unavailable"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-chat failed after answering the caller\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        128
+      ],
+      "id": "96feac90-5464-4559-96e2-dbc3121fed84",
+      "name": "Raise For Alert"
     }
   ],
   "pinData": {},
@@ -662,6 +675,17 @@
         [
           {
             "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Unavailable": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }

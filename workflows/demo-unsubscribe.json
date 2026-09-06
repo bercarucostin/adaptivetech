@@ -142,6 +142,19 @@
     },
     {
       "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-unsubscribe could not record a suppression\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "95f80e87-a790-4453-82a4-1b660361f9a3",
+      "name": "Raise For Alert"
+    },
+    {
+      "parameters": {
         "respondWith": "text",
         "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Link invalid — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Link invalid</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Linkul de dezabonare nu este valid sau a fost modificat. Folosește linkul din cel mai recent email primit de la noi.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
         "options": {
@@ -220,6 +233,17 @@
         [
           {
             "node": "Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Failed": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }
