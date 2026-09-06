@@ -301,25 +301,32 @@ it: the site works, TLS works, Turnstile works, and none of that tells you
 whether the origin is reachable directly. Re-run this check after every
 firewall change.
 
-## Turnstile: replace the test site key before going live
+## Turnstile
 
-`website/demo/index.html` currently ships Cloudflare's public **test** site
-key, `1x00000000000000000000AA`. That key always passes verification for
-anyone, regardless of whether they solved anything — it exists so the page
-renders and the button click still works before the real widget is wired
-up. Leaving it in production means the human-verification gate on
-`request-code` checks nothing at all.
+Live, on the widget named **adaptivetech.ro (Spin)**. `website/demo/index.html`
+carries its real, public site key; the paired secret is `TURNSTILE_SECRET` in
+Coolify's environment variables and is never embedded in the page.
 
-Before the demo is public:
+Two things about this pair are worth knowing before you touch either:
 
-1. Create a Turnstile widget for `DEMO_DOMAIN` in the Cloudflare dashboard.
-2. Replace `data-sitekey="1x00000000000000000000AA"` in
-   `website/demo/index.html` with the real, public **site key**.
-3. Put the paired **secret** in `deploy/.env` as `TURNSTILE_SECRET` (the
-   secret is never embedded in the page — only the site key is public).
+- **They only work together.** Replacing one without the other makes every
+  token fail siteverify with `invalid-input-response` — which is exactly what
+  it looks like when the real secret is deployed against the old test site
+  key. Note the error code carefully when debugging: `invalid-input-secret`
+  means the *secret* is wrong, `invalid-input-response` means the secret was
+  accepted and the *token* was rejected.
+- **The widget renders only on hostnames listed in its Cloudflare settings** —
+  currently `adaptivetech.ro`, `www.adaptivetech.ro`, `localhost` and
+  `127.0.0.1`. Anywhere else the script fails at `400020` before
+  `onTurnstile` is called, the gate cannot be submitted, and the page looks
+  broken for no visible reason. A new environment needs its hostname added
+  there first.
 
-The site key and secret are a pair; mismatching them (e.g. a leftover test
-secret against a real site key, or vice versa) fails every verification.
+For local work without a widget, Cloudflare publishes a test pair: site key
+`1x00000000000000000000AA` with secret `1x0000000000000000000000000000000AA`,
+which passes anything. Both halves have to be swapped together, and neither
+belongs in a deployed environment — that pair makes the human-verification
+gate on `request-code` check nothing at all.
 
 ## Provider spend caps
 

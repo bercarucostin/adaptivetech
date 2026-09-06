@@ -65,15 +65,20 @@
         </span>
       </label>
 
-      <!-- No Cloudflare Turnstile widget has been provisioned for this domain
-           yet (the backend it verifies against does not exist either — Tasks
-           8-11), so there is no real site key to put here. Cloudflare's own
-           documented "always passes, visible" test key stands in for it —
-           it renders and calls onTurnstile with no console errors, unlike
-           the brief's literal TURNSTILE_SITE_KEY placeholder, which the live
-           Cloudflare script rejects at 400020 as soon as the page loads.
-           Swap this for the real, public site key before this page goes live. -->
-      <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstile"></div>
+      <!-- The real, public site key for the "adaptivetech.ro (Spin)" widget.
+           A site key belongs in client-side code — it is not a secret; its
+           pair, the secret key, lives only in TURNSTILE_SECRET on the n8n
+           container and is what demo-request-code verifies the token against.
+
+           The two are matched: swapping one without the other makes every
+           token fail siteverify with "invalid-input-response".
+
+           The widget renders only on a hostname listed in its Cloudflare
+           settings (currently adaptivetech.ro, www.adaptivetech.ro, localhost
+           and 127.0.0.1). On any other hostname the script fails at 400020
+           before onTurnstile is ever called, and the gate cannot be
+           submitted — so a new environment needs its hostname added there. -->
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAAEp-iXrCUPjFsXhu" data-callback="onTurnstile"></div>
 
       <button type="submit" id="gate-submit">
         <span data-ro>Trimite-mi codul</span>
