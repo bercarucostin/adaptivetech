@@ -1440,6 +1440,421 @@ const upload = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// demo-chat
+//
+// The only route that spends model tokens on free-form visitor input, so the
+// order of the gates matters: the message slot is claimed BEFORE the query is
+// embedded, and retrieval decides whether Claude is called at all.
+// ---------------------------------------------------------------------------
+
+// Matches MESSAGE_LIMIT in website/demo/demo.js. The two must not drift --
+// the frontend disables the composer at zero, the server enforces it.
+const MESSAGE_LIMIT = 10;
+
+// Below this cosine similarity the document has nothing to say about the
+// question, and calling Claude buys a confident paragraph of nothing. This is
+// what best_similarity exists for: the `similarity` column is an RRF score
+// and always ranks something first, however unrelated. Deliberately generous
+// -- a false "not in the document" is worse for a demo than a wasted call.
+const RELEVANCE_FLOOR = 0.25;
+
+const claimMessageSql =
+  'UPDATE demo_sessions SET messages_used = messages_used + 1\n' +
+  'WHERE id = $1::uuid AND messages_used < ' + MESSAGE_LIMIT + '\n' +
+  'RETURNING id::text AS session_id,\n' +
+  '          (' + MESSAGE_LIMIT + ' - messages_used) AS messages_left';
+
+const prepareQueryCode = `const message = String(($('Webhook').first().json.body || {}).message || '').trim();
+
+// A 4000-character "question" is not a question; it is an attempt to make us
+// embed a document. The composer cannot produce one.
+if (!message) throw new Error('EMPTY_MESSAGE');
+const query = message.slice(0, 1000);
+
+return [{
+  json: {
+    query: query,
+    requestBody: {
+      model: 'models/gemini-embedding-001',
+      content: { parts: [{ text: query }] },
+      // RETRIEVAL_QUERY here against RETRIEVAL_DOCUMENT at ingest. Using the
+      // same task type on both sides measurably degrades retrieval.
+      taskType: 'RETRIEVAL_QUERY',
+      outputDimensionality: 1536,
+    },
+  },
+}];
+`;
+
+const normaliseQueryCode = `// Same normalisation as ingest, for the same reason: gemini-embedding-001
+// returns unit vectors only at 3072 dimensions, and demo_hybrid_search
+// assumes unit length on both sides of the comparison.
+function l2normalize(v) {
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm);
+  return norm > 0 ? v.map(function (x) { return x / norm; }) : v;
+}
+
+const res = $input.first().json || {};
+const values = res.embedding && res.embedding.values;
+if (!Array.isArray(values)) {
+  throw new Error('Embedding response had no values: ' + JSON.stringify(res).slice(0, 300));
+}
+
+return [{ json: { embedding: '[' + l2normalize(values).join(',') + ']' } }];
+`;
+
+const searchSql =
+  'SELECT content, metadata, best_similarity\n' +
+  'FROM demo_hybrid_search($1::text, $2::vector, $3::uuid, 8)';
+
+const historySql =
+  'SELECT role, content FROM demo_messages\n' +
+  'WHERE session_id = $1::uuid\n' +
+  'ORDER BY id DESC\n' +
+  'LIMIT 10';
+
+const buildPromptCode = `const SYSTEM = [
+  'You answer questions about one document that the user uploaded.',
+  '',
+  'Rules:',
+  '- Answer ONLY from the excerpts provided below. They are the whole of what',
+  '  you know about this document.',
+  '- If the excerpts do not contain the answer, say so plainly and stop. Do',
+  '  not fall back on general knowledge, and do not speculate.',
+  '- Answer in the language the question is written in.',
+  '- Be concise. Two or three sentences unless the question needs more.',
+].join('\\n');
+
+// alwaysOutputData means a search with no hits still emits one item, so rows
+// without content are filtered rather than trusted.
+const hits = $('Hybrid Search').all()
+  .map(function (i) { return i.json; })
+  .filter(function (r) { return r && r.content; });
+
+const top = hits.length ? Number(hits[0].best_similarity || 0) : 0;
+
+// Nothing relevant: answered without a model call. The route still records
+// the message and returns normally -- this is an answer, not an error.
+if (!hits.length || top < ${RELEVANCE_FLOOR}) {
+  return [{ json: { grounded: false, sources: [], input_tokens: 0, output_tokens: 0 } }];
+}
+
+const context = hits.map(function (r, i) {
+  const m = r.metadata || {};
+  return '[' + (i + 1) + '] ' + (m.section_heading || m.file_name || 'excerpt') +
+    '\\n' + r.content;
+}).join('\\n\\n');
+
+// Oldest first: the history query orders newest first so LIMIT takes the
+// most recent, and the model needs them the other way round.
+const history = $input.all()
+  .map(function (i) { return i.json; })
+  .filter(function (r) { return r && r.role && r.content; })
+  .reverse()
+  .map(function (r) { return { role: r.role, content: String(r.content) }; });
+
+const question = $('Prepare Query').first().json.query;
+
+// One source chip per file+section pair, in retrieval order.
+const seen = new Set();
+const sources = [];
+for (const r of hits) {
+  const m = r.metadata || {};
+  const key = (m.file_name || '') + '|' + (m.section_heading || '');
+  if (seen.has(key)) continue;
+  seen.add(key);
+  sources.push({ file: m.file_name || 'document', section: m.section_heading || '' });
+}
+
+return [{
+  json: {
+    grounded: true,
+    sources: sources,
+    requestBody: {
+      model: 'claude-sonnet-5',
+      max_tokens: 1024,
+      system: SYSTEM + '\\n\\nExcerpts from the document:\\n\\n' + context,
+      messages: history.concat([{ role: 'user', content: question }]),
+    },
+  },
+}];
+`;
+
+const parseAnswerCode = `const res = $input.first().json || {};
+
+// Claude returns content as a list of blocks. Join the text ones; taking
+// [0].text alone drops the rest of a multi-block answer.
+const blocks = Array.isArray(res.content) ? res.content : [];
+const answer = blocks
+  .filter(function (b) { return b && b.type === 'text'; })
+  .map(function (b) { return b.text || ''; })
+  .join('')
+  .trim();
+
+if (!answer) {
+  throw new Error('Claude returned no text: ' + JSON.stringify(res).slice(0, 400));
+}
+
+const usage = res.usage || {};
+return [{
+  json: {
+    answer: answer,
+    input_tokens: usage.input_tokens || 0,
+    output_tokens: usage.output_tokens || 0,
+  },
+}];
+`;
+
+const noAnswerCode = `// The retrieval floor rejected every hit. Answered in the visitor's own
+// language without spending a model call.
+const q = $('Prepare Query').first().json.query;
+const romanian = /[ăâîșțĂÂÎȘȚ]/.test(q) || /\\b(ce|cum|care|unde|cand|când|este|sunt)\\b/i.test(q);
+
+return [{
+  json: {
+    answer: romanian
+      ? 'Nu am găsit nimic despre asta în documentul încărcat.'
+      : "I couldn't find anything about that in the uploaded document.",
+    input_tokens: 0,
+    output_tokens: 0,
+  },
+}];
+`;
+
+// One statement: both messages and the token accounting land together, so a
+// recorded answer always has its cost recorded with it.
+const recordTurnSql =
+  'WITH m AS (\n' +
+  '  INSERT INTO demo_messages (session_id, role, content)\n' +
+  "  VALUES ($1::uuid, 'user', $2::text), ($1::uuid, 'assistant', $3::text)\n" +
+  ')\n' +
+  'UPDATE demo_sessions\n' +
+  'SET input_tokens = input_tokens + $4::bigint,\n' +
+  '    output_tokens = output_tokens + $5::bigint\n' +
+  'WHERE id = $1::uuid\n' +
+  // Echoed back so the responder reads one field off its own input. The
+  // answer arrives from either Claude or the not-found branch, and only one
+  // of those nodes ran -- referencing the wrong one by name throws.
+  'RETURNING $3::text AS answer';
+
+const chat = workflow(
+  'demo-chat',
+  [
+    webhookNode('Webhook', 'POST', 'chat', [0, 0]),
+    node('Shape Cookie', 'n8n-nodes-base.code', 2, { jsCode: shapeCookieCode }, [208, 0]),
+    callVerifySession([416, 0]),
+
+    // Claimed BEFORE anything is embedded or generated, so a caller cannot
+    // spend tokens faster than the limit by firing requests in parallel.
+    node('Claim Message Slot', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: claimMessageSql,
+        options: { queryReplacement: '={{ [$json.session_id] }}' },
+      },
+      [624, -96],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    ifBooleanNode('Under Limit?', '={{ !!$json.session_id }}', [832, -96]),
+
+    node('Prepare Query', 'n8n-nodes-base.code', 2,
+      { jsCode: prepareQueryCode }, [1040, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Embed Query', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: 'https://generativelanguage.googleapis.com/v1beta/models/' +
+             'gemini-embedding-001:embedContent',
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpQueryAuth',
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
+        options: { timeout: 30000 },
+      },
+      [1248, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Normalise Query', 'n8n-nodes-base.code', 2,
+      { jsCode: normaliseQueryCode }, [1456, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Hybrid Search', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: searchSql,
+        // The session id comes from the claim, which came from the verified
+        // token. The function refuses a null session id outright, so a
+        // search across every visitor's documents is unrepresentable here.
+        options: {
+          queryReplacement:
+            "={{ [$('Prepare Query').first().json.query, $json.embedding, " +
+            "$('Claim Message Slot').first().json.session_id] }}",
+        },
+      },
+      [1664, -192],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true,
+        onError: 'continueErrorOutput' }),
+
+    node('Load History', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: historySql,
+        options: {
+          queryReplacement:
+            "={{ [$('Claim Message Slot').first().json.session_id] }}",
+        },
+      },
+      [1872, -192],
+      {
+        credentials: { postgres: PG_CRED },
+        // Hybrid Search emits one item per hit; without this the history
+        // would be re-queried once per hit.
+        executeOnce: true,
+        // Empty on the first message of a session, which is normal.
+        alwaysOutputData: true,
+      }),
+
+    node('Build Prompt', 'n8n-nodes-base.code', 2,
+      { jsCode: buildPromptCode }, [2080, -192],
+      { onError: 'continueErrorOutput' }),
+
+    ifBooleanNode('Grounded?', '={{ $json.grounded }}', [2288, -192]),
+
+    node('Claude', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: 'https://api.anthropic.com/v1/messages',
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpHeaderAuth',
+        // The API version is a required header and is not part of the
+        // credential, which carries only x-api-key.
+        sendHeaders: true,
+        headerParameters: {
+          parameters: [{ name: 'anthropic-version', value: '2023-06-01' }],
+        },
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody: '={{ JSON.stringify($json.requestBody) }}',
+        options: { timeout: 120000 },
+      },
+      [2496, -288],
+      { onError: 'continueErrorOutput' }),
+
+    node('Parse Answer', 'n8n-nodes-base.code', 2,
+      { jsCode: parseAnswerCode }, [2704, -288],
+      { onError: 'continueErrorOutput' }),
+
+    node('Answer Not Found', 'n8n-nodes-base.code', 2,
+      { jsCode: noAnswerCode }, [2496, -64]),
+
+    node('Record Turn', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: recordTurnSql,
+        options: {
+          queryReplacement:
+            "={{ [$('Claim Message Slot').first().json.session_id, " +
+            "$('Prepare Query').first().json.query, $json.answer, " +
+            '$json.input_tokens, $json.output_tokens] }}',
+        },
+      },
+      [2912, -192],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    respondNode('Respond',
+      '={{ JSON.stringify({ answer: $json.answer, ' +
+      "messages_left: $('Claim Message Slot').first().json.messages_left, " +
+      "sources: $('Build Prompt').first().json.sources || [] }) }}",
+      200, [3120, -192]),
+
+    respondNode('Respond Session Invalid',
+      '={{ JSON.stringify({ code: "SESSION_INVALID" }) }}', 401, [624, 128]),
+
+    respondNode('Respond Message Limit',
+      '={{ JSON.stringify({ code: "MESSAGE_LIMIT", messages_left: 0 }) }}',
+      429, [1040, 64]),
+
+    // Every provider or database failure past the gate lands here. The slot
+    // has already been consumed -- deliberately: refunding it on failure
+    // would hand an attacker an unlimited retry loop.
+    respondNode('Respond Unavailable',
+      '={{ JSON.stringify({ code: "UNAVAILABLE" }) }}', 503, [2704, 128]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Shape Cookie', type: 'main', index: 0 }]] },
+    'Shape Cookie': { main: [[{ node: 'Verify Session', type: 'main', index: 0 }]] },
+    'Verify Session': {
+      main: [
+        [{ node: 'Claim Message Slot', type: 'main', index: 0 }],
+        [{ node: 'Respond Session Invalid', type: 'main', index: 0 }],
+      ],
+    },
+    'Claim Message Slot': { main: [[{ node: 'Under Limit?', type: 'main', index: 0 }]] },
+    'Under Limit?': {
+      main: [
+        [{ node: 'Prepare Query', type: 'main', index: 0 }],
+        [{ node: 'Respond Message Limit', type: 'main', index: 0 }],
+      ],
+    },
+    'Prepare Query': {
+      main: [
+        [{ node: 'Embed Query', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Embed Query': {
+      main: [
+        [{ node: 'Normalise Query', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Normalise Query': {
+      main: [
+        [{ node: 'Hybrid Search', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Hybrid Search': {
+      main: [
+        [{ node: 'Load History', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Load History': { main: [[{ node: 'Build Prompt', type: 'main', index: 0 }]] },
+    'Build Prompt': {
+      main: [
+        [{ node: 'Grounded?', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Grounded?': {
+      main: [
+        [{ node: 'Claude', type: 'main', index: 0 }],
+        [{ node: 'Answer Not Found', type: 'main', index: 0 }],
+      ],
+    },
+    'Claude': {
+      main: [
+        [{ node: 'Parse Answer', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Parse Answer': {
+      main: [
+        [{ node: 'Record Turn', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Answer Not Found': { main: [[{ node: 'Record Turn', type: 'main', index: 0 }]] },
+    'Record Turn': { main: [[{ node: 'Respond', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
@@ -1448,6 +1863,7 @@ const built = [
   ['demo-request-code.json', requestCode],
   ['demo-verify-code.json', verifyCode],
   ['demo-upload.json', upload],
+  ['demo-chat.json', chat],
 ];
 
 for (const [file, wf] of built) {
