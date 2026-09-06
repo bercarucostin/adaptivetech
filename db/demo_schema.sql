@@ -4,11 +4,23 @@
 -- Apply before db/demo_hybrid_search.sql.
 -- =====================================================================
 
+-- search_path FIRST, and it must include `extensions`.
+--
+-- Supabase installs extensions into the `extensions` schema, not `public`.
+-- With `search_path = public` alone, `create extension if not exists vector`
+-- finds pgvector already installed there and does nothing -- and then the
+-- `vector(1536)` column type below fails to resolve:
+--
+--   ERROR: 42704: type "vector" does not exist
+--
+-- The same applies to `citext` (used as a column type) and `pgcrypto`
+-- (gen_random_uuid). Setting the path before the extensions makes this work
+-- whether they were enabled from the Supabase dashboard or by this file.
+set search_path = public, extensions;
+
 create extension if not exists vector;
 create extension if not exists citext;
 create extension if not exists pgcrypto;
-
-set search_path = public;
 
 -- ---------------------------------------------------------------------
 -- Email verification codes. Only the salted hash is stored.
