@@ -33,6 +33,12 @@ services:
     environment:
       DEMO_DOMAIN: ${DEMO_DOMAIN}
       N8N_HOST: ${N8N_HOST}
+      # Defaulted here rather than left unset: Caddy's {$VAR:default} falls
+      # back only when the variable is ABSENT, and an unset-but-declared
+      # compose var arrives as an empty string, which would emit a blank
+      # header. Set to "noindex, nofollow" while DEMO_DOMAIN points at a
+      # staging hostname.
+      ROBOTS_TAG: ${ROBOTS_TAG:-all}
     # Only named volumes here. The Caddyfile and the site are in the image;
     # these two hold Caddy's own state (certificates, autosaved config), which
     # must survive a redeploy.

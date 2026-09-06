@@ -41,6 +41,12 @@ http://{$DEMO_DOMAIN} {
 	}
 
 	header {
+		# Defaults to "all" so production stays indexable if this is never set --
+		# a silently de-indexed live site is the worse failure of the two.
+		# On a staging hostname set ROBOTS_TAG="noindex, nofollow": it serves the
+		# same unfinished site, and a subdomain is discoverable through
+		# certificate transparency logs with nothing linking to it.
+		X-Robots-Tag "{$ROBOTS_TAG:all}"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
