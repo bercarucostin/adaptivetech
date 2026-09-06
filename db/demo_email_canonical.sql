@@ -27,49 +27,57 @@ set search_path = public, extensions;
 -- ---------------------------------------------------------------------
 create or replace function public.demo_canonical_email(addr text)
 returns text
-language sql
+language plpgsql
 immutable
 strict
 as $fn$
-  with e as (
-    select lower(btrim(addr)) as full
-  ),
-  p as (
-    select full,
-           split_part(full, '@', 1) as loc,
-           split_part(full, '@', 2) as dom
-    from e
-  ),
-  s as (
-    select
-      full,
-      dom,
-      -- Strip a "+tag" suffix. Plus-addressing is near universal (Gmail,
-      -- Outlook, Fastmail, iCloud), and it is stripped for EVERY domain
-      -- rather than a provider list: an address where "+" is genuinely
-      -- significant is vanishingly rare, and the only consequence there is
-      -- sharing a quota bucket with the base address. Delivery is never
-      -- affected -- mail is always sent to the address as typed.
-      case
-        when regexp_replace(loc, '\+.*$', '') = '' then loc
-        else regexp_replace(loc, '\+.*$', '')
-      end as loc
-    from p
-  )
-  select case
-    -- Not an address at all. Return it unchanged rather than inventing a
-    -- canonical form; the caller's own validation rejects it.
-    when position('@' in full) = 0 or dom = '' or full = '' then full
-    -- Dots are stripped ONLY for Google. Everywhere else a dot is a
-    -- significant character and removing it would merge distinct people.
-    when dom in ('gmail.com', 'googlemail.com') then
-      case
-        when replace(loc, '.', '') = '' then loc || '@gmail.com'
-        else replace(loc, '.', '') || '@gmail.com'
-      end
-    else loc || '@' || dom
-  end
-  from s;
+declare
+  a    text := lower(btrim(addr));
+  loc  text;
+  dom  text;
+  bare text;
+begin
+  -- Not an address at all. Return it unchanged rather than inventing a
+  -- canonical form; the caller's own validation is what rejects it.
+  if position('@' in a) = 0 then
+    return a;
+  end if;
+
+  loc := split_part(a, '@', 1);
+  dom := split_part(a, '@', 2);
+  if dom = '' then
+    return a;
+  end if;
+
+  -- Strip a "+tag" suffix. Plus-addressing is near universal (Gmail,
+  -- Outlook, Fastmail, iCloud) and it is stripped for EVERY domain rather
+  -- than a provider list: an address where "+" is genuinely significant is
+  -- vanishingly rare, and the only consequence there is sharing a quota
+  -- bucket with the base address. Delivery is never affected -- mail always
+  -- goes to the address as the visitor typed it.
+  --
+  -- Guarded against emptying the local part: "+only@x.com" keeps its local
+  -- part rather than becoming "@x.com", which would merge every such
+  -- address at that domain into one identity.
+  bare := regexp_replace(loc, '\+.*$', '');
+  if bare <> '' then
+    loc := bare;
+  end if;
+
+  -- Dots are stripped ONLY for Google. Everywhere else a dot is significant
+  -- and removing it would merge distinct people -- which is worse than not
+  -- canonicalising at all, because it locks strangers out of each other's
+  -- quota.
+  if dom in ('gmail.com', 'googlemail.com') then
+    bare := replace(loc, '.', '');
+    if bare <> '' then
+      loc := bare;
+    end if;
+    dom := 'gmail.com';
+  end if;
+
+  return loc || '@' || dom;
+end;
 $fn$;
 
 comment on function public.demo_canonical_email(text) is
