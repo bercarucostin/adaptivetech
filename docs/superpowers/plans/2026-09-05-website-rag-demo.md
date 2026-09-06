@@ -2882,7 +2882,7 @@ services:
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_DATABASE: n8n
       DB_POSTGRESDB_USER: n8n
-      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       # Required by lib/demo-session.js and the unsubscribe token.
       # Without it every Code node calling require('crypto') fails at runtime.
@@ -2904,7 +2904,7 @@ services:
     environment:
       POSTGRES_DB: n8n
       POSTGRES_USER: n8n
-      POSTGRES_PASSWORD: ${N8N_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pg_data:/var/lib/postgresql/data
 
@@ -2964,7 +2964,7 @@ ADMIN_IPS=203.0.113.4
 N8N_ENCRYPTION_KEY=
 DEMO_SESSION_SECRET=
 DEMO_CODE_PEPPER=
-N8N_DB_PASSWORD=
+POSTGRES_PASSWORD=
 
 # Cloudflare Turnstile -- the SECRET, not the site key.
 TURNSTILE_SECRET=
@@ -2975,7 +2975,7 @@ TURNSTILE_SECRET=
 ```bash
 cd deploy
 cp .env.example .env
-for k in N8N_ENCRYPTION_KEY DEMO_SESSION_SECRET DEMO_CODE_PEPPER N8N_DB_PASSWORD; do
+for k in N8N_ENCRYPTION_KEY DEMO_SESSION_SECRET DEMO_CODE_PEPPER POSTGRES_PASSWORD; do
   printf '%s=%s\n' "$k" "$(openssl rand -base64 48 | tr -d '\n')"
 done >> .env
 # Remove the now-duplicated empty keys from the copied example.

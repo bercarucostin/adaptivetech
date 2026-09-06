@@ -1,24 +1,32 @@
-# Cloudflare proxies every request to this origin, so the TCP peer Caddy
-# sees is always a Cloudflare edge IP, never the visitor. `client_ip` (used
-# below, instead of `remote_ip`) reads the real client from the
-# Cloudflare-set forwarding header, but only trusts that header from peers
-# listed here -- so it must be Cloudflare's ranges, not the visitor's.
+# Caddy runs BEHIND Coolify's proxy, which terminates TLS and forwards over
+# the Docker network. So Caddy's direct peer is that proxy, never Cloudflare
+# and never the visitor, and the request chain is:
 #
-# REPLACE THE PLACEHOLDERS BELOW before deploying. Do not hard-code a
-# remembered or invented list: Cloudflare's ranges change, and a stale list
-# either locks out the admin or (worse) trusts a header from an IP that is
-# no longer Cloudflare's. Fetch the CURRENT lists at deploy time from:
-#   IPv4: https://www.cloudflare.com/ips-v4
-#   IPv6: https://www.cloudflare.com/ips-v6
-# See deploy/README.md, "Cloudflare + the ufw origin lock", for the exact
-# step that fills these in.
+#   visitor -> Cloudflare -> Coolify's proxy -> Caddy -> n8n
+#
+# `trusted_proxies private_ranges` tells Caddy to believe the forwarding
+# header when it arrives from a private address -- which is what the Coolify
+# proxy is, over the compose network. Cloudflare's own ranges are NOT listed
+# here any more: Caddy never sees Cloudflare directly, so listing them would
+# match nothing.
+#
+# The consequence for `client_ip` below: it is only as accurate as the chain
+# above it. Coolify's proxy must itself be configured to trust Cloudflare's
+# forwarding header, or the address Caddy reads is a Cloudflare edge IP
+# rather than the admin's. Treat the IP allowlist on the editor as one factor
+# and the basic_auth beneath it as the one that actually holds.
 {
+	# Caddy terminates no TLS here -- Coolify's proxy already did. Both site
+	# blocks below are http:// for the same reason; without that, Caddy would
+	# try to provision its own certificates for hostnames it cannot validate.
+	auto_https off
+
 	servers {
-		trusted_proxies static REPLACE_WITH_CURRENT_CLOUDFLARE_IPV4_RANGES REPLACE_WITH_CURRENT_CLOUDFLARE_IPV6_RANGES
+		trusted_proxies static private_ranges
 	}
 }
 
-{$DEMO_DOMAIN} {
+http://{$DEMO_DOMAIN} {
 	encode gzip
 
 	# The demo API. Same origin as the site, which is what lets the
@@ -44,18 +52,24 @@
 }
 
 # The n8n editor on its own hostname, never the public one.
-{$N8N_HOST} {
-	# client_ip, not remote_ip: this host is also proxied through Cloudflare,
-	# so the direct peer is always a Cloudflare edge IP. remote_ip would
-	# match against ADMIN_IPS and never once match the real admin, locking
-	# the editor out entirely from behind the proxy. client_ip resolves the
-	# real client via the trusted_proxies block above.
+http://{$N8N_HOST} {
+	# client_ip, not remote_ip: the direct peer is Coolify's proxy, so
+	# remote_ip would compare a private container address against ADMIN_IPS
+	# and never once match the real admin -- locking the editor out entirely.
+	# client_ip walks the forwarding header instead, trusted per the
+	# trusted_proxies block above.
+	#
+	# Across three hops this is genuinely best-effort. If the editor 403s
+	# when it should not, check what Coolify's proxy is forwarding before
+	# widening ADMIN_IPS -- widening it to make a symptom go away removes the
+	# factor rather than fixing it.
 	@notallowed not client_ip {$ADMIN_IPS}
 	respond @notallowed 403
 
-	# Second factor behind the IP allowlist. Generate the hash on the box
-	# with `caddy hash-password` and put the username/hash in .env as
-	# N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH -- see deploy/README.md.
+	# The factor that actually holds, and the reason the allowlist being
+	# best-effort is tolerable. Generate the hash with `caddy hash-password`
+	# and set N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH in Coolify's
+	# environment variables -- see deploy/README.md.
 	basic_auth {
 		{$N8N_ADMIN_USER} {$N8N_ADMIN_PASSWORD_HASH}
 	}

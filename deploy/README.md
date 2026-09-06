@@ -50,13 +50,36 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
 
 ## Order of operations
 
-1. Provision the Hetzner VPS, install Docker and the Compose plugin.
-2. **Clone the repository on the box** — do not copy `deploy/` alone. Caddy
-   serves the site from `../website`, mounted relative to this directory,
-   so `deploy/` and `website/` must stay siblings. Copying only `deploy/`
-   produces a bind-mount error on the first `docker compose up`.
-3. Generate secrets and write `deploy/.env` (Secrets, below).
-4. `docker compose up -d` and confirm all three services are `running`.
+**This stack is deployed through Coolify.** Two things follow from that, and
+both are load-bearing:
+
+- **Secrets live in Coolify's Environment Variables, not in a `.env` on the
+  box.** Coolify supplies them to compose at deploy time. See Secrets, below.
+- **Coolify's proxy owns `:80` and `:443` and terminates TLS.** Caddy runs
+  behind it with no published ports, serving plain HTTP on port 80 — point
+  Coolify's domain at the `caddy` service on that port. Caddy is still here
+  because it does the one thing that cannot move to proxy labels: it serves
+  the site and rewrites `/api/demo/*` to n8n on the **same origin**, which is
+  the only reason the session cookie can be `httpOnly` + `SameSite=Strict`.
+
+The chain is therefore `visitor → Cloudflare → Coolify's proxy → Caddy → n8n`,
+which is why `N8N_PROXY_HOPS` is `3` and why the Caddyfile trusts private
+ranges rather than Cloudflare's.
+
+1. Provision the Hetzner VPS. Coolify installs Docker and its proxy on each
+   destination server it manages, so if Coolify is driving this host, expect
+   its proxy to already own the public ports.
+2. **Point Coolify at the repository, not at `deploy/` alone.** Caddy serves
+   the site from `../website`, mounted relative to this directory, so
+   `deploy/` and `website/` must stay siblings in whatever Coolify checks out.
+   Set the compose file path to `deploy/docker-compose.yml` and the base
+   directory to the repository root. A checkout that contains only `deploy/`
+   fails on the bind mount at first deploy.
+3. Set every variable from `.env.example` in Coolify's Environment Variables
+   (Secrets, below). Do not create a `.env` on the box.
+4. Deploy, and confirm all three services come up. `postgres` must reach
+   `healthy` before `n8n` starts — that dependency is declared, so if `n8n`
+   sits waiting, the fault is in Postgres, not in n8n.
 5. Verify `crypto` is available inside n8n's Code nodes (Why
    `NODE_FUNCTION_ALLOW_BUILTIN=crypto`, below) — do this before building
    anything on top of it.
@@ -76,33 +99,35 @@ Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
 
 ## Secrets
 
-`deploy/.env` is never committed (`deploy/.env` is in `.gitignore` at the
-repo root). Copy the template and fill it in on the box itself:
+**Set these in Coolify's Environment Variables for this resource. Do not create
+a `.env` on the box.** Coolify supplies them to compose at deploy time, so the
+values live in Coolify's store rather than on disk in plaintext.
+`deploy/.env.example` remains the canonical list of what must be set — and the
+fallback if this is ever deployed with a plain `docker compose up`, in which
+case `deploy/.env` is gitignored and the old copy-the-template flow applies.
+
+Four of the values are locally-generated random secrets. Generate each with its
+own invocation so they are independent, then paste them into Coolify:
 
 ```bash
-cd deploy
-cp .env.example .env
-```
-
-Four of the six values are locally-generated random secrets. Generate each
-with its own invocation so they are independent:
-
-```bash
-for k in N8N_ENCRYPTION_KEY DEMO_SESSION_SECRET DEMO_CODE_PEPPER N8N_DB_PASSWORD; do
+for k in N8N_ENCRYPTION_KEY DEMO_SESSION_SECRET DEMO_CODE_PEPPER POSTGRES_PASSWORD; do
   echo "$k=$(openssl rand -base64 48 | tr -d '\n')"
 done
 ```
 
-Paste each result over the matching empty `KEY=` line in `.env` (don't just
-append — `.env.example` already has the key names; leaving both the empty
-and filled line would be ambiguous about which one Compose reads last).
+> **Back up `N8N_ENCRYPTION_KEY` outside Coolify — a password manager.**
+> It encrypts every credential n8n stores. If the Coolify instance is lost, or
+> the variable is edited by accident, every stored API key and connection
+> string becomes unrecoverable and you re-enter all of them by hand. With the
+> secrets no longer on disk, Coolify is the only copy unless you make another.
+> The other three cost only a session reset to regenerate.
 
 | Variable | What it protects | Source |
 |---|---|---|
 | `N8N_ENCRYPTION_KEY` | Encrypts n8n's stored credentials at rest. | `openssl rand -base64 48` |
 | `DEMO_SESSION_SECRET` | HMAC key for the session cookie token (`lib/demo-session.js`). | `openssl rand -base64 48` |
 | `DEMO_CODE_PEPPER` | Peppers the 6-digit email-verification code before it's hashed. | `openssl rand -base64 48` |
-| `N8N_DB_PASSWORD` | Postgres password for n8n's own database. | `openssl rand -base64 48` |
+| `POSTGRES_PASSWORD` | Postgres password for n8n's own database. | `openssl rand -base64 48` |
 | `TURNSTILE_SECRET` | Server-side secret to verify Turnstile tokens. | Cloudflare Turnstile dashboard (paired with the site key — see Turnstile, below). Not locally generated. |
 | `N8N_ADMIN_PASSWORD_HASH` | Basic-auth password hash Caddy checks before proxying to the n8n editor. | `caddy hash-password` — see "Cloudflare + the n8n editor", below. |
 
@@ -158,35 +183,37 @@ finds that IP bypasses Cloudflare, Turnstile, and every edge rule entirely.
 **The firewall rule is what makes the proxy real; without it the proxy
 protects nothing.**
 
-Being behind Cloudflare also means Caddy's `remote_ip` matcher — used by
-the n8n editor's IP allowlist — never sees the real visitor, only
-Cloudflare's edge IP. The Caddyfile uses `client_ip` instead, which trusts
-Cloudflare's forwarding header, but only from peers listed in
-`trusted_proxies`. That step below is what makes the editor's `ADMIN_IPS`
-check work at all once Cloudflare is in front of it.
+Being behind proxies also means Caddy's `remote_ip` matcher — used by the n8n
+editor's IP allowlist — never sees the real visitor. Behind Coolify it does not
+even see Cloudflare: Caddy's direct peer is Coolify's proxy, on the compose
+network. So the Caddyfile uses `client_ip` and trusts `private_ranges`, which
+is what that peer is.
+
+**Be honest about what this buys.** Across three hops the allowlist is only as
+accurate as the weakest forwarder in the chain — Coolify's proxy must itself be
+trusting Cloudflare's header, or the address Caddy reads is a Cloudflare edge
+IP rather than yours. Treat `ADMIN_IPS` as one factor and the basic auth
+beneath it as the one that actually holds. If the editor 403s when it should
+not, inspect what Coolify's proxy forwards before widening `ADMIN_IPS` —
+widening it to make the symptom go away deletes the factor rather than fixing
+it.
 
 1. DNS: point `DEMO_DOMAIN` and `N8N_HOST` at Cloudflare with the proxy
    (orange cloud) on.
-2. SSL/TLS mode: **Full (strict)** (Caddy auto-provisions a real cert, so
-   Cloudflare can validate the origin instead of trusting an unverified one).
-3. **Fill in `trusted_proxies` in `deploy/Caddyfile`.** It ships with
-   placeholders (`REPLACE_WITH_CURRENT_CLOUDFLARE_IPV4_RANGES` /
-   `..._IPV6_RANGES`) instead of a hard-coded list on purpose — Cloudflare's
-   ranges change, and a stale list is worse than an obviously-broken
-   placeholder. Fetch the current lists and paste them in, space-separated,
-   in place of each placeholder:
-
-```bash
-curl -s https://www.cloudflare.com/ips-v4
-curl -s https://www.cloudflare.com/ips-v6
-```
-
-   Re-run this and update the Caddyfile after any Cloudflare network
-   change, and periodically re-diff against those two URLs.
+2. SSL/TLS mode: **Full (strict)**. Coolify's proxy provisions the origin
+   certificate, so Cloudflare validates a real one rather than trusting an
+   unverified origin. Caddy itself terminates no TLS — it runs `auto_https off`
+   behind Coolify, which is why both site blocks are `http://`.
+3. **Nothing to fill in for `trusted_proxies` any more.** It reads
+   `private_ranges`, which covers Coolify's proxy on the compose network.
+   Cloudflare's ranges are deliberately *not* listed: Caddy never sees
+   Cloudflare directly, so listing them would match nothing. You still need
+   Cloudflare's ranges for the firewall step below — that one is about the
+   host, not about Caddy.
 4. **Set basic auth on the n8n editor.** `ADMIN_IPS` is one factor; the
-   Caddyfile also expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH` in
-   `.env`. Generate the hash on the box (needs the `caddy` binary — run it
-   inside the `caddy` container if you don't have one on the host):
+   Caddyfile also expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH`, set in
+   Coolify. Generate the hash (needs the `caddy` binary — run it inside the
+   `caddy` container if you don't have one on the host):
 
 ```bash
 docker compose run --rm --no-deps caddy caddy hash-password
