@@ -1010,8 +1010,9 @@ return [{
 }];
 `;
 
-// Models. Extraction and embedding are pinned from ingestion.json's working
-// nodes rather than written from memory.
+// Models. Extraction and embedding are pinned from the working nodes in the
+// WhatsApp bot's ingestion.json, which lives on main -- not on this branch --
+// rather than written from memory.
 //
 // ANSWER_MODEL is the one to change if the account 404s on it: extraction is
 // mechanical and runs on the cheap lite model, but the answer is the thing
@@ -1150,7 +1151,7 @@ function l2normalize(v) {
 // This node runs ONCE for all items, not once per item, so it must loop.
 // Chunk Document emits one item per batch and Embed Chunks preserves that
 // count, so the two lists line up index for index -- the same pairing
-// ingestion.json's own Format for Insert does.
+// the bot's own Format for Insert does (workflows/ingestion.json on main).
 const items = $input.all();
 const batches = $('Chunk Document').all();
 const out = [];
@@ -1307,7 +1308,7 @@ const upload = workflow(
       { jsCode: shared('demo-extraction-prompt.js') + prepareExtractionGlue },
       [1872, -192]),
 
-    // 10 minutes, matching ingestion.json. A long PDF genuinely takes
+    // 10 minutes, matching the bot's ingestion on main. A long PDF genuinely takes
     // minutes, and the client is polling rather than waiting on a socket.
     geminiNode('Gemini Extract', EXTRACT_MODEL, 'generateContent',
       [2080, -192], { timeout: 600000 }, { onError: 'continueErrorOutput' }),

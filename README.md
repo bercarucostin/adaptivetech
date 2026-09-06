@@ -1,85 +1,127 @@
-# WhatsApp RAG Support Bot — n8n
+# adaptivetech.ro — website and public RAG demo
 
-The general implementation of an n8n-backed WhatsApp support bot with hybrid
-retrieval over a document knowledge base. Per-client customisation lives on its
-own branch; this branch holds only what is client-agnostic.
+This branch holds the Adaptive Technologies website and the n8n-backed RAG
+demo behind it: a visitor gives an email address, uploads one document, and
+asks questions answered only from that document.
+
+It is a **separate product** from the WhatsApp support bot on `main` and
+`partner-prod`. They share no deployment, no database and no n8n instance, and
+they do not merge back into each other. `tests/branch-contract.test.js` fails
+if the bot's files reappear here.
 
 ## Branches
 
 | Branch | Contents |
 |---|---|
-| `main` | This generic spine: schema, retrieval, ingestion, error handling |
-| `partner-prod` | The active client deployment — agent workflow, client-specific credential validation, technician sync |
-| `website` | adaptivetech.ro and its public RAG demo |
+| `main` | The generic WhatsApp bot spine: schema, retrieval, ingestion, error handling |
+| `partner-prod` | The active client deployment |
+| `website` | **This branch** — adaptivetech.ro and its public RAG demo |
 
-`main` does not yet contain an agent workflow. Generalising `agent.json` needs a
-second client to generalise against, so it stays on `partner-prod` for now;
-`workflows/error-handling-agent.json` and `workflows/hybrid-search-tool.json`
-are here ahead of it deliberately — `agent.json` is the only caller of the
-retrieval tool's `executeWorkflowTrigger`, and the error handler it triggers
-on failure — so the set lands together when that work happens.
+## The demo, end to end
+
+```
+visitor → Cloudflare → Coolify's proxy → Caddy ─┬─ /*           → static site
+                                                └─ /api/demo/*  → n8n webhooks
+```
+
+Caddy rewrites `/api/demo/*` to `/webhook/demo/*` on the **same origin**, which
+is the only reason the session cookie can be `httpOnly; Secure; SameSite=Strict`.
+
+1. **Email gate.** Turnstile, then a 6-digit code stored only as an HMAC.
+   Redeeming it mints a signed session token — the one and only origin of a
+   `session_id`. No route ever reads one from a request body.
+2. **Upload.** One document per session, ≤10 MB, type detected from the bytes.
+   Answered `202` immediately; extraction and embedding continue behind the
+   response while the browser polls.
+3. **Chat.** Hybrid RRF retrieval scoped to the session, then a grounded
+   answer. Ten messages per session.
+
+Every limit is enforced by a single SQL statement that both checks and
+increments, so parallel requests cannot outrun it.
 
 ## What's here
 
 ### Database (`db/`)
 
-This branch carries only the **demo's** schema. The WhatsApp bot's own SQL
-(`documents.sql`, `hybrid_search.sql`, `match_documents.sql`,
-`n8n_chat_histories.sql` and its trigger) lives on `main` and was removed here —
-`website` and `main` are separate products and do not merge back into each
-other.
-
 | File | Purpose |
 |---|---|
-| `demo_schema.sql` | The demo's seven tables. Session-scoped chunk store with no HNSW index, three retention tiers, and RLS enabled with zero policies |
-| `demo_hybrid_search.sql` | Session-scoped RRF search. Requires `p_session_id`, scopes **both** branches, and returns a real `best_similarity` alongside the fused rank |
-| `demo_verify.sql` | Nine checks proving retention, cross-session isolation, and the high/low similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
+| `demo_schema.sql` | Seven tables. Session-scoped chunk store, three retention tiers, RLS enabled with zero policies |
+| `demo_hybrid_search.sql` | Session-scoped RRF search. `p_session_id` is required and scopes **both** branches |
+| `demo_verify.sql` | Nine checks proving retention, cross-session isolation and the similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
 
 Apply in that order. Each sets `search_path = public, extensions`, because
-Supabase installs pgvector into `extensions` rather than `public` — without it
-the `vector` type does not resolve and the schema fails on its first vector
-column.
+Supabase installs pgvector into `extensions` — without it the `vector` type
+does not resolve and the schema fails on its first vector column.
+
+There is deliberately **no HNSW index**. A per-session filter is maximally
+selective, so an exact scan over a btree-filtered subset is both faster and
+exact.
 
 ### Workflows (`workflows/`)
 
 | File | Purpose |
 |---|---|
-| `ingestion.json` | Google Drive → Gemini extraction → section-aware chunking → batch embedding → Postgres. Two branches: knowledge base and expert feedback |
-| `hybrid-search-tool.json` | Sub-workflow: embeds a query and calls `hybrid_search()`, returning labelled chunks |
-| `db-cleanup.json` | Weekly SQL sweep of old conversations, plus pruning of old rows from the `executions` Data Table |
-| `error-handling-ingestion.json` | Error workflow for ingestion — builds a report, emails the team |
-| `error-handling-agent.json` | Error workflow for an agent workflow — also replies to the original sender |
+| `demo-request-code.json` | Turnstile, quota, mints and emails a 6-digit code. Answers `202` on every path |
+| `demo-verify-code.json` | Redeems the code and issues the session cookie. The only place a session is created |
+| `demo-verify-session.json` | Sub-workflow. Verifies the cookie and returns the session row — called by every other route |
+| `demo-upload.json` | Accepts and validates the file, claims the slot, then extracts, chunks, embeds and stores it |
+| `demo-upload-status.json` | Polled by the progress UI |
+| `demo-chat.json` | Retrieval and the grounded answer |
+| `demo-cleanup.json` | Hourly purge. The workflow that makes the privacy policy true |
+| `demo-unsubscribe.json` | The signed link at the bottom of every code email |
+| `error-handling-demo.json` | Set as the error workflow on all of the above |
+| `demo-verify-session-test.json` | Harness. Seeds its own session, so there is nothing to paste by hand |
 
-Workflow JSON carries n8n instance-specific IDs (`credentials.*.id`,
-`settings.errorWorkflow`, node `id`s). Re-point credentials in the n8n UI after
-importing; the files are templates, not portable deployments. A few node
-*parameters* also carry deployment-specific values rather than going through a
-credential — notably `error-handling-agent.json`'s `Send Error Message to
-Original Sender` node, whose `phoneNumberId` is hard-coded to the exporting
-deployment's Meta WhatsApp Business phone number ID (see Setup step 6).
+**These files are generated. Do not hand-edit them.**
+
+```bash
+node tools/build-demo-workflows.js
+```
+
+`tools/build-demo-workflows.js` is the source of truth. It exists because the
+Code nodes must contain the `---8<--- SHARED` blocks from `lib/` byte for
+byte, and a hand-copied block drifts the first time either side is edited.
+Generating them makes drift impossible rather than merely tested.
+
+It also pins, in `N8N_IDS`, the workflow and credential ids read back from the
+live instance — so a rebuild produces the files that are already deployed
+instead of a set that has to be re-wired by hand. Two consecutive builds are
+byte-identical; re-importing updates a workflow in place rather than creating
+a duplicate that collides on its webhook path.
+
+Node types and `typeVersion`s were taken from real exports off the target
+instance (n8n 2.28.3), not from memory. The Gemini call shapes came from the
+bot's own working `ingestion.json` on `main`.
+
+### Shared code (`lib/`)
+
+Each of these carries a `---8<--- SHARED` block copied verbatim into a Code
+node by the generator, and is unit-tested here where a workflow cannot be:
+
+| File | Purpose |
+|---|---|
+| `demo-session.js` | HMAC session tokens — sign, verify, constant-time compare |
+| `demo-filetype.js` | Type detection from magic bytes, never the declared Content-Type |
+| `demo-chunker.js` | Section-aware 350/75 windowing with a 600-chunk ceiling |
+| `demo-extraction-prompt.js` | The extraction prompt, whose `##` heading rule the chunker depends on |
 
 ## Retrieval design
 
-Chunking is section-aware: text is split on `##` headings emitted by the Gemini
+Chunking is section-aware: text is split on `##` headings emitted by the
 extraction prompt, then windowed at 350 tokens with 75 tokens of overlap. Each
-chunk is prefixed with its document title and section heading before embedding,
-so a retrieved chunk carries its own context.
+chunk is prefixed with its document title and section heading before
+embedding, so a retrieved chunk carries its own context.
 
-Embeddings are `gemini-embedding-001` at `outputDimensionality: 1536`. **The API
-does not normalise at that dimension** — only at 3072 — so every embedding is
-L2-normalised client-side before insert and before search. `hybrid_search()`
-assumes normalised vectors.
+Embeddings are `gemini-embedding-001` at `outputDimensionality: 1536`. **The
+API does not normalise at that dimension** — only at 3072 — so every embedding
+is L2-normalised client-side before insert and before search.
+`demo_hybrid_search()` assumes unit vectors.
 
-Search fuses two branches with RRF: an HNSW cosine scan and a `romanian`
-`ts_rank` scan, each limited to a candidate pool before fusion. The returned
-`similarity` column is an RRF score, not a cosine similarity — do not threshold
-it as though it were one.
-
-Romanian is baked into more than the FTS configuration choice: the Gemini
-extraction prompts are written in Romanian, the WhatsApp error text sent to
-users is Romanian, several SQL comments are Romanian, and
-`error-handling-agent.json` formats timestamps as `ro-RO` / `Europe/Bucharest`.
-A deployment in another language touches all four.
+Search fuses a cosine scan and a `romanian` `ts_rank` scan with RRF. The
+returned `similarity` is an RRF score, not a cosine similarity — **do not
+threshold it as one.** It always ranks something first however unrelated the
+question. `best_similarity`, returned alongside it, is a real cosine value, and
+that is what `demo-chat` thresholds to decide whether to call the model at all.
 
 ## Tests
 
@@ -87,54 +129,27 @@ A deployment in another language touches all four.
 node --test tests/
 ```
 
-No dependencies and no `package.json`: tests use `node:test` and `node:assert`
-against the workflow JSON directly. They assert graph structure — that chains are
-wired in the right order and that removed nodes stay removed — which is what
-catches an n8n re-export that silently drops a connection.
+No dependencies and no `package.json` — `node:test` and `node:assert` only.
+
+The tests read the **generated workflow JSON**, not the generator, so they
+fail on what would actually be imported. `branch-contract.test.js` carries the
+isolation guarantees: no query may take an identifier from the request body
+without also scoping by `session_id`, no read of per-visitor data may go
+unscoped, and no route may read a `session_id` from a body at all.
 
 ## Setup
 
-1. Provision PostgreSQL 15+ with pgvector ≥ 0.7.0.
-2. Apply the files in `db/` in the order given above —
-   `cleanup_n8n_chat_histories_after_insert.sql` must precede
-   `n8n_chat_histories.sql`. The latter's `CREATE TRIGGER` resolves the
-   trigger function at creation time, so applying them in table order instead
-   fails with `ERROR: function cleanup_n8n_chat_histories_after_insert() does
-   not exist`.
-3. Import the workflows in `workflows/` into n8n.
-4. Create credentials in n8n for: Postgres, Google Drive, Google Gemini
-   (HTTP query auth), WhatsApp, and SMTP. Re-point each node's credential.
-   The WhatsApp credential is used by `error-handling-agent.json`'s
-   `Send Error Message to Original Sender` node — without it, that node is
-   left unconfigured and fails silently until an agent error fires.
-5. Set each workflow's error workflow to the matching `error-handling-*`.
-6. Point `Drive: Knowledge Base` and `Drive: Expert Feedback` at your
-   folders, and re-point `error-handling-agent.json`'s `Send Error Message to
-   Original Sender` node: its `phoneNumberId` parameter is hard-coded to the
-   exporting deployment's Meta WhatsApp Business phone number ID rather than
-   coming from a credential, so it is untouched by step 4. **`ingestion.json`
-   ships with `"active": true`.** Combined with its schedule trigger, it can
-   start importing against the exporting deployment's Drive folder IDs before
-   you finish this step — deactivate it on import if you are not ready for it
-   to run immediately.
-
-### The `executions` Data Table
-
-`db-cleanup.json` and `error-handling-agent.json` both read or write an n8n
-**Data Table** named `executions`, addressed by IDs that are instance- and
-project-specific — re-point them after import. Its implied columns are
-`execution_id`, `workflow_id`, `phone_number`, and `createdAt`. Nothing
-shipped on this branch writes to it: the client agent workflow (kept on
-`partner-prod` as `agent.json`) is its only writer. On a fresh instance
-without it, `db-cleanup.json`'s "Clean old execution logs" step fails, and
-`error-handling-agent.json`'s row lookup fails — which also silences its
-reply to the original sender, since the recipient phone number comes from
-that lookup's `phone_number` column.
-
-Both `error-handling-*` workflows email failure reports to
-`service_account@adaptivetech.ro`, subject-prefixed `Partner` — that is the
-vendor's own address, not a placeholder; point it elsewhere if you don't want
-reports routed there.
+1. Create a Supabase project and apply `db/` in the order above.
+2. Deploy the stack — see [`deploy/README.md`](deploy/README.md).
+3. Import every file in `workflows/` and activate all but
+   `error-handling-demo.json` (invoked by n8n directly) and
+   `demo-verify-session-test.json`.
+4. Create the credentials the generator pins: Postgres (Supabase), SMTP, and
+   the **predefined** Google Gemini (PaLM) credential. If their ids differ from
+   `N8N_IDS`, update that table and rebuild rather than re-wiring by hand.
+5. Create a Cloudflare Turnstile widget, list every hostname the demo is served
+   from, put the site key in `website/demo/index.html` and the secret in
+   `TURNSTILE_SECRET`.
 
 ## License
 

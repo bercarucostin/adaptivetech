@@ -28,6 +28,17 @@ const FORBIDDEN = [
   'db/wa_message_links.sql',
   'db/wa_reaction_links.sql',
   'Tabel tehnicieni pentru Robotel.ods',
+  // The WhatsApp bot's own workflows. They belong to a different product
+  // that shares no deployment, no database and no n8n instance with the
+  // demo, and they were only ever here because this branch was cut from
+  // main. Their node shapes are pinned into tools/build-demo-workflows.js
+  // where the demo needed them, so nothing here depends on the files.
+  'workflows/ingestion.json',
+  'workflows/hybrid-search-tool.json',
+  'workflows/db-cleanup.json',
+  'workflows/error-handling-ingestion.json',
+  'workflows/error-handling-agent.json',
+  'tests/ingestion-workflow.test.js',
 ];
 
 test('no client-specific file has returned to the branch', () => {
@@ -86,16 +97,100 @@ test('the 1536-dimension contract agrees across schema, function and workflows',
   assert.match(read('db/demo_hybrid_search.sql'), /query_embedding\s+vector\(1536\)/,
     'demo_hybrid_search must accept vector(1536)');
 
-  // Ingestion must request that width from the embedding API.
-  assert.match(read('workflows/ingestion.json'), /outputDimensionality[^0-9]{0,12}1536/,
-    'ingestion must request outputDimensionality 1536');
+  // Both sides of the demo must ask the embedding API for that same width.
+  // A mismatch does not error anywhere: Postgres rejects the insert, or -- far
+  // worse -- the two sides agree with each other but disagree with the column,
+  // and every search silently returns nothing.
+  assert.match(read('workflows/demo-upload.json'), /outputDimensionality[^0-9]{0,12}1536/,
+    'demo-upload must request outputDimensionality 1536 when embedding chunks');
+  assert.match(read('workflows/demo-chat.json'), /outputDimensionality[^0-9]{0,12}1536/,
+    'demo-chat must request outputDimensionality 1536 when embedding the query');
+});
 
-  // And the retrieval tool must both request and assert it.
-  const tool = read('workflows/hybrid-search-tool.json');
-  assert.match(tool, /outputDimensionality[^0-9]{0,12}1536/,
-    'hybrid-search-tool must request outputDimensionality 1536');
-  assert.match(tool, /EXPECTED_DIMS\s*=\s*1536/,
-    'hybrid-search-tool must assert 1536 dims before building the query');
-  assert.match(tool, /vector\(1536\)/,
-    'hybrid-search-tool must cast to vector(1536)');
+test('embeddings are normalised on both sides of the demo', () => {
+  // The paired invariant to the dimension above, and the one with no symptom.
+  // gemini-embedding-001 returns unit vectors only at 3072 dims; at 1536 they
+  // come back unnormalised, and demo_hybrid_search assumes unit length. Drop
+  // this on either side and cosine distance quietly ranks by magnitude --
+  // retrieval still returns results, just subtly wrong ones.
+  const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+  for (const file of ['workflows/demo-upload.json', 'workflows/demo-chat.json']) {
+    assert.match(read(file), /l2normalize/,
+      file + ' must L2-normalise embeddings before use');
+  }
+});
+
+// The isolation guarantee, asserted rather than trusted. Both halves below
+// would still pass every other test on this branch if they regressed, and
+// both would serve one visitor's document to another.
+//
+// The naive form of this check -- "any query naming demo_uploads must name
+// session_id" -- is wrong, and rejecting it is the point. demo-upload's
+// status writes address a row by an upload_id the workflow minted itself
+// moments earlier for the verified session; that id never came from the
+// caller, and requiring a redundant session_id clause there would be
+// cargo-culting the shape of the rule instead of the rule.
+//
+// What actually matters is where the value comes from.
+
+const SCOPED_TABLES = ['demo_uploads', 'demo_documents', 'demo_messages'];
+
+function demoWorkflows() {
+  const dir = path.join(ROOT, 'workflows');
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith('demo-'))
+    .map((f) => ({ file: f, wf: JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) }));
+}
+
+test('no query takes an identifier from the request body without scoping it', () => {
+  for (const { file, wf } of demoWorkflows()) {
+    for (const node of wf.nodes) {
+      const p = node.parameters || {};
+      if (typeof p.query !== 'string') continue;
+      const params = JSON.stringify(p.options || {});
+      // A parameter read off the request body is attacker-chosen. Paired with
+      // a per-visitor table it MUST also be paired with the session id from
+      // the verified token -- that is what makes a guessed id return nothing.
+      if (!/\.body\b/.test(params)) continue;
+      if (!SCOPED_TABLES.some((t) => p.query.includes(t))) continue;
+      assert.ok(
+        /session_id/.test(p.query),
+        file + ' / ' + node.name +
+          ': uses a request-body value against a per-visitor table without session_id'
+      );
+    }
+  }
+});
+
+test('every read of per-visitor data is scoped to the session', () => {
+  for (const { file, wf } of demoWorkflows()) {
+    // The hourly purge is the one legitimate cross-session statement: it
+    // deletes BY EXPIRY across every visitor, which is its entire job.
+    if (file === 'demo-cleanup.json') continue;
+    for (const node of wf.nodes) {
+      const query = (node.parameters || {}).query;
+      if (typeof query !== 'string' || !/^\s*(WITH|SELECT)/i.test(query)) continue;
+      for (const table of SCOPED_TABLES) {
+        if (!query.includes(table)) continue;
+        assert.ok(
+          /session_id/.test(query),
+          file + ' / ' + node.name + ': reads ' + table + ' without naming session_id'
+        );
+      }
+    }
+  }
+});
+
+test('no route reads a session id from the request body', () => {
+  // The session id has exactly one origin: the signed cookie, via
+  // demo-verify-session. A body-supplied session_id anywhere would make the
+  // whole token scheme decorative.
+  for (const { file, wf } of demoWorkflows()) {
+    const body = JSON.stringify(wf);
+    assert.ok(
+      !/body\.session_id|body\)\.session_id|body\["session_id"\]/.test(body),
+      file + ' reads session_id from the request body'
+    );
+  }
 });
