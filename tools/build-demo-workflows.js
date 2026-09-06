@@ -439,11 +439,362 @@ const uploadStatus = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// demo-request-code
+//
+// The gate's first half. Turnstile is verified BEFORE anything else runs,
+// because the attack this endpoint faces is scripted by definition.
+//
+// Both rejection paths return the same 202 as success. A different response
+// for "over quota" or "failed Turnstile" tells an attacker which addresses
+// tripped a limit, which is free reconnaissance. A visitor who genuinely hit
+// a limit learns it when no email arrives.
+// ---------------------------------------------------------------------------
+const quotaSql =
+  'SELECT\n' +
+  '  (SELECT count(*) FROM demo_sessions\n' +
+  "     WHERE email = $1::citext AND created_at > now() - interval '1 day') < 3\n" +
+  '  AND\n' +
+  '  (SELECT count(*) FROM demo_email_codes\n' +
+  "     WHERE email = $1::citext AND created_at > now() - interval '1 hour') < 3\n" +
+  '  AS allowed';
+
+const generateCodeJs = `const crypto = require('crypto');
+
+const body = $('Webhook').first().json.body || {};
+const email = String(body.email || '').trim().toLowerCase();
+const consent = body.consent === true || body.consent === 'true';
+
+// Shape check only. Deliverability is proven by the code arriving.
+if (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) throw new Error('INVALID_EMAIL');
+if (!consent) throw new Error('CONSENT_REQUIRED');
+
+// randomInt is uniform and unpredictable; Math.random() is neither.
+const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+
+const pepper = $env.DEMO_CODE_PEPPER;
+if (!pepper) throw new Error('DEMO_CODE_PEPPER is not set on the n8n container');
+const codeHash = crypto.createHmac('sha256', pepper).update(code).digest('hex');
+
+// The unsubscribe link is signed so it cannot be used to remove, or
+// enumerate, anyone else's address.
+const secret = $env.DEMO_SESSION_SECRET;
+if (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');
+const unsubMac = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')
+  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+const unsubToken = Buffer.from(email).toString('base64url') + '.' + unsubMac;
+
+return [{ json: { email, code, code_hash: codeHash, unsub_token: unsubToken } }];
+`;
+
+const storeCodeSql =
+  'INSERT INTO demo_email_codes (email, code_hash, expires_at)\n' +
+  "VALUES ($1::citext, $2::text, now() + interval '10 minutes')";
+
+const requestCode = workflow(
+  'demo-request-code',
+  [
+    webhookNode('Webhook', 'POST', 'request-code', [0, 0]),
+
+    node('Verify Turnstile', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: 'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody:
+          "={{ JSON.stringify({ secret: $env.TURNSTILE_SECRET, response: $json.body.turnstile_token, remoteip: $json.headers['cf-connecting-ip'] || '' }) }}",
+        options: { timeout: 10000 },
+      },
+      [208, 0],
+      { onError: 'continueErrorOutput' }),
+
+    ifBooleanNode('Turnstile OK?', '={{ $json.success }}', [416, 0]),
+
+    node('Check Quota', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: quotaSql,
+        options: { queryReplacement: "={{ [$('Webhook').first().json.body.email] }}" },
+      },
+      [624, -96],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true, onError: 'continueErrorOutput' }),
+
+    ifBooleanNode('Within Quota?', '={{ $json.allowed }}', [832, -96]),
+
+    node('Generate Code', 'n8n-nodes-base.code', 2,
+      { jsCode: generateCodeJs }, [1040, -192],
+      { onError: 'continueErrorOutput' }),
+
+    node('Store Code', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: storeCodeSql,
+        options: { queryReplacement: '={{ [$json.email, $json.code_hash] }}' },
+      },
+      [1248, -192],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    node('Send Code Email', 'n8n-nodes-base.emailSend', 2.1,
+      {
+        fromEmail: 'no-reply@adaptivetech.ro',
+        toEmail: "={{ $('Generate Code').first().json.email }}",
+        subject: 'Codul tău pentru demo-ul Adaptive Technologies',
+        emailFormat: 'text',
+        text:
+          "={{ 'Codul tău este: ' + $('Generate Code').first().json.code + " +
+          "'\\n\\nExpiră în 10 minute.\\n\\nDacă nu ai cerut acest cod, ignoră acest mesaj.\\n\\n" +
+          "Nu mai vrei emailuri de la noi? ' + $env.DEMO_PUBLIC_ORIGIN + " +
+          "'/api/demo/unsubscribe?t=' + $('Generate Code').first().json.unsub_token }}",
+        options: {},
+      },
+      [1456, -192]),
+
+    respondNode('Respond Accepted',
+      '={{ JSON.stringify({ ok: true }) }}', 202, [1664, -192]),
+
+    // Every rejection lands here with the identical body and status. Turnstile
+    // failure, over quota, bad email shape, missing consent -- all the same.
+    respondNode('Respond Accepted (rejected)',
+      '={{ JSON.stringify({ ok: true }) }}', 202, [1664, 96]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Verify Turnstile', type: 'main', index: 0 }]] },
+    'Verify Turnstile': {
+      main: [
+        [{ node: 'Turnstile OK?', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+      ],
+    },
+    'Turnstile OK?': {
+      main: [
+        [{ node: 'Check Quota', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+      ],
+    },
+    'Check Quota': {
+      main: [
+        [{ node: 'Within Quota?', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+      ],
+    },
+    'Within Quota?': {
+      main: [
+        [{ node: 'Generate Code', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+      ],
+    },
+    'Generate Code': {
+      main: [
+        [{ node: 'Store Code', type: 'main', index: 0 }],
+        [{ node: 'Respond Accepted (rejected)', type: 'main', index: 0 }],
+      ],
+    },
+    'Store Code': { main: [[{ node: 'Send Code Email', type: 'main', index: 0 }]] },
+    'Send Code Email': { main: [[{ node: 'Respond Accepted', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
+// demo-verify-code
+//
+// The gate's second half, and the only place a session is created.
+// ---------------------------------------------------------------------------
+const loadCodeSql =
+  'SELECT id AS code_id, code_hash, attempts,\n' +
+  '       (expires_at > now()) AS not_expired\n' +
+  'FROM demo_email_codes\n' +
+  'WHERE email = $1::citext AND consumed_at IS NULL\n' +
+  'ORDER BY created_at DESC\n' +
+  'LIMIT 1';
+
+const checkCodeJs = `const crypto = require('crypto');
+
+const submitted = String($('Webhook').first().json.body.code || '').trim();
+const row = $input.first().json || {};
+
+const pepper = $env.DEMO_CODE_PEPPER;
+if (!pepper) throw new Error('DEMO_CODE_PEPPER is not set on the n8n container');
+
+// No unconsumed code for this address at all: alwaysOutputData gave us an
+// empty item rather than ending the execution silently.
+if (!row.code_id) {
+  return [{ json: { ok: false, code_id: null } }];
+}
+
+const expected = crypto.createHmac('sha256', pepper).update(submitted).digest('hex');
+const a = Buffer.from(expected);
+const b = Buffer.from(String(row.code_hash || ''));
+
+// Length first: timingSafeEqual throws on a mismatch. Both sides are fixed
+// width hex, so the length is not a secret.
+const macOk = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+const ok = macOk && row.not_expired === true && Number(row.attempts) < 5;
+
+return [{ json: { ok, code_id: row.code_id } }];
+`;
+
+// The WHERE consumed_at IS NULL inside the UPDATE is what makes a replay fail:
+// a second request finds nothing to consume, the INSERT..SELECT produces no
+// row, and no session is created.
+const consumeSql =
+  'WITH consumed AS (\n' +
+  '  UPDATE demo_email_codes SET consumed_at = now()\n' +
+  '  WHERE id = $1::uuid AND consumed_at IS NULL\n' +
+  '  RETURNING id\n' +
+  ')\n' +
+  'INSERT INTO demo_sessions (email, expires_at, ip)\n' +
+  "SELECT $2::citext, now() + interval '2 hours', $3::inet\n" +
+  'FROM consumed\n' +
+  'RETURNING id::text AS session_id,\n' +
+  '          floor(extract(epoch FROM expires_at) * 1000)::bigint AS expires_ms';
+
+const signTokenGlue = `
+// --- node glue below the shared block -------------------------------------
+const row = $input.first().json || {};
+if (!row.session_id) {
+  // The code was already consumed by a concurrent request. Fail closed.
+  throw new Error('CODE_ALREADY_USED');
+}
+
+const secret = $env.DEMO_SESSION_SECRET;
+if (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');
+
+// expires_ms arrives floored from SQL; Number() keeps signToken's integer
+// guard satisfied whether the driver hands back a bigint as string or number.
+const expiresMs = Number(row.expires_ms);
+const token = signToken(row.session_id, expiresMs, secret);
+
+return [{ json: { session_id: row.session_id, token, expires_ms: expiresMs } }];
+`;
+
+// Skipped for suppressed addresses: unsubscribing means "stop contacting me",
+// not "revoke my access", so the session is still issued above.
+const upsertLeadSql =
+  'INSERT INTO demo_leads (email, consent_at, sessions_count, last_ip)\n' +
+  'SELECT $1::citext, now(), 1, $2::inet\n' +
+  'WHERE NOT EXISTS (SELECT 1 FROM demo_suppressions WHERE email = $1::citext)\n' +
+  'ON CONFLICT (email) DO UPDATE\n' +
+  'SET last_seen_at = now(),\n' +
+  '    sessions_count = demo_leads.sessions_count + 1,\n' +
+  '    last_ip = excluded.last_ip';
+
+const countAttemptSql =
+  'UPDATE demo_email_codes SET attempts = attempts + 1\n' +
+  'WHERE id = (SELECT id FROM demo_email_codes\n' +
+  '            WHERE email = $1::citext AND consumed_at IS NULL\n' +
+  '            ORDER BY created_at DESC LIMIT 1)';
+
+const verifyCode = workflow(
+  'demo-verify-code',
+  [
+    webhookNode('Webhook', 'POST', 'verify-code', [0, 0]),
+
+    node('Load Latest Code', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: loadCodeSql,
+        options: { queryReplacement: '={{ [$json.body.email] }}' },
+      },
+      [208, 0],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    node('Check Code', 'n8n-nodes-base.code', 2,
+      { jsCode: checkCodeJs }, [416, 0]),
+
+    ifBooleanNode('Code Valid?', '={{ $json.ok }}', [624, 0]),
+
+    node('Consume And Create Session', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: consumeSql,
+        options: {
+          queryReplacement:
+            "={{ [$json.code_id, $('Webhook').first().json.body.email, $('Webhook').first().json.headers['cf-connecting-ip'] || null] }}",
+        },
+      },
+      [832, -96],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    node('Sign Token', 'n8n-nodes-base.code', 2,
+      { jsCode: shared('demo-session.js') + signTokenGlue }, [1040, -96],
+      { onError: 'continueErrorOutput' }),
+
+    node('Upsert Lead', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: upsertLeadSql,
+        options: {
+          queryReplacement:
+            "={{ [$('Webhook').first().json.body.email, $('Webhook').first().json.headers['cf-connecting-ip'] || null] }}",
+        },
+      },
+      [1248, -96],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    // httpOnly keeps injected script from reading it; SameSite=Strict keeps
+    // another site from riding it; Path=/api/demo keeps it off every other
+    // request to this origin.
+    node('Respond With Cookie', 'n8n-nodes-base.respondToWebhook', 1.5,
+      {
+        respondWith: 'json',
+        responseBody: '={{ JSON.stringify({ ok: true, messages_left: 10 }) }}',
+        options: {
+          responseHeaders: {
+            entries: [
+              {
+                name: 'Set-Cookie',
+                value:
+                  "={{ 'demo_session=' + $('Sign Token').first().json.token + '; Path=/api/demo; HttpOnly; Secure; SameSite=Strict; Max-Age=7200' }}",
+              },
+            ],
+          },
+        },
+      },
+      [1456, -96]),
+
+    node('Count Attempt', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: countAttemptSql,
+        options: { queryReplacement: "={{ [$('Webhook').first().json.body.email] }}" },
+      },
+      [832, 128],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true }),
+
+    respondNode('Respond Bad Code',
+      '={{ JSON.stringify({ code: "BAD_CODE" }) }}', 401, [1040, 128]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Load Latest Code', type: 'main', index: 0 }]] },
+    'Load Latest Code': { main: [[{ node: 'Check Code', type: 'main', index: 0 }]] },
+    'Check Code': { main: [[{ node: 'Code Valid?', type: 'main', index: 0 }]] },
+    'Code Valid?': {
+      main: [
+        [{ node: 'Consume And Create Session', type: 'main', index: 0 }],
+        [{ node: 'Count Attempt', type: 'main', index: 0 }],
+      ],
+    },
+    'Consume And Create Session': { main: [[{ node: 'Sign Token', type: 'main', index: 0 }]] },
+    'Sign Token': {
+      main: [
+        [{ node: 'Upsert Lead', type: 'main', index: 0 }],
+        [{ node: 'Respond Bad Code', type: 'main', index: 0 }],
+      ],
+    },
+    'Upsert Lead': { main: [[{ node: 'Respond With Cookie', type: 'main', index: 0 }]] },
+    'Count Attempt': { main: [[{ node: 'Respond Bad Code', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
   ['demo-verify-session-test.json', verifySessionTest],
   ['demo-upload-status.json', uploadStatus],
+  ['demo-request-code.json', requestCode],
+  ['demo-verify-code.json', verifyCode],
 ];
 
 for (const [file, wf] of built) {

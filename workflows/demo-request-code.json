@@ -1,0 +1,358 @@
+{
+  "name": "demo-request-code",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo/request-code",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d8d6d397-47a4-4369-9f1d-4f3f371200a1",
+      "name": "Webhook",
+      "webhookId": "239e6594-8140-4ed5-ad7b-9340452f7a51"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.TURNSTILE_SECRET, response: $json.body.turnstile_token, remoteip: $json.headers['cf-connecting-ip'] || '' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "c910b7fe-6f10-4fd5-8d91-4591a715b0e7",
+      "name": "Verify Turnstile",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b3dc9bb9-946d-45fc-9b14-704fb52e4a4d",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "9f15e1fa-d3c0-4d81-9c35-302742707b28",
+      "name": "Turnstile OK?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT count(*) FROM demo_sessions\n     WHERE email = $1::citext AND created_at > now() - interval '1 day') < 3\n  AND\n  (SELECT count(*) FROM demo_email_codes\n     WHERE email = $1::citext AND created_at > now() - interval '1 hour') < 3\n  AS allowed",
+        "options": {
+          "queryReplacement": "={{ [$('Webhook').first().json.body.email] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "ebd07f4c-8a82-4d09-9c5e-c78119de3654",
+      "name": "Check Quota",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5725cf40-3d36-4339-9beb-1b26951979c5",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        -96
+      ],
+      "id": "59bd3051-9048-4060-82de-6b852e82e528",
+      "name": "Within Quota?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst body = $('Webhook').first().json.body || {};\nconst email = String(body.email || '').trim().toLowerCase();\nconst consent = body.consent === true || body.consent === 'true';\n\n// Shape check only. Deliverability is proven by the code arriving.\nif (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]+$/.test(email)) throw new Error('INVALID_EMAIL');\nif (!consent) throw new Error('CONSENT_REQUIRED');\n\n// randomInt is uniform and unpredictable; Math.random() is neither.\nconst code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');\n\nconst pepper = $env.DEMO_CODE_PEPPER;\nif (!pepper) throw new Error('DEMO_CODE_PEPPER is not set on the n8n container');\nconst codeHash = crypto.createHmac('sha256', pepper).update(code).digest('hex');\n\n// The unsubscribe link is signed so it cannot be used to remove, or\n// enumerate, anyone else's address.\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\nconst unsubMac = crypto.createHmac('sha256', secret).update('unsub:' + email).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\nconst unsubToken = Buffer.from(email).toString('base64url') + '.' + unsubMac;\n\nreturn [{ json: { email, code, code_hash: codeHash, unsub_token: unsubToken } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -192
+      ],
+      "id": "481c6b9e-a052-42e9-a2b5-dad6526330b8",
+      "name": "Generate Code",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO demo_email_codes (email, code_hash, expires_at)\nVALUES ($1::citext, $2::text, now() + interval '10 minutes')",
+        "options": {
+          "queryReplacement": "={{ [$json.email, $json.code_hash] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1248,
+        -192
+      ],
+      "id": "eb29b0e9-114a-4157-bf34-aa2de65e26ae",
+      "name": "Store Code",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "no-reply@adaptivetech.ro",
+        "toEmail": "={{ $('Generate Code').first().json.email }}",
+        "subject": "Codul tău pentru demo-ul Adaptive Technologies",
+        "emailFormat": "text",
+        "text": "={{ 'Codul tău este: ' + $('Generate Code').first().json.code + '\\n\\nExpiră în 10 minute.\\n\\nDacă nu ai cerut acest cod, ignoră acest mesaj.\\n\\nNu mai vrei emailuri de la noi? ' + $env.DEMO_PUBLIC_ORIGIN + '/api/demo/unsubscribe?t=' + $('Generate Code').first().json.unsub_token }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1456,
+        -192
+      ],
+      "id": "1fbfb9ad-4fd8-4514-bffa-2c1357843d05",
+      "name": "Send Code Email"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1664,
+        -192
+      ],
+      "id": "9568f174-b1b5-4266-8faf-8e7698952e3c",
+      "name": "Respond Accepted"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1664,
+        96
+      ],
+      "id": "964909ac-ad81-4766-a58e-97c9a49c8e51",
+      "name": "Respond Accepted (rejected)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Turnstile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Turnstile": {
+      "main": [
+        [
+          {
+            "node": "Turnstile OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turnstile OK?": {
+      "main": [
+        [
+          {
+            "node": "Check Quota",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Quota": {
+      "main": [
+        [
+          {
+            "node": "Within Quota?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Within Quota?": {
+      "main": [
+        [
+          {
+            "node": "Generate Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Code": {
+      "main": [
+        [
+          {
+            "node": "Store Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Accepted (rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Code": {
+      "main": [
+        [
+          {
+            "node": "Send Code Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Code Email": {
+      "main": [
+        [
+          {
+            "node": "Respond Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
