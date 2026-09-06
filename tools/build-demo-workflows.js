@@ -108,14 +108,17 @@ if (!row || !row.session_id) {
 return [{ json: row }];
 `;
 
+// floor(...)::bigint, not a bare multiply: extract(epoch ...) * 1000 yields a
+// NUMERIC with a fractional part, and a fractional expiry in a token payload
+// fails verifyToken's /^\d+$/ check -- minting a token that verifies nowhere.
 const loadSessionSql =
-  'SELECT id AS session_id,\n' +
+  'SELECT id::text AS session_id,\n' +
   '       email,\n' +
   '       files_uploaded,\n' +
   '       messages_used,\n' +
   '       input_tokens,\n' +
   '       output_tokens,\n' +
-  '       extract(epoch FROM expires_at) * 1000 AS expires_ms\n' +
+  '       floor(extract(epoch FROM expires_at) * 1000)::bigint AS expires_ms\n' +
   'FROM demo_sessions\n' +
   'WHERE id = $1::uuid\n' +
   '  AND expires_at > now()';
@@ -157,8 +160,124 @@ const verifySession = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// demo-verify-session-test
+//
+// A harness, not a deliverable. It seeds its own session if none is live, so
+// there is nothing to paste by hand and nothing that goes stale when the 2h
+// expiry lapses -- run it again tomorrow and it just works.
+//
+// The sub-workflow id below is the one on the target instance. If the import
+// lands somewhere else, re-pick it from the node's dropdown.
+// ---------------------------------------------------------------------------
+const VERIFY_SESSION_WORKFLOW_ID = 'qBScjzp3KtIuZJhy';
 
-const built = [['demo-verify-session.json', verifySession]];
+const seedSessionSql =
+  "WITH live AS (\n" +
+  "  SELECT id, expires_at\n" +
+  "  FROM demo_sessions\n" +
+  "  WHERE email = 'verify-session-test@x.test' AND expires_at > now()\n" +
+  "  ORDER BY created_at DESC\n" +
+  "  LIMIT 1\n" +
+  "), seeded AS (\n" +
+  "  INSERT INTO demo_sessions (email, expires_at)\n" +
+  "  SELECT 'verify-session-test@x.test', now() + interval '2 hours'\n" +
+  "  WHERE NOT EXISTS (SELECT 1 FROM live)\n" +
+  "  RETURNING id, expires_at\n" +
+  ")\n" +
+  "SELECT id::text AS session_id,\n" +
+  "       floor(extract(epoch FROM expires_at) * 1000)::bigint AS expires_ms\n" +
+  "FROM live\n" +
+  "UNION ALL\n" +
+  "SELECT id::text, floor(extract(epoch FROM expires_at) * 1000)::bigint\n" +
+  "FROM seeded";
+
+const mintTokenCode = `const crypto = require('crypto');
+
+const row = $input.first().json;
+const secret = $env.DEMO_SESSION_SECRET;
+if (!secret) {
+  throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');
+}
+
+// expires_ms arrives already floored from SQL. Concatenating rather than
+// arithmetic keeps it exact whether the driver hands back a bigint as a
+// number or a string.
+const payload = row.session_id + '.' + row.expires_ms;
+
+const mac = crypto.createHmac('sha256', secret).update(payload).digest('base64')
+  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+
+const token = payload + '.' + mac;
+
+// Flip one character of the MAC to get a token that must be REJECTED. Swap
+// which line is returned to test the unhappy path -- verify-session should
+// throw SESSION_INVALID, and a session coming back instead would mean the
+// signature check is not doing its job.
+const tampered = payload + '.' + (mac[0] === 'A' ? 'B' : 'A') + mac.slice(1);
+
+return [{
+  json: {
+    cookie_header: 'demo_session=' + token,
+    // cookie_header: 'demo_session=' + tampered,
+    expected_session_id: row.session_id,
+  },
+}];
+`;
+
+const verifySessionTest = workflow(
+  'demo-verify-session-test',
+  [
+    node("When clicking 'Execute workflow'", 'n8n-nodes-base.manualTrigger', 1,
+      {}, [0, 0]),
+
+    node('Seed Or Reuse A Session', 'n8n-nodes-base.postgres', 2.6,
+      { operation: 'executeQuery', query: seedSessionSql, options: {} },
+      [208, 0],
+      { credentials: { postgres: PG_CRED } }),
+
+    node('Mint Token', 'n8n-nodes-base.code', 2,
+      { jsCode: mintTokenCode }, [416, 0]),
+
+    node("Call demo-verify-session", 'n8n-nodes-base.executeWorkflow', 1.3,
+      {
+        workflowId: {
+          __rl: true,
+          value: VERIFY_SESSION_WORKFLOW_ID,
+          mode: 'list',
+          cachedResultUrl: '/workflow/' + VERIFY_SESSION_WORKFLOW_ID,
+          cachedResultName: 'demo-verify-session',
+        },
+        workflowInputs: {
+          mappingMode: 'defineBelow',
+          value: {},
+          matchingColumns: [],
+          schema: [],
+          attemptToConvertTypes: false,
+          convertFieldsToString: true,
+        },
+        options: {},
+      },
+      [624, 0]),
+  ],
+  {
+    "When clicking 'Execute workflow'": {
+      main: [[{ node: 'Seed Or Reuse A Session', type: 'main', index: 0 }]],
+    },
+    'Seed Or Reuse A Session': {
+      main: [[{ node: 'Mint Token', type: 'main', index: 0 }]],
+    },
+    'Mint Token': {
+      main: [[{ node: 'Call demo-verify-session', type: 'main', index: 0 }]],
+    },
+  }
+);
+
+// ---------------------------------------------------------------------------
+
+const built = [
+  ['demo-verify-session.json', verifySession],
+  ['demo-verify-session-test.json', verifySessionTest],
+];
 
 for (const [file, wf] of built) {
   const target = path.join(OUT, file);

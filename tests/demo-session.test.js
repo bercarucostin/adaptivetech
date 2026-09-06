@@ -92,6 +92,21 @@ test('a token at the length limit is still processed normally', () => {
   assert.deepStrictEqual(verifyToken(token, SECRET, NOW), { sessionId: SID, expiresAtMs: SOON });
 });
 
+test('signToken refuses a fractional expiry rather than minting a dead token', () => {
+  // Postgres returns extract(epoch ...) * 1000 as a fraction-bearing numeric.
+  // Signing it produces "...121.642" in the payload, which verifyToken's
+  // /^\d+$/ check rejects -- so the token would verify nowhere, ever.
+  assert.throws(() => signToken(SID, 1788695089121.642, SECRET), /integer/);
+  assert.throws(() => signToken(SID, NaN, SECRET), /integer/);
+  assert.throws(() => signToken(SID, '1788695089121', SECRET), /integer/);
+});
+
+test('a token signed with an integer expiry still round-trips', () => {
+  const token = signToken(SID, Math.floor(1788695089121.642), SECRET);
+  assert.deepStrictEqual(verifyToken(token, SECRET, NOW),
+    { sessionId: SID, expiresAtMs: 1788695089121 });
+});
+
 test('signToken refuses a non-string secret', () => {
   assert.throws(() => signToken(SID, SOON, {}), /string or Buffer/);
 });

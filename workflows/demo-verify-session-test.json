@@ -1,0 +1,120 @@
+{
+  "name": "demo-verify-session-test",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0fab21c3-d713-4804-92ae-56d8b91cb278",
+      "name": "When clicking 'Execute workflow'"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH live AS (\n  SELECT id, expires_at\n  FROM demo_sessions\n  WHERE email = 'verify-session-test@x.test' AND expires_at > now()\n  ORDER BY created_at DESC\n  LIMIT 1\n), seeded AS (\n  INSERT INTO demo_sessions (email, expires_at)\n  SELECT 'verify-session-test@x.test', now() + interval '2 hours'\n  WHERE NOT EXISTS (SELECT 1 FROM live)\n  RETURNING id, expires_at\n)\nSELECT id::text AS session_id,\n       floor(extract(epoch FROM expires_at) * 1000)::bigint AS expires_ms\nFROM live\nUNION ALL\nSELECT id::text, floor(extract(epoch FROM expires_at) * 1000)::bigint\nFROM seeded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "125c6e51-c934-42a0-9dd8-e509ef074430",
+      "name": "Seed Or Reuse A Session",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst row = $input.first().json;\nconst secret = $env.DEMO_SESSION_SECRET;\nif (!secret) {\n  throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');\n}\n\n// expires_ms arrives already floored from SQL. Concatenating rather than\n// arithmetic keeps it exact whether the driver hands back a bigint as a\n// number or a string.\nconst payload = row.session_id + '.' + row.expires_ms;\n\nconst mac = crypto.createHmac('sha256', secret).update(payload).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n\nconst token = payload + '.' + mac;\n\n// Flip one character of the MAC to get a token that must be REJECTED. Swap\n// which line is returned to test the unhappy path -- verify-session should\n// throw SESSION_INVALID, and a session coming back instead would mean the\n// signature check is not doing its job.\nconst tampered = payload + '.' + (mac[0] === 'A' ? 'B' : 'A') + mac.slice(1);\n\nreturn [{\n  json: {\n    cookie_header: 'demo_session=' + token,\n    // cookie_header: 'demo_session=' + tampered,\n    expected_session_id: row.session_id,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "995a7985-ab47-4356-8c81-6b903007ad50",
+      "name": "Mint Token"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "qBScjzp3KtIuZJhy",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/qBScjzp3KtIuZJhy",
+          "cachedResultName": "demo-verify-session"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "ed78ac02-11ed-4a1b-94f1-79e03c72c530",
+      "name": "Call demo-verify-session"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Seed Or Reuse A Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Or Reuse A Session": {
+      "main": [
+        [
+          {
+            "node": "Mint Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mint Token": {
+      "main": [
+        [
+          {
+            "node": "Call demo-verify-session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
