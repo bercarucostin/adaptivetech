@@ -397,7 +397,17 @@ const uploadStatus = workflow(
         },
       },
       [624, 0],
-      { credentials: { postgres: PG_CRED }, retryOnFail: true }),
+      {
+        credentials: { postgres: PG_CRED },
+        retryOnFail: true,
+        // Zero rows is a LEGITIMATE outcome here -- a stale upload_id, or one
+        // belonging to another session. Without this, a no-rows query emits no
+        // items, n8n does not run the downstream node, Respond to Webhook
+        // never fires, and the caller is left hanging on a request that n8n
+        // reports as "Succeeded". alwaysOutputData emits one empty item so the
+        // route still answers.
+        alwaysOutputData: true,
+      }),
     respondNode('Respond',
       '={{ JSON.stringify($json || {}) }}', 200, [832, 0]),
   ],
