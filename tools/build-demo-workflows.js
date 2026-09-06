@@ -21,8 +21,47 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'workflows');
 
-// The Postgres credential as it exists on the target instance.
+// Credentials as they exist on the target instance.
 const PG_CRED = { id: '1Ig8IigY7ugDJKhy', name: 'Supabase' };
+const SMTP_CRED = { id: 'BI2J0KgYoH5uWjln', name: 'SMTP account' };
+
+// Real ids read back from n8n exports, so a rebuild produces the files that
+// are already deployed rather than a set that has to be re-wired by hand.
+//
+// The workflow ids are NOT decorative. demo-verify-session is called by id
+// from four other workflows, and n8n assigns those ids on import -- so they
+// cannot be guessed and every one below was read off the instance. The
+// collision this table exists to prevent already happened once: the id
+// originally pinned for demo-verify-session was later handed to demo-upload,
+// which would have made every route call the upload workflow to check its
+// session.
+//
+// webhookId only addresses a workflow's TEST url; production routes register
+// by `path`. It is pinned anyway so a fresh export diffs clean against the
+// repo instead of churning on every rebuild.
+const N8N_IDS = {
+  'demo-verify-session': { id: 'QWICxTnfbkvLtmFQ' },
+  'demo-request-code': {
+    id: '5ZNd32OKMgsNX2nE',
+    webhooks: { Webhook: '239e6594-8140-4ed5-ad7b-9340452f7a51' },
+  },
+  'demo-verify-code': {
+    id: 'mbuQUEIfcw9xu5es',
+    webhooks: { Webhook: '47d799d5-0555-48d4-ae9d-14106e99cfa3' },
+  },
+  'demo-upload': {
+    id: 'qBScjzp3KtIuZJhy',
+    webhooks: { Webhook: 'b8066e2c-cbdc-4e31-9e0f-68c61f40636a' },
+  },
+  'demo-upload-status': {
+    id: 'NjQwVYmXFTdJQACc',
+    webhooks: { Webhook: '38157711-a3c1-4ec3-b521-ea96efd01009' },
+  },
+};
+
+// Called by id from demo-upload, demo-upload-status, demo-search and
+// demo-chat. Read from the table above so it cannot drift from it.
+const VERIFY_SESSION_WORKFLOW_ID = N8N_IDS['demo-verify-session'].id;
 
 /** Pull the ---8<--- SHARED block out of a lib module, verbatim. */
 function shared(libFile) {
@@ -66,10 +105,17 @@ const workflow = (name, nodes, connections) => {
   // Assigned here rather than in each constructor because this is the only
   // place that knows the workflow name -- two workflows may hold nodes with
   // the same name, and their ids must still differ.
+  const pinned = N8N_IDS[name] || {};
+
   for (const n of nodes) {
     const seed = name + '|' + n.name;
     n.id = stableId(seed);
-    if (n.webhookId) n.webhookId = stableId(seed + '|webhook');
+    // Prefer the id n8n actually assigned; fall back to a derived one for a
+    // workflow that has not been imported yet.
+    if (n.webhookId) {
+      n.webhookId = (pinned.webhooks && pinned.webhooks[n.name])
+        || stableId(seed + '|webhook');
+    }
     const conds = n.parameters && n.parameters.conditions
       && n.parameters.conditions.conditions;
     if (Array.isArray(conds)) {
@@ -77,7 +123,7 @@ const workflow = (name, nodes, connections) => {
     }
   }
 
-  return {
+  const wf = {
     name,
     nodes,
     pinData: {},
@@ -86,6 +132,11 @@ const workflow = (name, nodes, connections) => {
     settings: { executionOrder: 'v1', binaryMode: 'separate' },
     tags: [],
   };
+  // Carried so the file matches a fresh export from the instance. Import
+  // through the UI assigns its own id regardless; this keeps the repo honest
+  // and lets the n8n CLI update in place.
+  if (pinned.id) wf.id = pinned.id;
+  return wf;
 };
 
 // ---------------------------------------------------------------------------
@@ -203,10 +254,11 @@ const verifySession = workflow(
 // there is nothing to paste by hand and nothing that goes stale when the 2h
 // expiry lapses -- run it again tomorrow and it just works.
 //
-// The sub-workflow id below is the one on the target instance. If the import
-// lands somewhere else, re-pick it from the node's dropdown.
+// It calls demo-verify-session by VERIFY_SESSION_WORKFLOW_ID, which is
+// defined once at the top of this file from N8N_IDS. It used to be redeclared
+// here with a stale value, and that value later became demo-upload's id --
+// so this harness was calling the upload workflow to verify a session.
 // ---------------------------------------------------------------------------
-const VERIFY_SESSION_WORKFLOW_ID = 'qBScjzp3KtIuZJhy';
 
 const seedSessionSql =
   "WITH live AS (\n" +
@@ -584,7 +636,8 @@ const requestCode = workflow(
           "'/api/demo/unsubscribe?t=' + $('Generate Code').first().json.unsub_token }}",
         options: {},
       },
-      [1456, -192]),
+      [1456, -192],
+      { credentials: { smtp: SMTP_CRED } }),
 
     respondNode('Respond Accepted',
       '={{ JSON.stringify({ ok: true }) }}', 202, [1664, -192]),

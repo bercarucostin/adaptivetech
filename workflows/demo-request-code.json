@@ -16,7 +16,7 @@
       ],
       "id": "0f30b560-cbb4-43dc-adea-28ad64823f86",
       "name": "Webhook",
-      "webhookId": "59f59b0f-1880-4309-af31-5843a64817b4"
+      "webhookId": "239e6594-8140-4ed5-ad7b-9340452f7a51"
     },
     {
       "parameters": {
@@ -186,7 +186,13 @@
         -192
       ],
       "id": "62d8f53d-c08b-4e38-a170-99546fe1ee48",
-      "name": "Send Code Email"
+      "name": "Send Code Email",
+      "credentials": {
+        "smtp": {
+          "id": "BI2J0KgYoH5uWjln",
+          "name": "SMTP account"
+        }
+      }
     },
     {
       "parameters": {
@@ -354,5 +360,6 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "tags": []
+  "tags": [],
+  "id": "5ZNd32OKMgsNX2nE"
 }
