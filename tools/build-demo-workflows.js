@@ -41,15 +41,52 @@ const node = (name, type, typeVersion, parameters, position, extra) =>
     extra || {}
   );
 
-const workflow = (name, nodes, connections) => ({
-  name,
-  nodes,
-  pinData: {},
-  connections,
-  active: false,
-  settings: { executionOrder: 'v1', binaryMode: 'separate' },
-  tags: [],
-});
+/** A UUID derived from a string rather than from randomness.
+ *
+ *  Every id in a generated workflow used to be crypto.randomUUID(), which
+ *  made each rebuild produce a file that LOOKED like a different workflow to
+ *  n8n. Re-importing after a rebuild then landed as a new workflow instead of
+ *  an update: the copy arrives inactive (active: false below), it collides
+ *  with the original on its webhook path, and the route starts answering
+ *  500 "webhook is not registered" -- with the old workflow still sitting
+ *  there looking fine. Deriving ids from names makes a rebuild idempotent.
+ */
+function stableId(seed) {
+  const h = crypto.createHash('sha256').update(seed).digest('hex');
+  // Shaped as a v4 UUID. n8n only needs a unique string, but anything that
+  // reads these expects the canonical form.
+  const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
+  return [
+    h.slice(0, 8), h.slice(8, 12), '4' + h.slice(13, 16),
+    variant + h.slice(17, 20), h.slice(20, 32),
+  ].join('-');
+}
+
+const workflow = (name, nodes, connections) => {
+  // Assigned here rather than in each constructor because this is the only
+  // place that knows the workflow name -- two workflows may hold nodes with
+  // the same name, and their ids must still differ.
+  for (const n of nodes) {
+    const seed = name + '|' + n.name;
+    n.id = stableId(seed);
+    if (n.webhookId) n.webhookId = stableId(seed + '|webhook');
+    const conds = n.parameters && n.parameters.conditions
+      && n.parameters.conditions.conditions;
+    if (Array.isArray(conds)) {
+      conds.forEach((c, i) => { c.id = stableId(seed + '|condition|' + i); });
+    }
+  }
+
+  return {
+    name,
+    nodes,
+    pinData: {},
+    connections,
+    active: false,
+    settings: { executionOrder: 'v1', binaryMode: 'separate' },
+    tags: [],
+  };
+};
 
 // ---------------------------------------------------------------------------
 // demo-verify-session

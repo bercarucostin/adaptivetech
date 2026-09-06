@@ -9,7 +9,7 @@
         0,
         0
       ],
-      "id": "96629d37-8017-4f6c-b4b6-1cfc4724ad3d",
+      "id": "5c4d871c-d9ce-4817-966b-cfd21ec10b9e",
       "name": "When clicking 'Execute workflow'"
     },
     {
@@ -24,7 +24,7 @@
         208,
         0
       ],
-      "id": "df9f0717-e575-4e7f-bed4-6ed840f1dfb1",
+      "id": "bd0e4cc6-926e-457a-a58c-8ce0696a8365",
       "name": "Seed Or Reuse A Session",
       "credentials": {
         "postgres": {
@@ -43,7 +43,7 @@
         416,
         0
       ],
-      "id": "54a73803-7d0b-4cff-8d5b-50b06c19a05f",
+      "id": "d5302923-8610-4c9f-9f92-52213788567a",
       "name": "Mint Token"
     },
     {
@@ -71,7 +71,7 @@
         624,
         0
       ],
-      "id": "3b549b3f-1269-4389-9839-d03ed05cd96c",
+      "id": "967cb94c-5e10-4ea5-817c-b30a63bfbe63",
       "name": "Call demo-verify-session"
     }
   ],
