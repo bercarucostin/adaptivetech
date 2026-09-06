@@ -132,13 +132,25 @@ const workflow = (name, nodes, connections) => {
     }
   }
 
+  const settings = { executionOrder: 'v1', binaryMode: 'separate' };
+
+  // Point every demo workflow at the shared error handler -- but only once
+  // that handler has an id, and never at itself. Until then the field is
+  // omitted rather than filled with a guess: a settings.errorWorkflow naming
+  // a workflow that does not exist means failures go nowhere at all, which
+  // is worse than the honest default of nowhere-but-the-executions-list.
+  const errorWorkflowId = (N8N_IDS['error-handling-demo'] || {}).id;
+  if (errorWorkflowId && name !== 'error-handling-demo') {
+    settings.errorWorkflow = errorWorkflowId;
+  }
+
   const wf = {
     name,
     nodes,
     pinData: {},
     connections,
     active: false,
-    settings: { executionOrder: 'v1', binaryMode: 'separate' },
+    settings: settings,
     tags: [],
   };
   // Carried so the file matches a fresh export from the instance. Import
@@ -2096,6 +2108,165 @@ const unsubscribe = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// error-handling-demo
+//
+// Set as the error workflow on every demo-* workflow, so a failure anywhere
+// in the demo reaches a human instead of sitting in the Executions list.
+//
+// Two things differ from error-handling-ingestion, and both come from this
+// being a PUBLIC endpoint rather than an internal one:
+//
+//   1. It carries no visitor data. The ingestion handler can afford to paste
+//      an error message straight into an email, because its inputs are the
+//      team's own Drive files. Here the inputs are a stranger's document and
+//      a stranger's questions, and error messages quote their subjects --
+//      Parse Extraction and Parse Answer both stringify a slice of the model
+//      response into the throw. The privacy policy promises those documents
+//      are deleted within three hours; copying fragments of them into a
+//      mailbox that keeps everything forever would quietly break that. So the
+//      email says what failed and links to the execution, and the message
+//      field is redacted on the way out.
+//
+//   2. It throttles. A public route fails for everyone at once -- if Gemini
+//      is down, every visitor's upload fails, and an unthrottled handler
+//      turns one outage into hundreds of identical emails, which is how a
+//      team learns to filter the alert mailbox.
+// ---------------------------------------------------------------------------
+const ALERT_THROTTLE_MINUTES = 15;
+
+const buildErrorReportCode = `// Build a report from the n8n Error Trigger, minus anything a visitor owns.
+const t = $('Error Trigger').first().json || {};
+const ex = t.execution || {};
+const wf = t.workflow || {};
+const err = ex.error || {};
+
+const failedNode = (err.node && err.node.name) || ex.lastNodeExecuted || 'unknown';
+const httpCode = err.httpCode || err.statusCode || (err.context && err.context.httpCode) || '';
+const rawMessage = err.message || (typeof err === 'string' ? err : '') || 'Unknown error';
+const when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' });
+const execUrl = ex.url || '';
+
+// Defence in depth, not a guarantee. The execution itself holds everything
+// and is one click away for whoever needs it -- this only keeps visitor
+// content out of the mail spool.
+function redact(s) {
+  return String(s == null ? '' : s)
+    // Long unbroken runs are base64 documents or embedding vectors.
+    .replace(/[A-Za-z0-9+/=_-]{80,}/g, '[redacted:blob]')
+    // A visitor's address can surface in a Postgres constraint error.
+    .replace(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/g, '[redacted:email]')
+    .slice(0, 300);
+}
+
+const message = redact(rawMessage);
+
+// --- throttle -------------------------------------------------------------
+// Static data persists between production executions of THIS workflow, so no
+// table and no credential is needed. If it ever stops persisting the throttle
+// simply stops suppressing -- it fails toward sending, never toward silence.
+const store = $getWorkflowStaticData('global');
+const key = (wf.name || '?') + '|' + failedNode;
+const now = Date.now();
+const windowMs = ${ALERT_THROTTLE_MINUTES} * 60 * 1000;
+
+store.alerts = store.alerts || {};
+const prev = store.alerts[key];
+let suppressed = 0;
+
+if (prev && (now - prev.lastSentAt) < windowMs) {
+  // Same failure, same node, still inside the window: count it and stop.
+  prev.since = (prev.since || 0) + 1;
+  return [{ json: { send: false } }];
+}
+
+if (prev) suppressed = prev.since || 0;
+store.alerts[key] = { lastSentAt: now, since: 0 };
+
+// Drop entries older than a day so this cannot grow without bound.
+for (const k of Object.keys(store.alerts)) {
+  if (now - store.alerts[k].lastSentAt > 86400000) delete store.alerts[k];
+}
+// --- end throttle ---------------------------------------------------------
+
+const esc = function (s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+};
+
+const subject = '⚠️ ' + (wf.name || 'Workflow') + ' — failed at "' + failedNode + '"' +
+  (httpCode ? ' (' + httpCode + ')' : '');
+
+const fields = [
+  ['Workflow', (wf.name || '?') + ' (' + (wf.id || '?') + ')'],
+  ['Failed node', failedNode],
+  ['Error', message],
+  httpCode ? ['HTTP code', String(httpCode)] : null,
+  ['When', when + ' (Europe/Bucharest)'],
+  ['Execution ID', String(ex.id || '?')],
+  ex.mode ? ['Mode', ex.mode] : null,
+  suppressed ? ['Also failed', suppressed + ' more time(s) in the last ' +
+    ${ALERT_THROTTLE_MINUTES} + ' minutes'] : null,
+].filter(Boolean);
+
+const table = fields.map(function (r) {
+  return '<tr><td style="padding:4px 12px;font-weight:600;vertical-align:top;' +
+    'white-space:nowrap">' + esc(r[0]) + '</td><td style="padding:4px 12px">' +
+    esc(r[1]) + '</td></tr>';
+}).join('');
+
+const html =
+  '<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111;line-height:1.45">' +
+  '<h2 style="margin:0 0 10px">' + esc(wf.name || 'Workflow') + ' error</h2>' +
+  '<table style="border-collapse:collapse;background:#f7f7f8;border:1px solid #e2e2e2">' +
+  table + '</table>' +
+  (execUrl
+    ? '<p style="margin:14px 0"><a href="' + esc(execUrl) +
+      '" style="color:#2563eb">Open the failed execution in n8n →</a></p>'
+    : '') +
+  '<p style="margin:14px 0 4px;color:#666;font-size:12px">' +
+  'Visitor content is deliberately not included here. The full execution, ' +
+  'including the document and the question, is in n8n until it is pruned.' +
+  '</p></div>';
+
+return [{ json: { send: true, subject: subject, html: html } }];
+`;
+
+const errorHandlingDemo = workflow(
+  'error-handling-demo',
+  [
+    node('Error Trigger', 'n8n-nodes-base.errorTrigger', 1, {}, [0, 0]),
+
+    node('Build Error Report', 'n8n-nodes-base.code', 2,
+      { jsCode: buildErrorReportCode }, [208, 0]),
+
+    ifBooleanNode('Send Alert?', '={{ $json.send }}', [416, 0]),
+
+    node('Email Adaptive Tech Team', 'n8n-nodes-base.emailSend', 2.1,
+      {
+        fromEmail: 'no-reply@adaptivetech.ro',
+        toEmail: 'service_account@adaptivetech.ro',
+        subject: '=[Demo] {{ $json.subject }}',
+        html: '={{ $json.html }}',
+        options: {},
+      },
+      [624, -96],
+      { credentials: { smtp: SMTP_CRED } }),
+    // The false branch ends here on purpose: a throttled alert is a
+    // no-op, not something to log or respond to.
+  ],
+  {
+    'Error Trigger': { main: [[{ node: 'Build Error Report', type: 'main', index: 0 }]] },
+    'Build Error Report': { main: [[{ node: 'Send Alert?', type: 'main', index: 0 }]] },
+    'Send Alert?': {
+      main: [
+        [{ node: 'Email Adaptive Tech Team', type: 'main', index: 0 }],
+        [],
+      ],
+    },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
@@ -2107,6 +2278,7 @@ const built = [
   ['demo-chat.json', chat],
   ['demo-cleanup.json', cleanup],
   ['demo-unsubscribe.json', unsubscribe],
+  ['error-handling-demo.json', errorHandlingDemo],
 ];
 
 for (const [file, wf] of built) {

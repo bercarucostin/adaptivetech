@@ -1,0 +1,129 @@
+{
+  "name": "error-handling-demo",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c682e32a-3b5a-437f-9f84-04e49608eb9d",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a report from the n8n Error Trigger, minus anything a visitor owns.\nconst t = $('Error Trigger').first().json || {};\nconst ex = t.execution || {};\nconst wf = t.workflow || {};\nconst err = ex.error || {};\n\nconst failedNode = (err.node && err.node.name) || ex.lastNodeExecuted || 'unknown';\nconst httpCode = err.httpCode || err.statusCode || (err.context && err.context.httpCode) || '';\nconst rawMessage = err.message || (typeof err === 'string' ? err : '') || 'Unknown error';\nconst when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' });\nconst execUrl = ex.url || '';\n\n// Defence in depth, not a guarantee. The execution itself holds everything\n// and is one click away for whoever needs it -- this only keeps visitor\n// content out of the mail spool.\nfunction redact(s) {\n  return String(s == null ? '' : s)\n    // Long unbroken runs are base64 documents or embedding vectors.\n    .replace(/[A-Za-z0-9+/=_-]{80,}/g, '[redacted:blob]')\n    // A visitor's address can surface in a Postgres constraint error.\n    .replace(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/g, '[redacted:email]')\n    .slice(0, 300);\n}\n\nconst message = redact(rawMessage);\n\n// --- throttle -------------------------------------------------------------\n// Static data persists between production executions of THIS workflow, so no\n// table and no credential is needed. If it ever stops persisting the throttle\n// simply stops suppressing -- it fails toward sending, never toward silence.\nconst store = $getWorkflowStaticData('global');\nconst key = (wf.name || '?') + '|' + failedNode;\nconst now = Date.now();\nconst windowMs = 15 * 60 * 1000;\n\nstore.alerts = store.alerts || {};\nconst prev = store.alerts[key];\nlet suppressed = 0;\n\nif (prev && (now - prev.lastSentAt) < windowMs) {\n  // Same failure, same node, still inside the window: count it and stop.\n  prev.since = (prev.since || 0) + 1;\n  return [{ json: { send: false } }];\n}\n\nif (prev) suppressed = prev.since || 0;\nstore.alerts[key] = { lastSentAt: now, since: 0 };\n\n// Drop entries older than a day so this cannot grow without bound.\nfor (const k of Object.keys(store.alerts)) {\n  if (now - store.alerts[k].lastSentAt > 86400000) delete store.alerts[k];\n}\n// --- end throttle ---------------------------------------------------------\n\nconst esc = function (s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n};\n\nconst subject = '⚠️ ' + (wf.name || 'Workflow') + ' — failed at \"' + failedNode + '\"' +\n  (httpCode ? ' (' + httpCode + ')' : '');\n\nconst fields = [\n  ['Workflow', (wf.name || '?') + ' (' + (wf.id || '?') + ')'],\n  ['Failed node', failedNode],\n  ['Error', message],\n  httpCode ? ['HTTP code', String(httpCode)] : null,\n  ['When', when + ' (Europe/Bucharest)'],\n  ['Execution ID', String(ex.id || '?')],\n  ex.mode ? ['Mode', ex.mode] : null,\n  suppressed ? ['Also failed', suppressed + ' more time(s) in the last ' +\n    15 + ' minutes'] : null,\n].filter(Boolean);\n\nconst table = fields.map(function (r) {\n  return '<tr><td style=\"padding:4px 12px;font-weight:600;vertical-align:top;' +\n    'white-space:nowrap\">' + esc(r[0]) + '</td><td style=\"padding:4px 12px\">' +\n    esc(r[1]) + '</td></tr>';\n}).join('');\n\nconst html =\n  '<div style=\"font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111;line-height:1.45\">' +\n  '<h2 style=\"margin:0 0 10px\">' + esc(wf.name || 'Workflow') + ' error</h2>' +\n  '<table style=\"border-collapse:collapse;background:#f7f7f8;border:1px solid #e2e2e2\">' +\n  table + '</table>' +\n  (execUrl\n    ? '<p style=\"margin:14px 0\"><a href=\"' + esc(execUrl) +\n      '\" style=\"color:#2563eb\">Open the failed execution in n8n →</a></p>'\n    : '') +\n  '<p style=\"margin:14px 0 4px;color:#666;font-size:12px\">' +\n  'Visitor content is deliberately not included here. The full execution, ' +\n  'including the document and the question, is in n8n until it is pruned.' +\n  '</p></div>';\n\nreturn [{ json: { send: true, subject: subject, html: html } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "cda9dbef-74f3-4929-a8af-322bde850384",
+      "name": "Build Error Report"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2990bbda-45ea-4350-afa1-b800342a12f1",
+              "leftValue": "={{ $json.send }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "e73dcd6e-eff0-4b38-bff7-8dabbb118df4",
+      "name": "Send Alert?"
+    },
+    {
+      "parameters": {
+        "fromEmail": "no-reply@adaptivetech.ro",
+        "toEmail": "service_account@adaptivetech.ro",
+        "subject": "=[Demo] {{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "54e29166-df6d-4e4c-9dbc-650b64790bdb",
+      "name": "Email Adaptive Tech Team",
+      "credentials": {
+        "smtp": {
+          "id": "BI2J0KgYoH5uWjln",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Report": {
+      "main": [
+        [
+          {
+            "node": "Send Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert?": {
+      "main": [
+        [
+          {
+            "node": "Email Adaptive Tech Team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
