@@ -273,10 +273,148 @@ const verifySessionTest = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// Shared helpers for the public webhook routes.
+// ---------------------------------------------------------------------------
+
+/** A public route. Caddy rewrites /api/demo/<x> to /webhook/demo/<x>. */
+function webhookNode(name, method, routePath, position) {
+  const id = crypto.randomUUID();
+  return Object.assign(
+    node(name, 'n8n-nodes-base.webhook', 2.1,
+      {
+        httpMethod: method,
+        path: 'demo/' + routePath,
+        // responseNode: this workflow decides the status and body itself,
+        // rather than n8n echoing the last node's output.
+        responseMode: 'responseNode',
+        options: {},
+      },
+      position),
+    { webhookId: id }
+  );
+}
+
+function respondNode(name, bodyExpression, statusCode, position) {
+  return node(name, 'n8n-nodes-base.respondToWebhook', 1.5,
+    {
+      respondWith: 'json',
+      responseBody: bodyExpression,
+      options: statusCode === 200 ? {} : { responseCode: statusCode },
+    },
+    position);
+}
+
+/** An If on a single boolean field. typeValidation is loose so a NULL or a
+ *  string 'true' from Postgres does not error the node instead of routing. */
+function ifBooleanNode(name, leftValue, position) {
+  return node(name, 'n8n-nodes-base.if', 2.3,
+    {
+      conditions: {
+        options: {
+          caseSensitive: true,
+          leftValue: '',
+          typeValidation: 'loose',
+          version: 3,
+        },
+        conditions: [
+          {
+            id: crypto.randomUUID(),
+            leftValue: leftValue,
+            rightValue: true,
+            operator: { type: 'boolean', operation: 'true', singleValue: true },
+          },
+        ],
+        combinator: 'and',
+      },
+      options: {},
+    },
+    position);
+}
+
+/** Calls demo-verify-session with the request's Cookie header. */
+function callVerifySession(position) {
+  return node('Verify Session', 'n8n-nodes-base.executeWorkflow', 1.3,
+    {
+      workflowId: {
+        __rl: true,
+        value: VERIFY_SESSION_WORKFLOW_ID,
+        mode: 'list',
+        cachedResultUrl: '/workflow/' + VERIFY_SESSION_WORKFLOW_ID,
+        cachedResultName: 'demo-verify-session',
+      },
+      workflowInputs: {
+        mappingMode: 'defineBelow',
+        value: {},
+        matchingColumns: [],
+        schema: [],
+        attemptToConvertTypes: false,
+        convertFieldsToString: true,
+      },
+      options: {},
+    },
+    position);
+}
+
+// ---------------------------------------------------------------------------
+// demo-upload-status
+//
+// The simplest public route, and the one that proves the webhook round trip.
+//
+// It is also the route the final review flagged: it is the ONLY endpoint whose
+// request body carries a record identifier. The query below pairs that
+// client-supplied upload_id with the session_id from the VERIFIED token, so an
+// id guessed from another visitor returns nothing. Dropping the session_id
+// clause would still pass every structural test and would leak another
+// visitor's filename, status and error string.
+// ---------------------------------------------------------------------------
+const shapeCookieCode = `// The sub-workflow takes the raw Cookie header and nothing else. Everything
+// the route needs from the request is read later from $('Webhook'), so no
+// client value can reach the session lookup.
+const req = $input.first().json;
+return [{ json: { cookie_header: (req.headers && req.headers.cookie) || '' } }];
+`;
+
+const uploadStatusSql =
+  'SELECT status, error, chunk_count, page_count\n' +
+  'FROM demo_uploads\n' +
+  'WHERE id = $2::uuid\n' +
+  '  AND session_id = $1::uuid';
+
+const uploadStatus = workflow(
+  'demo-upload-status',
+  [
+    webhookNode('Webhook', 'POST', 'upload-status', [0, 0]),
+    node('Shape Cookie', 'n8n-nodes-base.code', 2, { jsCode: shapeCookieCode }, [208, 0]),
+    callVerifySession([416, 0]),
+    node('Load Status', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: uploadStatusSql,
+        // $1 is the verified session, $2 the client's upload_id. Both, always.
+        options: {
+          queryReplacement:
+            "={{ [$json.session_id, $('Webhook').first().json.body.upload_id] }}",
+        },
+      },
+      [624, 0],
+      { credentials: { postgres: PG_CRED }, retryOnFail: true }),
+    respondNode('Respond',
+      '={{ JSON.stringify($json || {}) }}', 200, [832, 0]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Shape Cookie', type: 'main', index: 0 }]] },
+    'Shape Cookie': { main: [[{ node: 'Verify Session', type: 'main', index: 0 }]] },
+    'Verify Session': { main: [[{ node: 'Load Status', type: 'main', index: 0 }]] },
+    'Load Status': { main: [[{ node: 'Respond', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
   ['demo-verify-session-test.json', verifySessionTest],
+  ['demo-upload-status.json', uploadStatus],
 ];
 
 for (const [file, wf] of built) {

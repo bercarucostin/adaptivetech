@@ -1,0 +1,155 @@
+{
+  "name": "demo-upload-status",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo/upload-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0161d3e6-10d9-43b6-87dc-7840b56d13e1",
+      "name": "Webhook",
+      "webhookId": "4fd3a434-7602-4e9e-9a9d-85beac703066"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The sub-workflow takes the raw Cookie header and nothing else. Everything\n// the route needs from the request is read later from $('Webhook'), so no\n// client value can reach the session lookup.\nconst req = $input.first().json;\nreturn [{ json: { cookie_header: (req.headers && req.headers.cookie) || '' } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "6e56b37f-60b1-4b72-a890-2abfc8a2f87c",
+      "name": "Shape Cookie"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "qBScjzp3KtIuZJhy",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/qBScjzp3KtIuZJhy",
+          "cachedResultName": "demo-verify-session"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "19613d92-3919-4f0b-9d75-025753fc6c52",
+      "name": "Verify Session"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT status, error, chunk_count, page_count\nFROM demo_uploads\nWHERE id = $2::uuid\n  AND session_id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$json.session_id, $('Webhook').first().json.body.upload_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "id": "d96e6fc8-d955-4065-8cb7-d2bdad726f6d",
+      "name": "Load Status",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json || {}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        0
+      ],
+      "id": "d40fdc19-73ee-4e69-9946-70add5cb61d7",
+      "name": "Respond"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Shape Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Cookie": {
+      "main": [
+        [
+          {
+            "node": "Verify Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Session": {
+      "main": [
+        [
+          {
+            "node": "Load Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Status": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
