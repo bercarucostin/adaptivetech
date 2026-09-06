@@ -12,23 +12,24 @@ deploy; follow the steps below on the actual VPS.
 ## Architecture
 
 ```
-Internet -> Cloudflare (proxy, TLS, Turnstile) -> Hetzner:80/443 -> Caddy
-                                                                     |
-                                            /            \api/demo/*
-                                    static files        reverse_proxy
-                                  (website/, ro:)         n8n:5678
+Internet -> Cloudflare (proxy, TLS, Turnstile)
+              -> Coolify's proxy (:80/:443, TLS) -> Caddy (:80, no TLS)
+                                                      |
+                                          /                  \api/demo/*
+                                  static files            reverse_proxy
+                                  (baked into image)         n8n:5678
 ```
 
-- Caddy mounts `../website:/srv/site:ro` and serves it at `DEMO_DOMAIN`, so
-  `website/index.html` is the marketing site at `/` and `website/demo/index.html`
-  is the demo at `/demo`.
+- The site is **baked into the Caddy image** (see caddy.Dockerfile) and served
+  at `DEMO_DOMAIN`, so `website/index.html` is the marketing site at `/` and
+  `website/demo/index.html` is the demo at `/demo`.
 - Caddy proxies `/api/demo/*` to n8n's webhook path on the **same origin**
   (`DEMO_DOMAIN`, not a separate API subdomain). That's deliberate: it's what
   lets the session cookie be `httpOnly` and `SameSite=Strict` — a
   cross-origin API could not receive it under those settings.
 - n8n publishes no ports of its own. It is reachable only via Caddy on the
   compose network, except for the editor, which Caddy exposes on the
-  separate `N8N_HOST` hostname behind HTTP basic auth.
+  separate `N8N_HOST` hostname, gated by n8n's own user accounts.
 - Postgres holds only n8n's workflow/execution state. It is **not** where
   demo documents, chunks, embeddings, leads or messages live — that data
   lives in a dedicated Supabase project, isolated from both this box and
@@ -150,7 +151,6 @@ done
 | `DEMO_CODE_PEPPER` | Peppers the 6-digit email-verification code before it's hashed. | `openssl rand -base64 48` |
 | `POSTGRES_PASSWORD` | Postgres password for n8n's own database. | `openssl rand -base64 48` |
 | `TURNSTILE_SECRET` | Server-side secret to verify Turnstile tokens. | Cloudflare Turnstile dashboard (paired with the site key — see Turnstile, below). Not locally generated. |
-| `N8N_ADMIN_PASSWORD_HASH` | Basic-auth password hash Caddy checks before proxying to the n8n editor. | `caddy hash-password` — see "Cloudflare + the n8n editor", below. |
 
 `DEMO_DOMAIN` and `N8N_HOST` in `.env.example` are not secrets;
 they're deployment-specific values (the demo's public hostname and the n8n
@@ -229,17 +229,15 @@ affect only what shows up in the access logs, not who gets in.
    Cloudflare directly, so listing them would match nothing. You still need
    Cloudflare's ranges for the firewall step below — that one is about the
    host, not about Caddy.
-4. **Set basic auth on the n8n editor.** This is the gate on the editor —
-   share the username and password with whoever needs access. The Caddyfile
-   expects `N8N_ADMIN_USER` / `N8N_ADMIN_PASSWORD_HASH`, set in Coolify.
-   Generate the hash (needs the `caddy` binary — run it inside the `caddy`
-   container if you don't have one on the host):
+4. **Complete n8n's own setup immediately, then enable MFA.** Caddy adds no
+   authentication of its own — n8n's user management is the only gate on the
+   editor, and everyone gets their own account.
 
-```bash
-docker compose run --rm --no-deps caddy caddy hash-password
-```
-
-   Paste the result into `N8N_ADMIN_PASSWORD_HASH` in `.env`.
+   The window that matters: a fresh n8n serves an **unauthenticated setup
+   screen** until an owner account exists, so whoever reaches it first claims
+   the instance — and that instance will hold the Anthropic key, the Gemini
+   key and the Supabase connection string. Create the owner account in the
+   same sitting as the first deploy, never later, and turn on MFA for it.
 5. Lock the origin to Cloudflare's published IP ranges plus your own admin
    IP for SSH, on the box itself:
 

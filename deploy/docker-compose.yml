@@ -33,8 +33,6 @@ services:
     environment:
       DEMO_DOMAIN: ${DEMO_DOMAIN}
       N8N_HOST: ${N8N_HOST}
-      N8N_ADMIN_USER: ${N8N_ADMIN_USER}
-      N8N_ADMIN_PASSWORD_HASH: ${N8N_ADMIN_PASSWORD_HASH}
     # Only named volumes here. The Caddyfile and the site are in the image;
     # these two hold Caddy's own state (certificates, autosaved config), which
     # must survive a redeploy.

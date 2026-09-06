@@ -50,18 +50,16 @@ http://{$DEMO_DOMAIN} {
 
 # The n8n editor on its own hostname, never the public one.
 http://{$N8N_HOST} {
-	# There is deliberately NO IP allowlist here. Several people need to reach
-	# this editor from different connections, and an allowlist across three
-	# proxies is both fragile and a maintenance tax -- it locks out whoever's
-	# address moved rather than whoever shouldn't be here.
+	# No IP allowlist and no basic auth here, deliberately. n8n's own user
+	# management is the gate: accounts, password hashing, sessions, and MFA.
+	# Both earlier layers were removed because several people need access from
+	# different connections, and a shared second password is a credential to
+	# distribute and rotate rather than a meaningful barrier on top of n8n's.
 	#
-	# Two layers guard it instead: this password, and n8n's own user accounts
-	# behind it. Generate the hash with `caddy hash-password` and set
-	# N8N_ADMIN_USER / N8N_ADMIN_PASSWORD_HASH in Coolify's environment
-	# variables -- see deploy/README.md.
-	basic_auth {
-		{$N8N_ADMIN_USER} {$N8N_ADMIN_PASSWORD_HASH}
-	}
-
+	# The consequence to know: n8n serves an UNAUTHENTICATED setup screen until
+	# an owner account exists. Whoever reaches a fresh instance first claims it.
+	# Never expose a newly-provisioned n8n on this hostname without completing
+	# setup, and enable MFA on the owner account -- this is now the only gate
+	# in front of every credential the demo stores.
 	reverse_proxy n8n:5678
 }
