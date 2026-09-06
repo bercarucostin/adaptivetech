@@ -47,9 +47,11 @@ increments, so parallel requests cannot outrun it.
 |---|---|
 | `demo_schema.sql` | Seven tables. Session-scoped chunk store, three retention tiers, RLS enabled with zero policies |
 | `demo_hybrid_search.sql` | Session-scoped RRF search. `p_session_id` is required and scopes **both** branches |
+| `demo_email_canonical.sql` | The quota identity: a generated `email_canonical` column on three tables, so `you+1@gmail.com` and `y.o.u@gmail.com` cannot buy a second quota |
 | `demo_verify.sql` | Nine checks proving retention, cross-session isolation and the similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
 
-Apply in that order. Each sets `search_path = public, extensions`, because
+Apply in that order — `demo_email_canonical.sql` after `demo_schema.sql`, since it
+alters the tables that file creates. Each sets `search_path = public, extensions`, because
 Supabase installs pgvector into `extensions` — without it the `vector` type
 does not resolve and the schema fails on its first vector column.
 

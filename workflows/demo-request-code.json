@@ -76,7 +76,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  (SELECT count(*) FROM demo_sessions\n     WHERE email = $1::citext AND created_at > now() - interval '1 day') < 3\n  AND\n  (SELECT count(*) FROM demo_email_codes\n     WHERE email = $1::citext AND created_at > now() - interval '1 hour') < 3\n  AS allowed",
+        "query": "SELECT\n  (SELECT count(*) FROM demo_sessions\n     WHERE email_canonical = public.demo_canonical_email($1::text)\n       AND created_at > now() - interval '1 day') < 3\n  AND\n  (SELECT count(*) FROM demo_email_codes\n     WHERE email_canonical = public.demo_canonical_email($1::text)\n       AND created_at > now() - interval '1 hour') < 3\n  AS allowed",
         "options": {
           "queryReplacement": "={{ [$('Webhook').first().json.body.email] }}"
         }

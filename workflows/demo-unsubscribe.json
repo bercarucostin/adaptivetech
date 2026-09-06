@@ -68,7 +68,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH s AS (\n  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n  ON CONFLICT (email) DO NOTHING\n)\nDELETE FROM demo_leads WHERE email = $1::citext",
+        "query": "WITH s AS (\n  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n  ON CONFLICT (email) DO NOTHING\n)\nDELETE FROM demo_leads\nWHERE public.demo_canonical_email(email::text)\n    = public.demo_canonical_email($1::text)",
         "options": {
           "queryReplacement": "={{ [$json.email] }}"
         }

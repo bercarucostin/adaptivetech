@@ -21,6 +21,10 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'workflows');
 
+// db/demo_email_canonical.sql must be applied before these workflows run:
+// the quota queries below call public.demo_canonical_email() and read the
+// email_canonical generated columns it creates.
+
 // Credentials as they exist on the target instance.
 const PG_CRED = { id: '1Ig8IigY7ugDJKhy', name: 'Supabase' };
 const SMTP_CRED = { id: 'BI2J0KgYoH5uWjln', name: 'SMTP account' };
@@ -628,10 +632,12 @@ const uploadStatus = workflow(
 const quotaSql =
   'SELECT\n' +
   '  (SELECT count(*) FROM demo_sessions\n' +
-  "     WHERE email = $1::citext AND created_at > now() - interval '1 day') < 3\n" +
+  "     WHERE email_canonical = public.demo_canonical_email($1::text)\n" +
+  "       AND created_at > now() - interval '1 day') < 3\n" +
   '  AND\n' +
   '  (SELECT count(*) FROM demo_email_codes\n' +
-  "     WHERE email = $1::citext AND created_at > now() - interval '1 hour') < 3\n" +
+  "     WHERE email_canonical = public.demo_canonical_email($1::text)\n" +
+  "       AND created_at > now() - interval '1 hour') < 3\n" +
   '  AS allowed';
 
 const generateCodeJs = `const crypto = require('crypto');
@@ -888,7 +894,13 @@ return [{ json: { ok: true, session_id: row.session_id, token, expires_ms: expir
 const upsertLeadSql =
   'INSERT INTO demo_leads (email, consent_at, sessions_count, last_ip)\n' +
   'SELECT $1::citext, now(), 1, $2::inet\n' +
-  'WHERE NOT EXISTS (SELECT 1 FROM demo_suppressions WHERE email = $1::citext)\n' +
+  '-- Canonical: someone who unsubscribed me@gmail.com asked not to be\n' +
+  '-- contacted, and me+demo@gmail.com is the same inbox. Matching the\n' +
+  '-- exact string would keep mailing them under any alias.\n' +
+  'WHERE NOT EXISTS (\n' +
+  '  SELECT 1 FROM demo_suppressions\n' +
+  '  WHERE email_canonical = public.demo_canonical_email($1::text)\n' +
+  ')\n' +
   'ON CONFLICT (email) DO UPDATE\n' +
   'SET last_seen_at = now(),\n' +
   '    sessions_count = demo_leads.sessions_count + 1,\n' +
@@ -2120,7 +2132,9 @@ const suppressSql =
   '  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n' +
   '  ON CONFLICT (email) DO NOTHING\n' +
   ')\n' +
-  'DELETE FROM demo_leads WHERE email = $1::citext';
+  'DELETE FROM demo_leads\n' +
+  'WHERE public.demo_canonical_email(email::text)\n' +
+  '    = public.demo_canonical_email($1::text)';
 
 // Served as a whole page because a mail client opens this in a browser tab.
 // Inline styles only: this response does not pass through Caddy's file server

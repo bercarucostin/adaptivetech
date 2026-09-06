@@ -194,3 +194,47 @@ test('no route reads a session id from the request body', () => {
     );
   }
 });
+
+test('per-address limits count the inbox, not the alias', () => {
+  // citext only folds case. you+1@gmail.com and you+2@gmail.com are distinct
+  // rows delivered to one inbox, as is y.o.u@gmail.com -- so a quota keyed on
+  // the raw address is satisfied indefinitely from a single free mailbox,
+  // legitimately, with nothing about it resembling an attack.
+  //
+  // Any query that enforces a limit, or honours an unsubscribe, must go
+  // through demo_canonical_email. Reverting one to `email = $1` would pass
+  // every other test here and quietly reopen it.
+  const MUST_CANONICALISE = [
+    ['demo-request-code.json', 'Check Quota'],
+    ['demo-verify-code.json', 'Upsert Lead'],
+    ['demo-unsubscribe.json', 'Suppress Address'],
+  ];
+  for (const [file, node] of MUST_CANONICALISE) {
+    const wf = JSON.parse(fs.readFileSync(path.join(ROOT, 'workflows', file), 'utf8'));
+    const n = wf.nodes.find((x) => x.name === node);
+    assert.ok(n, file + ': node "' + node + '" is missing');
+    assert.match(
+      n.parameters.query, /demo_canonical_email/,
+      file + ' / ' + node + ' compares raw addresses, so aliases bypass it'
+    );
+  }
+});
+
+test('the canonicalisation is derived by the database, not by a workflow', () => {
+  // A workflow can forget to canonicalise; a generated column cannot, and no
+  // caller can supply a value for one. That is the whole reason this lives in
+  // SQL rather than in a Code node.
+  const sql = fs.readFileSync(path.join(ROOT, 'db', 'demo_email_canonical.sql'), 'utf8');
+  for (const table of ['demo_sessions', 'demo_email_codes', 'demo_suppressions']) {
+    const re = new RegExp(
+      'alter table public\\.' + table + '[\\s\\S]{0,200}?generated always as', 'i'
+    );
+    assert.match(sql, re, table + ' has no generated email_canonical column');
+  }
+  assert.match(sql, /immutable/i,
+    'demo_canonical_email must be IMMUTABLE or a generated column cannot use it');
+  // Dots are Google-specific. Stripping them everywhere would merge
+  // first.last@ and firstlast@, who are different people almost everywhere.
+  assert.match(sql, /gmail\.com', 'googlemail\.com'/,
+    'dot-stripping must be scoped to Google domains');
+});
