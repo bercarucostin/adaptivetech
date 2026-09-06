@@ -1,0 +1,320 @@
+{
+  "name": "demo-upload",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo/upload",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3e1aac06-bc07-438f-9381-76a95ae7d5ff",
+      "name": "Webhook",
+      "webhookId": "b8066e2c-cbdc-4e31-9e0f-68c61f40636a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\r\n// Copied verbatim into the \"Validate Upload\" Code node in\r\n// workflows/demo-upload.json.\r\n// tests/demo-workflow.test.js fails if they drift apart.\r\n//\r\n// The declared Content-Type is attacker-controlled, so the allowlist is\r\n// enforced against the bytes. DOCX shares the ZIP signature with every\r\n// other Office format; the check confirms the container, and extraction\r\n// fails cleanly on a ZIP that is not a document.\r\n\r\nfunction detectFileType(buffer) {\r\n  if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;\r\n\r\n  // %PDF- at offset 0.\r\n  if (buffer.length >= 5 && buffer.slice(0, 5).toString('latin1') === '%PDF-') return 'pdf';\r\n\r\n  // ZIP local file header (PK\\x03\\x04) or empty-archive marker (PK\\x05\\x06).\r\n  if (\r\n    buffer.length >= 4 &&\r\n    buffer[0] === 0x50 && buffer[1] === 0x4b &&\r\n    ((buffer[2] === 0x03 && buffer[3] === 0x04) || (buffer[2] === 0x05 && buffer[3] === 0x06))\r\n  ) {\r\n    return 'docx';\r\n  }\r\n\r\n  // Plain text: valid UTF-8, no NUL bytes, and no C0 control characters\r\n  // other than tab, newline and carriage return.\r\n  //\r\n  // A NUL anywhere disqualifies the file as text. This scan covers the whole\r\n  // buffer, not a sample: a file that is clean ASCII for its first 8 KB and\r\n  // binary afterward would otherwise pass, and the whole buffer is what gets\r\n  // forwarded for extraction. At the 10 MB upload ceiling this is a memchr.\r\n  if (buffer.includes(0x00)) return null;\r\n\r\n  // Decode and control-character checks stay on a sample — they are per\r\n  // character, and a document's encoding does not change halfway through.\r\n  const sample = buffer.slice(0, 8192);\r\n\r\n  const decoded = new TextDecoder('utf-8', { fatal: false }).decode(sample);\r\n  if (decoded.includes('�')) return null;\r\n\r\n  for (let i = 0; i < decoded.length; i++) {\r\n    const code = decoded.charCodeAt(i);\r\n    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) return null;\r\n  }\r\n\r\n  return 'txt';\r\n}\r\n\n// --- node glue below the shared block -------------------------------------\n// This node sits FIRST, ahead of the session check, for one mechanical\n// reason: this.helpers.getBinaryDataBuffer reads the binary attached to the\n// CURRENT input item, and the only item carrying the file is the webhook's.\n// Verify Session is a sub-workflow whose output is plain JSON, so the file\n// would already be gone by the time this ran downstream of it.\n//\n// The cost is that an unauthenticated caller can make us hash a buffer we\n// have already received in full. That is CPU on bytes already paid for, it\n// touches no database and no provider, and it fails closed.\n\nconst MAX_BYTES = 10485760;\n\nconst req = $('Webhook').first().json;\nconst cookieHeader = (req.headers && req.headers.cookie) || '';\n\n// Rejections are returned, not thrown. A returned item routes through a\n// plain If, where a thrown one would depend on the exact shape of n8n's\n// error item -- which differs between node types and is not worth guessing.\nfunction reject(code) {\n  return [{ json: { ok: false, code: code, cookie_header: cookieHeader } }];\n}\n\nconst item = $input.first();\nconst binary = item.binary || {};\nconst keys = Object.keys(binary);\n// Whatever the multipart field is called. The frontend sends \"file\", but the\n// property name is n8n's to choose and is not worth coupling to.\nif (!keys.length) return reject('UNSUPPORTED_TYPE');\n\nconst key = keys[0];\nconst meta = binary[key] || {};\n\n// N8N_DEFAULT_BINARY_DATA_MODE is filesystem, so the bytes are NOT inline on\n// the item -- meta.data is empty and this helper is the only way to them.\nconst buffer = await this.helpers.getBinaryDataBuffer(0, key);\n\nif (!buffer || !buffer.length) return reject('UNSUPPORTED_TYPE');\nif (buffer.length > MAX_BYTES) return reject('FILE_TOO_LARGE');\n\n// Against the bytes, never the declared Content-Type, which the caller owns.\nconst fileType = detectFileType(buffer);\nif (!fileType) return reject('UNSUPPORTED_TYPE');\n\nconst filename = String(meta.fileName || 'document');\n\n// Materialised here so part 2 is a pure addition: after Verify Session the\n// binary is gone (a sub-workflow returns JSON), so the content has to cross\n// that boundary as JSON or not at all. Text decodes now; PDF and DOCX go to\n// Gemini as base64 anyway, which is the same encoding.\nconst isText = fileType === 'txt';\n\nreturn [{\n  json: {\n    ok: true,\n    cookie_header: cookieHeader,\n    filename: filename,\n    size: buffer.length,\n    file_type: fileType,\n    text: isText ? buffer.toString('utf8') : '',\n    content_b64: isText ? '' : buffer.toString('base64'),\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "90a048a9-106a-49be-adc3-b319b4279e7f",
+      "name": "Validate Upload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2f75c75c-3fcc-4fb7-b382-31cf050f14bd",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "fc180508-cec5-43ab-9ecf-3e2be87a0aa9",
+      "name": "File OK?"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "qBScjzp3KtIuZJhy",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/qBScjzp3KtIuZJhy",
+          "cachedResultName": "demo-verify-session"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "966ccb49-2a57-4a5b-a554-beb118c030c7",
+      "name": "Verify Session",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH claimed AS (\n  UPDATE demo_sessions SET files_uploaded = files_uploaded + 1\n  WHERE id = $1::uuid AND files_uploaded < 1\n  RETURNING id\n)\nINSERT INTO demo_uploads (session_id, filename, status)\nSELECT $1::uuid, $2::text, 'pending'\nFROM claimed\nRETURNING id::text AS upload_id",
+        "options": {
+          "queryReplacement": "={{ [$json.session_id, $('Validate Upload').first().json.filename] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        -192
+      ],
+      "id": "106af794-9699-4b21-ab2a-95d7080688e6",
+      "name": "Claim Upload Slot",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3aa2a27d-4571-4c7e-a7bb-0b4227e40e04",
+              "leftValue": "={{ !!$json.upload_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        -192
+      ],
+      "id": "bf630353-ae60-4ef4-ae6c-fb8d27a42a41",
+      "name": "Slot Claimed?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ upload_id: $json.upload_id }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        -288
+      ],
+      "id": "1685557c-d446-4b18-9b57-5b5666dcef3f",
+      "name": "Respond Accepted"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ code: \"UPLOAD_LIMIT\" }) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        -96
+      ],
+      "id": "235297c7-5a4e-4eae-94a6-62bd3b7ea469",
+      "name": "Respond Upload Limit"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ code: \"SESSION_INVALID\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        96
+      ],
+      "id": "eb9a0319-50cd-4c69-b669-bd428f10e3ce",
+      "name": "Respond Session Invalid"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ code: $json.code }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        224
+      ],
+      "id": "ae473760-0db1-4eb2-816e-a40bbc7ec220",
+      "name": "Respond Bad File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Upload": {
+      "main": [
+        [
+          {
+            "node": "File OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File OK?": {
+      "main": [
+        [
+          {
+            "node": "Verify Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Bad File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Session": {
+      "main": [
+        [
+          {
+            "node": "Claim Upload Slot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Session Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Upload Slot": {
+      "main": [
+        [
+          {
+            "node": "Slot Claimed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Claimed?": {
+      "main": [
+        [
+          {
+            "node": "Respond Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Upload Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

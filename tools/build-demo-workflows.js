@@ -788,6 +788,177 @@ const verifyCode = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// demo-upload  (part 1 of 2: accept, validate, claim the slot, respond)
+//
+// Extraction and embedding are deliberately not here yet. This half carries
+// the unknowns -- reading a multipart upload out of binary storage, and the
+// atomic slot claim -- and those are worth proving on the live instance
+// before a Gemini pipeline is stacked on top of them.
+//
+// Until part 2 lands the upload sits at status 'pending' and the frontend
+// polls upload-status forever, then gives up with STALLED. That is the
+// honest intermediate state, not a broken one.
+// ---------------------------------------------------------------------------
+
+// 10 MB. The frontend's FILE_TOO_LARGE copy promises exactly this number, so
+// the two must not drift.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+const validateUploadGlue = `
+// --- node glue below the shared block -------------------------------------
+// This node sits FIRST, ahead of the session check, for one mechanical
+// reason: this.helpers.getBinaryDataBuffer reads the binary attached to the
+// CURRENT input item, and the only item carrying the file is the webhook's.
+// Verify Session is a sub-workflow whose output is plain JSON, so the file
+// would already be gone by the time this ran downstream of it.
+//
+// The cost is that an unauthenticated caller can make us hash a buffer we
+// have already received in full. That is CPU on bytes already paid for, it
+// touches no database and no provider, and it fails closed.
+
+const MAX_BYTES = ${MAX_UPLOAD_BYTES};
+
+const req = $('Webhook').first().json;
+const cookieHeader = (req.headers && req.headers.cookie) || '';
+
+// Rejections are returned, not thrown. A returned item routes through a
+// plain If, where a thrown one would depend on the exact shape of n8n's
+// error item -- which differs between node types and is not worth guessing.
+function reject(code) {
+  return [{ json: { ok: false, code: code, cookie_header: cookieHeader } }];
+}
+
+const item = $input.first();
+const binary = item.binary || {};
+const keys = Object.keys(binary);
+// Whatever the multipart field is called. The frontend sends "file", but the
+// property name is n8n's to choose and is not worth coupling to.
+if (!keys.length) return reject('UNSUPPORTED_TYPE');
+
+const key = keys[0];
+const meta = binary[key] || {};
+
+// N8N_DEFAULT_BINARY_DATA_MODE is filesystem, so the bytes are NOT inline on
+// the item -- meta.data is empty and this helper is the only way to them.
+const buffer = await this.helpers.getBinaryDataBuffer(0, key);
+
+if (!buffer || !buffer.length) return reject('UNSUPPORTED_TYPE');
+if (buffer.length > MAX_BYTES) return reject('FILE_TOO_LARGE');
+
+// Against the bytes, never the declared Content-Type, which the caller owns.
+const fileType = detectFileType(buffer);
+if (!fileType) return reject('UNSUPPORTED_TYPE');
+
+const filename = String(meta.fileName || 'document');
+
+// Materialised here so part 2 is a pure addition: after Verify Session the
+// binary is gone (a sub-workflow returns JSON), so the content has to cross
+// that boundary as JSON or not at all. Text decodes now; PDF and DOCX go to
+// Gemini as base64 anyway, which is the same encoding.
+const isText = fileType === 'txt';
+
+return [{
+  json: {
+    ok: true,
+    cookie_header: cookieHeader,
+    filename: filename,
+    size: buffer.length,
+    file_type: fileType,
+    text: isText ? buffer.toString('utf8') : '',
+    content_b64: isText ? '' : buffer.toString('base64'),
+  },
+}];
+`;
+
+// One statement, so the limit check and the increment cannot be separated by
+// a concurrent request. A second upload finds files_uploaded already at 1,
+// `claimed` is empty, the INSERT..SELECT inserts nothing, and no upload_id
+// comes back -- the same shape as the code-consumption guard in verify-code.
+const claimUploadSql =
+  'WITH claimed AS (\n' +
+  '  UPDATE demo_sessions SET files_uploaded = files_uploaded + 1\n' +
+  '  WHERE id = $1::uuid AND files_uploaded < 1\n' +
+  '  RETURNING id\n' +
+  ')\n' +
+  'INSERT INTO demo_uploads (session_id, filename, status)\n' +
+  "SELECT $1::uuid, $2::text, 'pending'\n" +
+  'FROM claimed\n' +
+  'RETURNING id::text AS upload_id';
+
+const upload = workflow(
+  'demo-upload',
+  [
+    webhookNode('Webhook', 'POST', 'upload', [0, 0]),
+
+    node('Validate Upload', 'n8n-nodes-base.code', 2,
+      { jsCode: shared('demo-filetype.js') + validateUploadGlue }, [208, 0]),
+
+    ifBooleanNode('File OK?', '={{ $json.ok }}', [416, 0]),
+
+    callVerifySession([624, -96]),
+
+    node('Claim Upload Slot', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: claimUploadSql,
+        options: {
+          queryReplacement:
+            "={{ [$json.session_id, $('Validate Upload').first().json.filename] }}",
+        },
+      },
+      [832, -192],
+      {
+        credentials: { postgres: PG_CRED },
+        // Zero rows is the LIMIT being enforced, not a failure. Without this
+        // the route would answer nothing at all to a second upload.
+        alwaysOutputData: true,
+      }),
+
+    ifBooleanNode('Slot Claimed?', '={{ !!$json.upload_id }}', [1040, -192]),
+
+    // 202, not 200: the row exists at status 'pending' and the work has not
+    // happened yet. The frontend takes upload_id and starts polling.
+    respondNode('Respond Accepted',
+      '={{ JSON.stringify({ upload_id: $json.upload_id }) }}', 202, [1248, -288]),
+
+    respondNode('Respond Upload Limit',
+      '={{ JSON.stringify({ code: "UPLOAD_LIMIT" }) }}', 403, [1248, -96]),
+
+    respondNode('Respond Session Invalid',
+      '={{ JSON.stringify({ code: "SESSION_INVALID" }) }}', 401, [832, 96]),
+
+    // FILE_TOO_LARGE or UNSUPPORTED_TYPE, both of which the frontend already
+    // has copy for. The code comes from Validate Upload's own vocabulary, so
+    // no internal message can reach the client through here.
+    respondNode('Respond Bad File',
+      '={{ JSON.stringify({ code: $json.code }) }}', 400, [624, 224]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Validate Upload', type: 'main', index: 0 }]] },
+    'Validate Upload': { main: [[{ node: 'File OK?', type: 'main', index: 0 }]] },
+    'File OK?': {
+      main: [
+        [{ node: 'Verify Session', type: 'main', index: 0 }],
+        [{ node: 'Respond Bad File', type: 'main', index: 0 }],
+      ],
+    },
+    'Verify Session': {
+      main: [
+        [{ node: 'Claim Upload Slot', type: 'main', index: 0 }],
+        [{ node: 'Respond Session Invalid', type: 'main', index: 0 }],
+      ],
+    },
+    'Claim Upload Slot': { main: [[{ node: 'Slot Claimed?', type: 'main', index: 0 }]] },
+    'Slot Claimed?': {
+      main: [
+        [{ node: 'Respond Accepted', type: 'main', index: 0 }],
+        [{ node: 'Respond Upload Limit', type: 'main', index: 0 }],
+      ],
+    },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
@@ -795,6 +966,7 @@ const built = [
   ['demo-upload-status.json', uploadStatus],
   ['demo-request-code.json', requestCode],
   ['demo-verify-code.json', verifyCode],
+  ['demo-upload.json', upload],
 ];
 
 for (const [file, wf] of built) {
