@@ -331,7 +331,14 @@ function ifBooleanNode(name, leftValue, position) {
     position);
 }
 
-/** Calls demo-verify-session with the request's Cookie header. */
+/** Calls demo-verify-session with the request's Cookie header.
+ *
+ *  onError: continueErrorOutput is not optional on a webhook route. Without
+ *  it, a thrown SESSION_INVALID ends the execution, Respond to Webhook never
+ *  runs, and the caller receives an empty body with no status code -- which
+ *  the frontend cannot map to a message. The node gets a second main output
+ *  (index 1) carrying the error, wired to a 401 responder.
+ */
 function callVerifySession(position) {
   return node('Verify Session', 'n8n-nodes-base.executeWorkflow', 1.3,
     {
@@ -352,7 +359,8 @@ function callVerifySession(position) {
       },
       options: {},
     },
-    position);
+    position,
+    { onError: 'continueErrorOutput' });
 }
 
 // ---------------------------------------------------------------------------
@@ -410,11 +418,22 @@ const uploadStatus = workflow(
       }),
     respondNode('Respond',
       '={{ JSON.stringify($json || {}) }}', 200, [832, 0]),
+    // The error branch. A missing, forged or expired cookie lands here with a
+    // typed code the page maps to a sentence -- never a bare empty body.
+    respondNode('Respond Unauthorized',
+      '={{ JSON.stringify({ code: "SESSION_INVALID" }) }}', 401, [832, 176]),
   ],
   {
     Webhook: { main: [[{ node: 'Shape Cookie', type: 'main', index: 0 }]] },
     'Shape Cookie': { main: [[{ node: 'Verify Session', type: 'main', index: 0 }]] },
-    'Verify Session': { main: [[{ node: 'Load Status', type: 'main', index: 0 }]] },
+    // Two outputs: index 0 is success, index 1 is the error branch created by
+    // onError: continueErrorOutput.
+    'Verify Session': {
+      main: [
+        [{ node: 'Load Status', type: 'main', index: 0 }],
+        [{ node: 'Respond Unauthorized', type: 'main', index: 0 }],
+      ],
+    },
     'Load Status': { main: [[{ node: 'Respond', type: 'main', index: 0 }]] },
   }
 );

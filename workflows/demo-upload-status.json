@@ -14,9 +14,9 @@
         0,
         0
       ],
-      "id": "b665bd10-6252-4358-ac97-443b33f8207e",
+      "id": "d88fb1bb-476a-406b-bd6e-87914a1e0ef1",
       "name": "Webhook",
-      "webhookId": "8c5c59a9-5e55-440e-80d1-22f4e17f991b"
+      "webhookId": "8c8d6fc1-530c-4978-ac7a-1be28d506921"
     },
     {
       "parameters": {
@@ -28,7 +28,7 @@
         208,
         0
       ],
-      "id": "60936682-3720-4276-820f-8f4e269b3377",
+      "id": "3bfbd398-459e-4ef2-936b-295b3a959978",
       "name": "Shape Cookie"
     },
     {
@@ -56,8 +56,9 @@
         416,
         0
       ],
-      "id": "2f4908d0-327a-4f96-9a5d-55b95709d550",
-      "name": "Verify Session"
+      "id": "dff48c70-e59d-4c14-b045-a41ab6be890c",
+      "name": "Verify Session",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -73,7 +74,7 @@
         624,
         0
       ],
-      "id": "14664540-1b61-42f6-805b-a0be9bc48b04",
+      "id": "1b78b712-09c5-4c2d-ac76-01df58109716",
       "name": "Load Status",
       "credentials": {
         "postgres": {
@@ -96,8 +97,25 @@
         832,
         0
       ],
-      "id": "b9bad14b-4d98-48e4-9eb1-1b82cdbf2fc3",
+      "id": "bcafe556-fba7-4694-84b5-71008fe760ea",
       "name": "Respond"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ code: \"SESSION_INVALID\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        176
+      ],
+      "id": "50788fea-e7cf-4064-8fe1-88a7ecdff0a2",
+      "name": "Respond Unauthorized"
     }
   ],
   "pinData": {},
@@ -129,6 +147,13 @@
         [
           {
             "node": "Load Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
             "type": "main",
             "index": 0
           }
