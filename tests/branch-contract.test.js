@@ -207,7 +207,7 @@ test('per-address limits count the inbox, not the alias', () => {
   const MUST_CANONICALISE = [
     ['demo-request-code.json', 'Check Quota'],
     ['demo-verify-code.json', 'Upsert Lead'],
-    ['demo-unsubscribe.json', 'Suppress Address'],
+    ['demo-unsubscribe-confirm.json', 'Suppress Address'],
   ];
   for (const [file, node] of MUST_CANONICALISE) {
     const wf = JSON.parse(fs.readFileSync(path.join(ROOT, 'workflows', file), 'utf8'));

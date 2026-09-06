@@ -31,26 +31,41 @@ const mintSrc = nodeCode('demo-request-code.json', 'Generate Code')
 assert.ok(mintSrc, 'demo-request-code no longer mints an unsub token the expected way');
 const mint = new Function('email', 'secret', 'crypto', mintSrc[0] + '; return unsubToken;');
 
-// The verifying half, with only its n8n-specific preamble removed.
-const verify = (function () {
-  const src = nodeCode('demo-unsubscribe.json', 'Verify Token')
-    .replace("const crypto = require('crypto');", '')
-    .replace(/const token = String\([^\n]*\n/, '')
-    .replace(/const secret = \$env\.DEMO_SESSION_SECRET;\n/, '')
-    .replace(/if \(!secret\) throw new Error\([^\n]*\n/, '');
-  return new Function('token', 'secret', 'crypto', src);
-})();
+// The verifying half. Only the two $env lines are removed; the body runs as
+// written, with `$` supplied the way n8n would supply it. An earlier version
+// stripped the token-extraction line too, which meant the test silently
+// stopped covering how the token is read off the request at all.
+const verifyBody = nodeCode('demo-unsubscribe.json', 'Verify Token')
+  .replace("const crypto = require('crypto');", '')
+  .replace(/const secret = \$env\.DEMO_SESSION_SECRET;\n/, '')
+  .replace(/if \(!secret\) throw new Error\([^\n]*\n/, '');
 
-function check(token, secret) {
-  return verify(token, secret || SECRET, crypto)[0].json;
+const verifyFn = new Function('$', 'secret', 'crypto', verifyBody);
+
+/** Run the node with the token arriving where `where` says: query or body. */
+function check(token, secret, where) {
+  const json = where === 'body' ? { body: { t: token } } : { query: { t: token } };
+  const $ = function () {
+    return { first: function () { return { json: json }; } };
+  };
+  return verifyFn($, secret || SECRET, crypto)[0].json;
 }
 
 test('a freshly minted token verifies and yields the address back', () => {
   for (const email of ['a@b.ro', 'user+demo@company.co.uk', 'ștefan@firmă.ro']) {
-    const claims = check(mint(email, SECRET, crypto));
-    assert.deepStrictEqual(claims, { ok: true, email: email },
+    const token = mint(email, SECRET, crypto);
+    assert.deepStrictEqual(check(token), { ok: true, email: email, token: token },
       'round trip failed for ' + email);
   }
+});
+
+test('the token is accepted from the body as well as the query', () => {
+  // The confirm form puts it in the query; a mail client doing RFC 8058
+  // one-click may POST it in the body instead. Reading only the query would
+  // make native unsubscribe controls silently fail.
+  const token = mint('a@b.ro', SECRET, crypto);
+  assert.strictEqual(check(token, SECRET, 'body').ok, true);
+  assert.strictEqual(check(token, SECRET, 'query').ok, true);
 });
 
 test('the address cannot be swapped while keeping a valid signature', () => {

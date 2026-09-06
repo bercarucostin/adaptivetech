@@ -1,10 +1,10 @@
 {
-  "name": "demo-unsubscribe",
+  "name": "demo-unsubscribe-confirm",
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "GET",
-        "path": "demo/unsubscribe",
+        "httpMethod": "POST",
+        "path": "demo/unsubscribe-confirm",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -14,9 +14,9 @@
         0,
         0
       ],
-      "id": "885b3dc8-c421-4cb1-8a0c-84f3e55cba20",
+      "id": "2d497857-fe65-4648-960f-4d0b56e3fd32",
       "name": "Webhook",
-      "webhookId": "a64e028f-0075-44cf-a07c-802f8ec90463"
+      "webhookId": "e1a72897-2596-4849-b756-2a425219f858"
     },
     {
       "parameters": {
@@ -28,7 +28,7 @@
         208,
         0
       ],
-      "id": "be615cd5-abcd-480d-9326-f0d12872507e",
+      "id": "acd55b2b-34b3-44aa-882e-bdf6ce61242e",
       "name": "Verify Token"
     },
     {
@@ -42,7 +42,7 @@
           },
           "conditions": [
             {
-              "id": "beed8cee-d991-4c1f-ba5f-793aa95e6ce0",
+              "id": "813699d4-9e04-4086-88c9-f63db111b2b4",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -62,27 +62,40 @@
         416,
         0
       ],
-      "id": "f4cac9fc-f66f-41d6-8ffb-5a59b692ed04",
+      "id": "f7b6eb7d-e4d5-40d6-ba23-89ba5172b845",
       "name": "Token Valid?"
     },
     {
       "parameters": {
-        "jsCode": "function esc(s) {\n  return String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n}\n\nconst token = esc($json.token);\n\nconst html =\n  '<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\">' +\n  '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +\n  '<meta name=\"robots\" content=\"noindex\">' +\n  '<title>Dezabonare — Adaptive Technologies</title></head>' +\n  '<body style=\"margin:0;background:#E7E5DF;color:#0C3054;' +\n  'font:17px/1.6 system-ui,-apple-system,sans-serif\">' +\n  '<main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;' +\n  'background:#fff;border-radius:14px\">' +\n  '<h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">' +\n  'Confirmi dezabonarea?</h1>' +\n  '<p style=\"margin:0 0 1.5rem;color:#16406B\">' +\n  'Nu îți vom mai trimite emailuri și îți ștergem adresa din lista noastră.' +\n  '</p>' +\n  '<form method=\"post\" action=\"/api/demo/unsubscribe-confirm?t=' + token + '\">' +\n  '<button type=\"submit\" style=\"background:#0C3054;color:#E7E5DF;border:0;' +\n  'padding:.75rem 1.3rem;border-radius:999px;font:inherit;cursor:pointer\">' +\n  'Da, dezabonează-mă</button>' +\n  '</form>' +\n  '</main></body></html>';\n\nreturn [{ json: { html: html } }];\n"
+        "operation": "executeQuery",
+        "query": "WITH s AS (\n  INSERT INTO demo_suppressions (email) VALUES ($1::citext)\n  ON CONFLICT (email) DO NOTHING\n)\nDELETE FROM demo_leads\nWHERE public.demo_canonical_email(email::text)\n    = public.demo_canonical_email($1::text)",
+        "options": {
+          "queryReplacement": "={{ [$json.email] }}"
+        }
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
       "position": [
         624,
         -96
       ],
-      "id": "890982e6-e82b-4aa7-9a76-c0ed3da926ce",
-      "name": "Build Confirm Page"
+      "id": "111ffed9-5afa-41da-bd4b-1be9d348de06",
+      "name": "Suppress Address",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
+        "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Te-am dezabonat — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Te-am dezabonat</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Nu îți vom mai trimite emailuri. Adresa ta a fost ștearsă din lista noastră.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
         "options": {
+          "responseCode": 200,
           "responseHeaders": {
             "entries": [
               {
@@ -97,10 +110,48 @@
       "typeVersion": 1.5,
       "position": [
         832,
-        -96
+        -192
       ],
-      "id": "e666e925-5a4a-472b-b5a7-827a9e46339b",
-      "name": "Respond Confirm"
+      "id": "977bb61b-5021-4754-96f5-5aba9b99626a",
+      "name": "Respond Done"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!doctype html><html lang=\"ro\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex\"><title>Ceva n-a mers — Adaptive Technologies</title></head><body style=\"margin:0;background:#E7E5DF;color:#0C3054;font:17px/1.6 system-ui,-apple-system,sans-serif\"><main style=\"max-width:34rem;margin:12vh auto;padding:2.5rem;background:#fff;border-radius:14px\"><h1 style=\"margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em\">Ceva n-a mers</h1><p style=\"margin:0 0 1.5rem;color:#16406B\">Nu am putut procesa dezabonarea acum. Scrie-ne la contact@adaptivetech.ro și o rezolvăm manual.</p><a href=\"https://adaptivetech.ro/\" style=\"display:inline-block;background:#0C3054;color:#E7E5DF;padding:.7rem 1.2rem;border-radius:999px;text-decoration:none\">adaptivetech.ro</a></main></body></html>",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        0
+      ],
+      "id": "1b55bb05-ec72-46f0-9c89-8821f8f51149",
+      "name": "Respond Failed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"demo-unsubscribe-confirm could not record a suppression\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "90b76bf3-cb0c-4440-908b-cf49a97c4afc",
+      "name": "Raise For Alert"
     },
     {
       "parameters": {
@@ -122,9 +173,9 @@
       "typeVersion": 1.5,
       "position": [
         624,
-        96
+        128
       ],
-      "id": "9053751c-58f7-41d8-b0b8-5ab51f80196e",
+      "id": "1a241a26-0b44-4a2c-af06-3ed5012156b7",
       "name": "Respond Invalid"
     }
   ],
@@ -156,7 +207,7 @@
       "main": [
         [
           {
-            "node": "Build Confirm Page",
+            "node": "Suppress Address",
             "type": "main",
             "index": 0
           }
@@ -170,11 +221,29 @@
         ]
       ]
     },
-    "Build Confirm Page": {
+    "Suppress Address": {
       "main": [
         [
           {
-            "node": "Respond Confirm",
+            "node": "Respond Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Failed": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
             "type": "main",
             "index": 0
           }

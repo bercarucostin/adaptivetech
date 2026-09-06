@@ -57,7 +57,7 @@ test('the routes that can fail on infrastructure all raise', () => {
     'demo-verify-code.json',
     'demo-upload.json',
     'demo-chat.json',
-    'demo-unsubscribe.json',
+    'demo-unsubscribe-confirm.json',
   ];
   for (const name of MUST_ALERT) {
     const wf = JSON.parse(fs.readFileSync(path.join(DIR, name), 'utf8'));
@@ -100,7 +100,9 @@ test('no business rejection reaches the alert', () => {
       'Respond Bad File', 'Mark Ready', 'Mark Failed No Text',
     ],
     'demo-upload-status.json': ['Respond', 'Respond Unauthorized'],
-    'demo-unsubscribe.json': ['Respond Done', 'Respond Invalid'],
+    // The GET only offers; it has no alert path and nothing to suppress.
+    'demo-unsubscribe.json': ['Respond Confirm', 'Respond Invalid'],
+    'demo-unsubscribe-confirm.json': ['Respond Done', 'Respond Invalid'],
   };
   for (const [file, names] of Object.entries(QUIET)) {
     const wf = JSON.parse(fs.readFileSync(path.join(DIR, file), 'utf8'));
@@ -128,7 +130,7 @@ test('nothing that can throw on a webhook route is left unhandled', () => {
     'demo-chat.json': [ALERT],
     'demo-request-code.json': [ALERT],
     'demo-verify-code.json': [ALERT],
-    'demo-unsubscribe.json': [ALERT],
+    'demo-unsubscribe-confirm.json': [ALERT],
   };
   for (const { file, wf } of demoWorkflows()) {
     const exempt = RESPONDED[file] || [ALERT];

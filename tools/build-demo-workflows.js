@@ -2116,13 +2116,17 @@ const cleanup = workflow(
 // ---------------------------------------------------------------------------
 const verifyUnsubCode = `const crypto = require('crypto');
 
-const token = String((($('Webhook').first().json.query) || {}).t || '');
+// Query on the GET a human clicks, and on the POST its form submits.
+// Body as well, because a mail client doing RFC 8058 one-click may put it
+// there instead.
+const req = $('Webhook').first().json;
+const token = String(((req.query) || {}).t || ((req.body) || {}).t || '');
 
 const secret = $env.DEMO_SESSION_SECRET;
 if (!secret) throw new Error('DEMO_SESSION_SECRET is not set on the n8n container');
 
 function fail() {
-  return [{ json: { ok: false, email: null } }];
+  return [{ json: { ok: false, email: null, token: '' } }];
 }
 
 // <base64url(email)>.<mac>, minted by demo-request-code's Generate Code node.
@@ -2146,7 +2150,7 @@ const b = Buffer.from(expected);
 // width, so its length is not a secret.
 if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fail();
 
-return [{ json: { ok: true, email: email } }];
+return [{ json: { ok: true, email: email, token: token } }];
 `;
 
 // Suppression is recorded and the lead row is removed in one statement, so a
@@ -2199,10 +2203,111 @@ function unsubRespondNode(name, html, statusCode, position) {
     position);
 }
 
+// The confirm page. Built in a Code node rather than as a constant because
+// it has to carry the token forward into the form, and the token arrives
+// from the URL. It is escaped even though a token that verified can only
+// contain [A-Za-z0-9._-] -- the escaping is what makes that reasoning
+// unnecessary rather than load-bearing.
+const confirmPageCode = `function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const token = esc($json.token);
+
+const html =
+  '<!doctype html><html lang="ro"><head><meta charset="utf-8">' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+  '<meta name="robots" content="noindex">' +
+  '<title>Dezabonare — Adaptive Technologies</title></head>' +
+  '<body style="margin:0;background:#E7E5DF;color:#0C3054;' +
+  'font:17px/1.6 system-ui,-apple-system,sans-serif">' +
+  '<main style="max-width:34rem;margin:12vh auto;padding:2.5rem;' +
+  'background:#fff;border-radius:14px">' +
+  '<h1 style="margin:0 0 .75rem;font-size:1.6rem;letter-spacing:-.02em">' +
+  'Confirmi dezabonarea?</h1>' +
+  '<p style="margin:0 0 1.5rem;color:#16406B">' +
+  'Nu îți vom mai trimite emailuri și îți ștergem adresa din lista noastră.' +
+  '</p>' +
+  '<form method="post" action="/api/demo/unsubscribe-confirm?t=' + token + '">' +
+  '<button type="submit" style="background:#0C3054;color:#E7E5DF;border:0;' +
+  'padding:.75rem 1.3rem;border-radius:999px;font:inherit;cursor:pointer">' +
+  'Da, dezabonează-mă</button>' +
+  '</form>' +
+  '</main></body></html>';
+
+return [{ json: { html: html } }];
+`;
+
+// ---------------------------------------------------------------------------
+// demo-unsubscribe  (GET -- offers, never acts)
+//
+// A GET that changed state was a real bug, not a stylistic one. Gmail,
+// Outlook and corporate link-scanners fetch every link in a message to check
+// it for malware, so the previous version unsubscribed people automatically
+// and the list would have eroded with no visible cause. This is why RFC 8058
+// requires a POST for one-click unsubscribe.
+//
+// So the link in the email body is safe to fetch: it renders a page and
+// touches nothing. Only the form's POST suppresses.
+// ---------------------------------------------------------------------------
 const unsubscribe = workflow(
   'demo-unsubscribe',
   [
     webhookNode('Webhook', 'GET', 'unsubscribe', [0, 0]),
+    node('Verify Token', 'n8n-nodes-base.code', 2,
+      { jsCode: verifyUnsubCode }, [208, 0]),
+    ifBooleanNode('Token Valid?', '={{ $json.ok }}', [416, 0]),
+
+    node('Build Confirm Page', 'n8n-nodes-base.code', 2,
+      { jsCode: confirmPageCode }, [624, -96]),
+
+    node('Respond Confirm', 'n8n-nodes-base.respondToWebhook', 1.5,
+      {
+        respondWith: 'text',
+        responseBody: '={{ $json.html }}',
+        options: {
+          responseHeaders: {
+            entries: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }],
+          },
+        },
+      },
+      [832, -96]),
+
+    // The same page for a malformed token and a forged one, and it never
+    // says whether the address exists.
+    unsubRespondNode('Respond Invalid',
+      unsubPage('Link invalid',
+        'Linkul de dezabonare nu este valid sau a fost modificat. ' +
+        'Folosește linkul din cel mai recent email primit de la noi.'),
+      400, [624, 96]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Verify Token', type: 'main', index: 0 }]] },
+    'Verify Token': { main: [[{ node: 'Token Valid?', type: 'main', index: 0 }]] },
+    'Token Valid?': {
+      main: [
+        [{ node: 'Build Confirm Page', type: 'main', index: 0 }],
+        [{ node: 'Respond Invalid', type: 'main', index: 0 }],
+      ],
+    },
+    'Build Confirm Page': { main: [[{ node: 'Respond Confirm', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
+// demo-unsubscribe-confirm  (POST -- the only thing that suppresses)
+//
+// Reached two ways, both of them a deliberate human action: the confirm
+// page's form, and a mail client's one-click unsubscribe control. A link
+// scanner cannot reach it, because a scanner issues GET and this path is
+// registered for POST alone.
+// ---------------------------------------------------------------------------
+const unsubscribeConfirm = workflow(
+  'demo-unsubscribe-confirm',
+  [
+    webhookNode('Webhook', 'POST', 'unsubscribe-confirm', [0, 0]),
     node('Verify Token', 'n8n-nodes-base.code', 2,
       { jsCode: verifyUnsubCode }, [208, 0]),
     ifBooleanNode('Token Valid?', '={{ $json.ok }}', [416, 0]),
@@ -2228,10 +2333,8 @@ const unsubscribe = workflow(
         'și o rezolvăm manual.'),
       500, [832, 0]),
 
-    raiseForAlertNode('demo-unsubscribe could not record a suppression', [1040, 0]),
+    raiseForAlertNode('demo-unsubscribe-confirm could not record a suppression', [1040, 0]),
 
-    // Deliberately the same page for a malformed token and a forged one --
-    // and it never says whether the address exists.
     unsubRespondNode('Respond Invalid',
       unsubPage('Link invalid',
         'Linkul de dezabonare nu este valid sau a fost modificat. ' +
@@ -2430,6 +2533,7 @@ const built = [
   ['demo-chat.json', chat],
   ['demo-cleanup.json', cleanup],
   ['demo-unsubscribe.json', unsubscribe],
+  ['demo-unsubscribe-confirm.json', unsubscribeConfirm],
   ['error-handling-demo.json', errorHandlingDemo],
 ];
 
