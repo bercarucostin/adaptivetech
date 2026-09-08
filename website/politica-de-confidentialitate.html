@@ -39,6 +39,13 @@
     --ink-mute: #506883;
     --line: #D9D9D7;
     --line-2: #808080;      /* 3.95:1 on white, 3.67:1 on Surface (cream-2), 3.14:1 on Sand */
+    /* Aliases for the redesigned homepage's names; values unchanged, since
+       this page's contrast was verified against its own backgrounds. */
+    --gold: var(--amber);
+    --sand: var(--cream);
+    --navy-900: #081F38;
+    --steel: #8796A9;
+    --footer-h: 48px;
     --white: #FFFFFF;
 
     --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
@@ -361,6 +368,38 @@
   span[data-en] { display: none; }
   html[lang="en"] span[data-ro] { display: none; }
   html[lang="en"] span[data-en] { display: inline; }
+
+/* ── Pinned site bar ──────────────────────────────────────────────────
+   Matches the homepage: contact and the privacy link stay reachable from
+   anywhere, at a height small enough not to cost the content its screen. */
+.site-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+  background: #081F38; color: var(--steel);
+  border-top: 1px solid rgba(234,240,247,0.14);
+}
+.site-bar__inner {
+  max-width: 1240px; margin: 0 auto; padding: 0 var(--pad);
+  height: var(--footer-h);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; font-size: 0.78rem; white-space: nowrap;
+}
+.site-bar__brand {
+  display: flex; align-items: center; gap: 0.6rem;
+  color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
+}
+.site-bar__brand svg { width: 16px; height: 16px; flex: none; }
+.site-bar__brand svg path { fill: var(--amber); }
+.site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
+.site-bar__sep { color: rgba(234,240,247,0.3); }
+/* On a light bar gold text would fail contrast; on this navy ground the
+   full-strength gold is the accessible one. */
+.site-bar a { color: var(--amber); border-bottom: none; }
+.site-bar a:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
+  .site-bar__inner { font-size: 0.72rem; }
+}
+  body { padding-bottom: var(--footer-h); }
 </style>
 </head>
 <body>
@@ -530,21 +569,19 @@
 </section>
 
 <!-- ─────────── FOOTER ─────────── -->
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div style="display:flex; align-items:center; gap:0.6rem;">
-        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true" style="flex:none;"><path fill="var(--amber)" d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
-        <span><strong style="color: var(--cream);">Adaptive Technologies S.R.L.</strong> · București, România · © <span id="year"></span></span>
-      </div>
-      <div class="footer-links">
-        <a href="/politica-de-confidentialitate.html">
-          <span data-ro>Politica de confidențialitate</span>
-          <span data-en>Privacy policy</span>
-        </a>
-        <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
-      </div>
-    </div>
+<footer class="site-bar">
+  <div class="site-bar__inner">
+    <span class="site-bar__brand">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
+      <span>ADAPTIVE · TECHNOLOGIES</span>
+    </span>
+    <span class="site-bar__meta">
+      <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
+      <span class="site-bar__sep">·</span>
+      <a href="/politica-de-confidentialitate.html"><span data-ro>Confidențialitate</span><span data-en>Privacy</span></a>
+      <span class="site-bar__sep opt">·</span>
+      <span class="site-bar__opt">© <span id="year"></span> Adaptive Technologies S.R.L.</span>
+    </span>
   </div>
 </footer>
 

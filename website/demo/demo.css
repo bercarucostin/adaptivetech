@@ -35,6 +35,15 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   --pad: clamp(1.25rem, 4vw, 2.5rem);
+
+  /* Aliases for the names the redesigned homepage uses, pointing at the
+     values already verified against THIS page's backgrounds. */
+  --gold: var(--amber);
+  --sand: var(--cream);
+  --surface: var(--cream-2);
+  --navy-900: #081F38;
+  --steel: #8796A9;
+  --footer-h: 48px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,6 +54,7 @@ body {
   line-height: 1.6;
   color: var(--ink);
   background: var(--cream-2);
+  padding-bottom: var(--footer-h);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -430,23 +440,33 @@ button[type="submit"]:disabled {
 /* This page had no footer at all, and the consent checkbox's own privacy
    link (see index.html) is the only other route to the policy from here --
    worth a second, more visible one regardless of that link's placement. */
-.demo__footer {
-  border-top: 1px solid var(--line);
-  padding: 1.5rem var(--pad);
+/* ── Pinned site bar ──────────────────────────────────────────────────
+   Matches the homepage: contact and the privacy link stay reachable from
+   anywhere, at a height small enough not to cost the content its screen. */
+.site-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+  background: #081F38; color: var(--steel);
+  border-top: 1px solid rgba(234,240,247,0.14);
 }
-.demo__footer-inner {
-  max-width: 640px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  font-size: 0.82rem;
-  color: var(--ink-mute);
+.site-bar__inner {
+  max-width: 1240px; margin: 0 auto; padding: 0 var(--pad);
+  height: var(--footer-h);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; font-size: 0.78rem; white-space: nowrap;
 }
-.demo__footer-inner a {
-  color: var(--gold-ink);
-  border-bottom: 1px solid rgba(138, 93, 7, 0.4);
+.site-bar__brand {
+  display: flex; align-items: center; gap: 0.6rem;
+  color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
 }
-.demo__footer-inner a:hover { border-bottom-color: var(--gold-ink); }
+.site-bar__brand svg { width: 16px; height: 16px; flex: none; }
+.site-bar__brand svg path { fill: var(--amber); }
+.site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
+.site-bar__sep { color: rgba(234,240,247,0.3); }
+/* On a light bar gold text would fail contrast; on this navy ground the
+   full-strength gold is the accessible one. */
+.site-bar a { color: var(--amber); border-bottom: none; }
+.site-bar a:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
+  .site-bar__inner { font-size: 0.72rem; }
+}
