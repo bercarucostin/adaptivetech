@@ -129,8 +129,14 @@ function setLang(next) {
 $('lang-ro').addEventListener('click', () => setLang('ro'));
 $('lang-en').addEventListener('click', () => setLang('en'));
 
+// ?lang= wins over the stored preference, because it carries intent from the
+// page the visitor just left. The main site is split into /  and /en/ now and
+// no longer writes LANG_KEY, so without this an English reader clicking
+// "Try the demo" would land on a Romanian demo. The key is still read: it is
+// what remembers the choice made HERE, on a direct visit.
 try {
-  const saved = localStorage.getItem(LANG_KEY);
+  const fromUrl = new URLSearchParams(location.search).get('lang');
+  const saved = fromUrl === 'en' || fromUrl === 'ro' ? fromUrl : localStorage.getItem(LANG_KEY);
   setLang(saved === 'en' ? 'en' : 'ro');
 } catch (_) {
   setLang('ro');
