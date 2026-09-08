@@ -1,3 +1,23 @@
+# NOTE: this file is currently SHADOWED and is not what visitors' crawlers see.
+#
+# Cloudflare's AI Crawl Control serves its own managed robots.txt for this
+# domain, which REPLACES this file rather than appending to it. Verify with:
+#
+#     curl https://adaptivetech.ro/robots.txt
+#
+# and you will get Cloudflare's content-signals policy instead of this. So
+# editing this file changes nothing on the live site until that feature is
+# turned off in the Cloudflare dashboard.
+#
+# It is kept anyway as the fallback: if the managed file is ever disabled,
+# the site still has sane crawl rules and a sitemap pointer instead of
+# nothing at all.
+#
+# Deliberately NOT restated here: per-crawler rules for GPTBot, ClaudeBot,
+# Google-Extended and the rest. Cloudflare's managed file disallows them and
+# that is the policy we are keeping, so listing the opposite here would be a
+# contradiction waiting to confuse whoever reads this next.
+
 User-agent: *
 Allow: /
 
@@ -5,32 +25,5 @@ Allow: /
 # /api/demo/ also keeps them from burning the rate limits meant for visitors.
 Disallow: /api/demo/
 Disallow: /demo/
-
-# AI answer engines are allowed on purpose: for a consultancy selling AI
-# automation, being quotable in an AI answer is the point, not a leak.
-# To opt out, change any of these to Disallow: /
-User-agent: GPTBot
-Allow: /
-
-User-agent: OAI-SearchBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: Claude-User
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-
-User-agent: Google-Extended
-Allow: /
-
-User-agent: Applebot-Extended
-Allow: /
 
 Sitemap: https://adaptivetech.ro/sitemap.xml
