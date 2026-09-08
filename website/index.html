@@ -42,7 +42,11 @@
     --navy-850: #0A2846;
     --navy-900: #081F38;
     --gold: #F2A91E;
-    --gold-deep: #C2861A;
+    --gold-deep: #B87D18;   /* derived: darkened from #C2861A (2.91:1 on Surface)
+                               to clear the 3:1 large-text/UI floor -- 3.26:1 on
+                               Surface, 3.51:1 on white. Emphasis and borders. */
+    --gold-ink: #8A5D07;    /* derived: gold TEXT on light grounds -- 5.35:1 on
+                               Surface, 5.75:1 on white. Same value demo.css uses. */
     --steel: #8796A9;
     --sand: #E7E5DF;
     --surface: #F4F7FA;
@@ -137,7 +141,7 @@
   .brand-mark path { fill: var(--navy); transition: fill 0.3s; }
   .brand-word { display: flex; flex-direction: column; line-height: 1; }
   .brand-name { font-weight: 700; font-size: 0.98rem; letter-spacing: 0.09em; color: var(--navy); transition: color 0.3s; }
-  .brand-tag  { font-family: var(--mono); font-size: 0.52rem; letter-spacing: 0.42em; color: var(--gold-deep); margin-top: 3px; transition: color 0.3s; }
+  .brand-tag  { font-family: var(--mono); font-size: 0.52rem; letter-spacing: 0.42em; color: var(--gold-ink); margin-top: 3px; transition: color 0.3s; }
 
   .nav-links { display: flex; gap: 1.9rem; align-items: center; }
   .nav-links a {
@@ -245,7 +249,7 @@
   .sec-head.wide { max-width: 1000px; }
   .eyebrow {
     font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase;
-    letter-spacing: 0.16em; color: var(--gold-deep); margin-bottom: 1.1rem;
+    letter-spacing: 0.16em; color: var(--gold-ink); margin-bottom: 1.1rem;
     display: flex; align-items: center; gap: 0.6rem;
   }
   .eyebrow::before { content: ''; width: 26px; height: 2px; background: var(--gold); flex: none; }
@@ -311,7 +315,7 @@
     --line-dark: #DFE6EE;
     --on-navy: #10273E;
     --on-navy-soft: #3D5266;
-    --gold: var(--gold-deep);   /* gold on near-white fails contrast */
+    --gold: var(--gold-ink);   /* 5.02:1 on this panel; --gold-deep is 2.9:1 */
     background: #EAF0F7;
     color: #10273E;
     border-color: #D3DEEA;
@@ -359,7 +363,7 @@
   }
   .hero-eyebrow {
     font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.16em;
-    text-transform: uppercase; color: var(--gold-deep); margin-bottom: 1.6rem;
+    text-transform: uppercase; color: var(--gold-ink); margin-bottom: 1.6rem;
     display: flex; align-items: center; gap: 0.6rem;
   }
   .hero-eyebrow::before { content: ''; width: 26px; height: 2px; background: var(--gold); }
@@ -379,7 +383,7 @@
   .hero-card-label {
     display: flex; align-items: center; gap: 0.55rem;
     font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em;
-    text-transform: uppercase; color: var(--gold-deep); margin-bottom: 0.8rem;
+    text-transform: uppercase; color: var(--gold-ink); margin-bottom: 0.8rem;
   }
   .hero-card-title { font-size: 1.22rem; font-weight: 700; letter-spacing: -0.015em; color: var(--navy); line-height: 1.25; margin-bottom: 0.75rem; }
   .hero-honest {
@@ -410,7 +414,7 @@
     font-weight: 700; font-size: 0.98rem; letter-spacing: 0.01em; color: var(--navy);
   }
   .flow-heads svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-  .flow-heads .fh-out { grid-column: 3; color: var(--gold-deep); }
+  .flow-heads .fh-out { grid-column: 3; color: var(--gold-ink); }
 
   .flow2 { position: relative; }
   .flow2-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: visible; }
@@ -606,7 +610,7 @@
   .tree-col.active .tree-art { transform: translateY(-4px); }
   .tree-num { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--ink-mute); margin-bottom: 0.3rem; }
   .tree-name { font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; color: var(--navy); line-height: 1.25; margin-bottom: 0.25rem; }
-  .tree-tag { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-deep); line-height: 1.5; }
+  .tree-tag { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-ink); line-height: 1.5; }
 
   .tree-card {
     flex: 1;
@@ -697,7 +701,7 @@
     padding: clamp(1.6rem, 3vw, 2.2rem);
   }
   .how-card.dark { background: var(--navy); border-color: var(--navy); color: var(--on-navy); }
-  .how-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold-deep); margin-bottom: 0.6rem; }
+  .how-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold-ink); margin-bottom: 0.6rem; }
   .how-card.dark .how-label { color: var(--gold); }
   .how-title { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; color: var(--navy); margin-bottom: 0.35rem; }
   .how-card.dark .how-title { color: var(--white); }
@@ -707,9 +711,9 @@
   .how-step { display: flex; gap: 1rem; padding: 1.05rem 0; border-top: 1px solid var(--line); }
   .how-card.dark .how-step { border-top-color: var(--line-dark); }
   .how-step:first-of-type { border-top: none; padding-top: 0; }
-  .how-num { font-family: var(--mono); font-size: 0.78rem; color: var(--gold-deep); font-weight: 600; min-width: 24px; padding-top: 2px; }
+  .how-num { font-family: var(--mono); font-size: 0.78rem; color: var(--gold-ink); font-weight: 600; min-width: 24px; padding-top: 2px; }
   .how-card.dark .how-num { color: var(--gold); }
-  .how-step-meta { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-deep); margin-bottom: 0.25rem; }
+  .how-step-meta { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-ink); margin-bottom: 0.25rem; }
   .how-card.dark .how-step-meta { color: var(--gold); }
   .how-step-title { font-size: 0.99rem; font-weight: 600; color: var(--navy); margin-bottom: 0.2rem; }
   .how-card.dark .how-step-title { color: var(--white); }
@@ -765,7 +769,7 @@
     font-family: var(--mono); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em;
   }
   .member-name { font-size: 1rem; font-weight: 700; color: var(--navy); line-height: 1.3; }
-  .member-role { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-deep); margin: 0.2rem 0 0.45rem; }
+  .member-role { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-ink); margin: 0.2rem 0 0.45rem; }
   .member-bio { font-size: 0.86rem; color: var(--ink-soft); line-height: 1.5; }
   @media (max-width: 860px) { .team { grid-template-columns: 1fr; } }
 
@@ -865,7 +869,7 @@
     font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em;
     color: var(--ink-mute); line-height: 1.6;
   }
-  .demo-note a { color: var(--gold-deep); text-decoration: underline; }
+  .demo-note a { color: var(--gold-ink); text-decoration: underline; }
   @media (max-width: 860px) { .demo-card { grid-template-columns: 1fr; } }
 
   /* ═══════════════ FLOATING ═══════════════ */
@@ -899,6 +903,10 @@
   .to-top.on-dark { background: var(--navy-900); border-color: var(--gold); box-shadow: 0 10px 28px rgba(4,14,26,0.5); }
   .to-top.on-dark:hover { border-color: var(--white); }
 </style>
+
+<!-- .reveal starts hidden and is revealed by an IntersectionObserver. Without
+     this, blocked or failed JS leaves the whole page below the hero blank. -->
+<noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
 <body>
 
@@ -1541,14 +1549,14 @@
     <div class="how-grid">
       <div class="how-card reveal">
         <div class="how-label"><span data-ro>Modelul A</span><span data-en>Model A</span></div>
-        <div class="how-title"><span data-ro>Proiect Specific</span><span data-en>Scoped Project</span></div>
+        <h3 class="how-title"><span data-ro>Proiect Specific</span><span data-en>Scoped Project</span></h3>
         <div class="how-sub"><span data-ro>Livrare delimitată. Estimare fixă. Predare clară.</span><span data-en>Scoped delivery. Fixed estimate. Clean handover.</span></div>
 
         <div class="how-step">
           <div class="how-num">01</div>
           <div>
             <div class="how-step-meta">60 min · <span data-ro>gratuit</span><span data-en>free</span></div>
-            <div class="how-step-title"><span data-ro>Descoperire</span><span data-en>Discovery</span></div>
+            <h4 class="how-step-title"><span data-ro>Descoperire</span><span data-en>Discovery</span></h4>
             <div class="how-step-desc"><span data-ro>O discuție sinceră: are sens automatizarea pentru procesul dumneavoastră — și cât ar costa?</span><span data-en>An honest conversation: does automation make sense for your process — and what would it cost?</span></div>
           </div>
         </div>
@@ -1556,7 +1564,7 @@
           <div class="how-num">02</div>
           <div>
             <div class="how-step-meta"><span data-ro>Înainte de angajament · gratuit</span><span data-en>Before commitment · free</span></div>
-            <div class="how-step-title"><span data-ro>Demo funcțional</span><span data-en>Working demo</span></div>
+            <h4 class="how-step-title"><span data-ro>Demo funcțional</span><span data-en>Working demo</span></h4>
             <div class="how-step-desc"><span data-ro>Construim un prototip pe cazul dumneavoastră concret. Îl vedeți rulând înainte să decideți ceva.</span><span data-en>We build a prototype on your actual use case. You see it running before you decide anything.</span></div>
           </div>
         </div>
@@ -1564,7 +1572,7 @@
           <div class="how-num">03</div>
           <div>
             <div class="how-step-meta">1–8 <span data-ro>săptămâni</span><span data-en>weeks</span></div>
-            <div class="how-step-title"><span data-ro>Construire & testare</span><span data-en>Build & test</span></div>
+            <h4 class="how-step-title"><span data-ro>Construire & testare</span><span data-en>Build & test</span></h4>
             <div class="how-step-desc"><span data-ro>Progres vizibil săptămânal. Nimic nu intră în producție fără aprobarea dumneavoastră.</span><span data-en>Visible weekly progress. Nothing goes live without your sign-off.</span></div>
           </div>
         </div>
@@ -1572,7 +1580,7 @@
           <div class="how-num">04</div>
           <div>
             <div class="how-step-meta">1–2 <span data-ro>zile</span><span data-en>days</span></div>
-            <div class="how-step-title"><span data-ro>Predare & instruire</span><span data-en>Handover & training</span></div>
+            <h4 class="how-step-title"><span data-ro>Predare & instruire</span><span data-en>Handover & training</span></h4>
             <div class="how-step-desc"><span data-ro>Documentație completă. Echipa dumneavoastră deține și operează totul — fără dependență de noi.</span><span data-en>Full documentation. Your team owns and runs everything — no dependency on us.</span></div>
           </div>
         </div>
@@ -1580,34 +1588,34 @@
 
       <div class="how-card dark reveal" style="--d:0.1s">
         <div class="how-label"><span data-ro>Modelul B</span><span data-en>Model B</span></div>
-        <div class="how-title"><span data-ro>Parteneriat de Automatizare</span><span data-en>Automation Partnership</span></div>
+        <h3 class="how-title"><span data-ro>Parteneriat de Automatizare</span><span data-en>Automation Partnership</span></h3>
         <div class="how-sub"><span data-ro>Continuu. Îmbunătățire constantă. Strategic.</span><span data-en>Ongoing. Continuous improvement. Strategic.</span></div>
 
         <div class="how-step">
           <div class="how-num">01</div>
           <div>
-            <div class="how-step-title"><span data-ro>Audit de proces & foaie de parcurs</span><span data-en>Process audit & roadmap</span></div>
+            <h4 class="how-step-title"><span data-ro>Audit de proces & foaie de parcurs</span><span data-en>Process audit & roadmap</span></h4>
             <div class="how-step-desc"><span data-ro>Cartografiem operațiunile și prioritizăm automatizările după randament — cel mai mare primul.</span><span data-en>We map your operations and prioritise automations by return — biggest first.</span></div>
           </div>
         </div>
         <div class="how-step">
           <div class="how-num">02</div>
           <div>
-            <div class="how-step-title"><span data-ro>Construire & implementare continuă</span><span data-en>Rolling build & deployment</span></div>
+            <h4 class="how-step-title"><span data-ro>Construire & implementare continuă</span><span data-en>Rolling build & deployment</span></h4>
             <div class="how-step-desc"><span data-ro>Automatizări noi livrate lunar — fiecare revizuită și aprobată înainte de producție.</span><span data-en>New automations delivered monthly — each reviewed and approved before going live.</span></div>
           </div>
         </div>
         <div class="how-step">
           <div class="how-num">03</div>
           <div>
-            <div class="how-step-title"><span data-ro>Revizuire & optimizare lunară</span><span data-en>Monthly review & optimisation</span></div>
+            <h4 class="how-step-title"><span data-ro>Revizuire & optimizare lunară</span><span data-en>Monthly review & optimisation</span></h4>
             <div class="how-step-desc"><span data-ro>Revizuim performanța împreună și ajustăm fluxurile pe măsură ce afacerea se schimbă.</span><span data-en>We review performance together and adjust flows as your business changes.</span></div>
           </div>
         </div>
         <div class="how-step">
           <div class="how-num">04</div>
           <div>
-            <div class="how-step-title"><span data-ro>Consultanță strategică</span><span data-en>Strategic advisory</span></div>
+            <h4 class="how-step-title"><span data-ro>Consultanță strategică</span><span data-en>Strategic advisory</span></h4>
             <div class="how-step-desc"><span data-ro>Acționăm ca echipa dumneavoastră internă de AI — consiliere pe măsură ce tehnologia evoluează.</span><span data-en>We act as your internal AI team — advising as the technology evolves.</span></div>
           </div>
         </div>
@@ -1638,7 +1646,7 @@
         <div class="why-ico">
           <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         </div>
-        <div class="why-title"><span data-ro>Construit pentru România</span><span data-en>Built for Romania</span></div>
+        <h3 class="why-title"><span data-ro>Construit pentru România</span><span data-en>Built for Romania</span></h3>
         <p class="why-desc"><span data-ro>ANAF, e-Factura, SPV — construim nativ pentru mediul local, nu învățăm pe timpul dumneavoastră.</span><span data-en>ANAF, e-Factura, SPV — we build natively for the local environment, not learning on your time.</span></p>
       </div>
       <div class="why-card reveal" style="--d:0.08s">
@@ -1646,7 +1654,7 @@
         <div class="why-ico">
           <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         </div>
-        <div class="why-title"><span data-ro>Experiență la ambele capete</span><span data-en>Experience at both ends</span></div>
+        <h3 class="why-title"><span data-ro>Experiență la ambele capete</span><span data-en>Experience at both ends</span></h3>
         <p class="why-desc"><span data-ro>Venim din multinaționale și administrăm noi înșine IMM-uri. Știm ce funcționează la fiecare scară.</span><span data-en>We come from multinationals and run SMEs ourselves. We know what works at each scale.</span></p>
       </div>
       <div class="why-card reveal" style="--d:0.16s">
@@ -1654,7 +1662,7 @@
         <div class="why-ico">
           <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         </div>
-        <div class="why-title"><span data-ro>Dețineți tot</span><span data-en>You own everything</span></div>
+        <h3 class="why-title"><span data-ro>Dețineți tot</span><span data-en>You own everything</span></h3>
         <p class="why-desc"><span data-ro>Platforme deschise, complet documentate. Nu depindeți niciodată exclusiv de noi.</span><span data-en>Open platforms, fully documented. You're never solely dependent on us.</span></p>
       </div>
       <div class="why-card accent reveal" style="--d:0.24s">
@@ -1662,7 +1670,7 @@
         <div class="why-ico">
           <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
-        <div class="why-title"><span data-ro>Sinceritate înainte de orice</span><span data-en>Honesty before anything</span></div>
+        <h3 class="why-title"><span data-ro>Sinceritate înainte de orice</span><span data-en>Honesty before anything</span></h3>
         <p class="why-desc"><span data-ro>Dacă nu se amortizează, vă spunem. Preferăm să refuzăm un proiect decât să livrăm ceva inutil.</span><span data-en>If it won't pay for itself, we'll tell you. We'd rather turn down a project than ship something useless.</span></p>
       </div>
     </div>
@@ -1671,7 +1679,7 @@
       <div class="member reveal">
         <div class="member-avatar">CA</div>
         <div>
-          <div class="member-name">Catalin</div>
+          <h3 class="member-name">Catalin</h3>
           <div class="member-role"><span data-ro>Strategie & Comercial</span><span data-en>Strategy & Commercial</span></div>
           <p class="member-bio"><span data-ro>Conduce relațiile cu clienții și scoping-ul proiectelor — cu înțelegere tehnică a arhitecturilor RAG și n8n.</span><span data-en>Leads client relationships and project scoping — with a technical grasp of RAG and n8n architectures.</span></p>
         </div>
@@ -1679,7 +1687,7 @@
       <div class="member reveal" style="--d:0.08s">
         <div class="member-avatar">CO</div>
         <div>
-          <div class="member-name">Costin</div>
+          <h3 class="member-name">Costin</h3>
           <div class="member-role"><span data-ro>Lead Tehnic</span><span data-en>Technical Lead</span></div>
           <p class="member-bio"><span data-ro>Arhitectul sistemelor — fluxuri n8n, baze vectoriale, integrări API care rulează fiabil în producție.</span><span data-en>The systems architect — n8n flows, vector stores, API integrations that run reliably in production.</span></p>
         </div>
@@ -1687,7 +1695,7 @@
       <div class="member reveal" style="--d:0.16s">
         <div class="member-avatar">AL</div>
         <div>
-          <div class="member-name">Alex</div>
+          <h3 class="member-name">Alex</h3>
           <div class="member-role"><span data-ro>Lead Hibrid</span><span data-en>Hybrid Lead</span></div>
           <p class="member-bio"><span data-ro>Puntea dintre strategie și execuție — traduce nevoile clienților în soluții care rezolvă problema reală.</span><span data-en>The bridge between strategy and delivery — turns client needs into solutions that solve the real problem.</span></p>
         </div>
