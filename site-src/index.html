@@ -22,6 +22,7 @@
 <meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
 <meta property="og:image:alt" content="Adaptive Technologies" />
 
+<link rel="stylesheet" href="/assets/site.css" />
 <link rel="canonical" href="https://adaptivetech.ro/" />
 <meta name="theme-color" content="#0C3054" />
 
@@ -125,50 +126,6 @@
 </script>
 
 <style>
-  /* ═══════════════ BRAND TOKENS (Brand Book · Edition 2025) ═══════════════ */
-  :root {
-    --navy: #0C3054;
-    --navy-700: #16406B;
-    --navy-850: #0A2846;
-    --navy-900: #081F38;
-    --gold: #F2A91E;
-    --gold-deep: #B87D18;   /* derived: darkened from #C2861A (2.91:1 on Surface)
-                               to clear the 3:1 large-text/UI floor -- 3.26:1 on
-                               Surface, 3.51:1 on white. Emphasis and borders. */
-    --gold-ink: #8A5D07;    /* derived: gold TEXT on light grounds -- 5.35:1 on
-                               Surface, 5.75:1 on white. Same value demo.css uses. */
-    --steel: #8796A9;
-    /* --sand #E7E5DF is a Brand Book colour, deliberately UNUSED: it was
-       the one warm tone in a cool palette and read as a different site. */
-    --steel-ink: #8C9BAD;  /* derived: --steel as TEXT on dark grounds. Brand
-                              --steel is 4.45:1 on --navy, just under the floor;
-                              this is 4.73:1 on --navy, 5.27:1 on --navy-850,
-                              5.86:1 on --navy-900. Graphics keep --steel. */
-    --surface: #F4F7FA;
-    --white: #FFFFFF;
-
-    --ink: #10273E;
-    --ink-soft: #3D5266;
-    --ink-mute: #5C6B7C;   /* derived: darkened from #6E8095, which was 3.77:1 on
-                              Surface and 3.53:1 on the #EAF0F7 inset panel -- below
-                              the 4.5 floor for the 0.58-0.9rem labels and notes that
-                              use it. Now 4.76:1 on that panel, 5.07:1 on Surface,
-                              5.46:1 on white. Ramp ink < ink-soft < ink-mute holds. */
-    --line: #DFE6EE;
-
-    --on-navy: #EAF0F7;
-    --on-navy-soft: rgba(234,240,247,0.72);
-    --line-dark: rgba(234,240,247,0.14);
-
-    --sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-
-    --maxw: 1240px;
-    --pad: clamp(1.25rem, 4vw, 2.5rem);
-    --ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --footer-h: 48px;
-  }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; scroll-padding-top: 84px; -webkit-text-size-adjust: 100%; }
   body {
@@ -219,105 +176,6 @@
     html { scroll-behavior: auto; }
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     .reveal { opacity: 1; transform: none; }
-  }
-
-  /* ═══════════════ TOP NAV ═══════════════ */
-  .nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-    transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease);
-  }
-  .nav-inner {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 1rem var(--pad);
-    max-width: var(--maxw); margin: 0 auto;
-  }
-  /* The lockup. Metrics match demo.css .demo__brand exactly, so the mark
-     and wordmark are pixel-identical on the homepage, the demo and the
-     privacy policy. A logotype is exempt from the WCAG contrast floors,
-     which is what lets the gold mark sit on a light nav. */
-  .brand { display: flex; align-items: baseline; gap: 0.4rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
-  .brand-mark { width: 20px; height: 20px; flex: none; align-self: center; }
-  .brand-mark path { fill: var(--gold); transition: fill 0.3s; }
-  .brand-word { line-height: 1; }
-  .brand-name { color: var(--navy); transition: color 0.3s; }
-  .brand-dot { width: 7px; height: 7px; margin: 0 2px; background: var(--gold); border-radius: 50%; display: inline-block; }
-  .brand-tag  { font-weight: 400; color: var(--navy-700); letter-spacing: 0; transition: color 0.3s; }
-
-  .nav-links { display: flex; gap: 1.9rem; align-items: center; }
-  .nav-links a {
-    font-size: 0.92rem; font-weight: 500; color: var(--ink-soft);
-    transition: color 0.2s; position: relative; padding: 4px 0;
-  }
-  .nav-links a::after {
-    content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
-    background: var(--gold); transition: width 0.25s var(--ease);
-  }
-  .nav-links a:hover { color: var(--navy); }
-  .nav-links a:hover::after { width: 100%; }
-
-  .nav-right { display: flex; align-items: center; gap: 1rem; }
-  .lang-toggle {
-    display: flex; gap: 2px; font-family: var(--mono); font-size: 0.72rem;
-    padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--white);
-  }
-  .lang-toggle a {
-    padding: 4px 9px; border-radius: 6px; color: var(--ink-mute);
-    transition: all 0.2s; font-family: inherit; font-size: inherit;
-  }
-  .lang-toggle a.active { background: var(--gold); color: var(--navy); font-weight: 600; }
-
-  .btn {
-    display: inline-flex; align-items: center; gap: 0.55rem;
-    padding: 0.78rem 1.35rem; border-radius: 10px;
-    font-size: 0.95rem; font-weight: 600; letter-spacing: 0.005em;
-    transition: transform 0.2s var(--ease), background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
-    cursor: pointer;
-  }
-  .btn .arr { transition: transform 0.25s var(--ease); }
-  .btn:hover .arr { transform: translateX(4px); }
-  .btn-gold { background: var(--gold); color: var(--navy); }
-  .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(242,169,30,0.32); }
-  .btn-outline { border: 1px solid var(--line); color: var(--navy); background: var(--white); }
-  .btn-outline:hover { border-color: var(--navy); }
-  .btn-navy { background: var(--navy); color: var(--white); }
-  .btn-navy:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(12,48,84,0.28); }
-  .btn-sm { padding: 0.55rem 1.05rem; font-size: 0.88rem; }
-
-  .nav.solid { background: rgba(244,247,250,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line); }
-
-  .menu-btn { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 9px; color: var(--navy); }
-
-  .m-menu {
-    position: fixed; inset: 0; z-index: 190; background: var(--navy);
-    display: flex; flex-direction: column; justify-content: center; padding: 0 var(--pad);
-    opacity: 0; pointer-events: none; transition: opacity 0.3s var(--ease);
-  }
-  .m-menu.open { opacity: 1; pointer-events: auto; }
-  .m-menu a {
-    font-size: 1.7rem; font-weight: 600; color: var(--on-navy); padding: 0.85rem 0;
-    border-bottom: 1px solid var(--line-dark); display: flex; justify-content: space-between; align-items: center;
-  }
-  .m-menu a .mono { font-size: 0.7rem; color: var(--gold); }
-  .m-menu a.btn {
-    margin-top: 2rem; justify-content: center; border-bottom: none;
-    font-size: 1.05rem; font-weight: 600; color: var(--navy); padding: 0.95rem 1.2rem;
-  }
-
-  .nav.menu-open, .nav.menu-open.solid { background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .nav.menu-open .brand-mark path { fill: var(--gold); }
-  .nav.menu-open .brand-name { color: var(--white); }
-  .nav.menu-open .brand-tag { color: var(--on-navy-soft); }
-  .nav.menu-open .menu-btn { color: var(--white); }
-  .nav.menu-open .lang-toggle { border-color: var(--line-dark); background: transparent; }
-  .nav.menu-open .lang-toggle a { color: var(--on-navy-soft); }
-  .nav.menu-open .lang-toggle a.active { color: var(--navy); }
-  .menu-btn .ic-close { display: none; }
-  .nav.menu-open .menu-btn .ic-burger { display: none; }
-  .nav.menu-open .menu-btn .ic-close { display: block; }
-
-  @media (max-width: 900px) {
-    .nav-links, .nav .btn-cta-nav { display: none; }
-    .menu-btn { display: flex; }
   }
 
   /* ═══════════════ LEFT RAIL ═══════════════ */
@@ -919,35 +777,6 @@
 
   @media (max-width: 900px) { .contact-grid { grid-template-columns: 1fr; } }
 
-  /* ═══════════════ FOOTER ═══════════════ */
-  /* Pinned, so contact and the privacy link are reachable from anywhere on
-     the page. z-index sits under the mobile menu overlay (190) so the menu
-     covers it, and under the nav (200). */
-  footer {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-    background: var(--navy-900); color: var(--steel);
-    border-top: 1px solid var(--line-dark);
-  }
-  .footer-inner {
-    display: flex; justify-content: space-between; align-items: center;
-    gap: 1rem; height: var(--footer-h); font-size: 0.78rem;
-    flex-wrap: nowrap; white-space: nowrap;
-  }
-  .footer-meta { display: flex; align-items: center; gap: 0.75rem; overflow: hidden; text-overflow: ellipsis; }
-  .footer-sep { color: var(--line-dark); }
-  .footer-brand { display: flex; align-items: center; gap: 0.6rem; color: var(--on-navy); font-weight: 600; letter-spacing: 0.06em; font-size: 0.9rem; }
-  .footer-brand svg { width: 18px; height: 18px; }
-  .footer-brand svg path { fill: var(--gold); }
-  .footer-inner a { color: var(--gold); }
-  .footer-inner a:hover { text-decoration: underline; }
-  .footer-tag { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.1em; }
-  /* Below 640px only the mark, the address and the policy survive -- the
-     bar must stay one line, or it eats the viewport it was slimmed to save. */
-  @media (max-width: 640px) {
-    .footer-tag, .footer-brand span, .footer-sep.opt, .footer-opt { display: none; }
-    .footer-inner { justify-content: space-between; font-size: 0.72rem; }
-  }
-
   /* ═══════════════ DEMO ═══════════════ */
   .demo-card {
     display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(1.8rem, 4vw, 3rem);
@@ -1016,62 +845,7 @@
 <svg class="watermark" id="watermark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
 
 <!-- ═══════════════ TOP NAV ═══════════════ -->
-<nav class="nav" id="nav">
-  <div class="nav-inner">
-    <a href="#start" class="brand" aria-label="Adaptive Technologies">
-      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
-      <span class="brand-word"><span class="brand-name">adaptive</span><span class="brand-dot"></span><span class="brand-tag">technologies</span></span>
-    </a>
-    <div class="nav-links">
-      <a href="#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
-      <a href="#studiu-de-caz"><span data-ro>Studii de caz</span><span data-en>Case studies</span></a>
-      <a href="#demo">Demo</a>
-      <a href="#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
-      <a href="#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span></a>
-      <a href="#contact">Contact</a>
-    </div>
-    <div class="nav-right">
-      <div class="lang-toggle" role="group" aria-label="Limbă / Language">
-        <!--LANG-TOGGLE-->
-      </div>
-      <a href="#contact" class="btn btn-gold btn-sm btn-cta-nav">
-        <span data-ro>Consultație gratuită</span><span data-en>Free consultation</span>
-      </a>
-      <button class="menu-btn" id="menuBtn" aria-label="Meniu" aria-expanded="false">
-        <svg class="ic-burger" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
-        <svg class="ic-close" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
-      </button>
-    </div>
-  </div>
-</nav>
-
-<!-- Mobile menu overlay -->
-<div class="m-menu" id="mMenu">
-  <a href="#probleme"><span data-ro>Probleme</span><span data-en>Problems</span><span class="mono">01</span></a>
-  <a href="#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span><span class="mono">02</span></a>
-  <a href="#studiu-de-caz"><span data-ro>Studiu de caz</span><span data-en>Case study</span><span class="mono">03</span></a>
-  <a href="#demo">Demo<span class="mono">04</span></a>
-  <a href="#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span><span class="mono">05</span></a>
-  <a href="#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span><span class="mono">06</span></a>
-  <a href="#contact">Contact<span class="mono">07</span></a>
-  <a href="#contact" class="btn btn-gold"><span data-ro>Programați o consultație gratuită</span><span data-en>Book a free consultation</span></a>
-</div>
-
-<!-- ═══════════════ LEFT RAIL TOC ═══════════════ -->
-<aside class="rail" id="rail" aria-label="Cuprins">
-  <div class="rail-track"><div class="rail-fill" id="railFill"></div></div>
-  <nav class="rail-items" id="railItems">
-    <a href="#probleme"><span class="rail-num">01</span><span class="rail-label"><span data-ro>Probleme</span><span data-en>Problems</span></span></a>
-    <a href="#solutii"><span class="rail-num">02</span><span class="rail-label"><span data-ro>Soluții</span><span data-en>Solutions</span></span></a>
-    <a href="#studiu-de-caz"><span class="rail-num">03</span><span class="rail-label"><span data-ro>Studiu de caz</span><span data-en>Case study</span></span></a>
-    <a href="#demo"><span class="rail-num">04</span><span class="rail-label">Demo</span></a>
-    <a href="#proces"><span class="rail-num">05</span><span class="rail-label"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></span></a>
-    <a href="#de-ce-noi"><span class="rail-num">06</span><span class="rail-label"><span data-ro>De ce noi</span><span data-en>Why us</span></span></a>
-    <a href="#contact"><span class="rail-num">07</span><span class="rail-label">Contact</span></a>
-  </nav>
-</aside>
-
-<main>
+<!--@header-->
 
 <!-- ═══════════════ HERO ═══════════════ -->
 <header class="hero" id="start" data-theme="light">
@@ -1872,24 +1646,7 @@
 </main>
 
 <!-- ═══════════════ FOOTER ═══════════════ -->
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
-        ADAPTIVE · TECHNOLOGIES
-      </div>
-      <div class="footer-tag"><span data-ro>Lucrați mai inteligent. Nu mai mult.</span><span data-en>Work smarter. Not more.</span></div>
-      <div class="footer-meta">
-        <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
-        <span class="footer-sep">·</span>
-        <a href="/politica-de-confidentialitate.html"><span data-ro>Confidențialitate</span><span data-en>Privacy</span></a>
-        <span class="footer-sep opt">·</span>
-        <span class="footer-opt">© <span id="year"></span> Adaptive Technologies S.R.L.</span>
-      </div>
-    </div>
-  </div>
-</footer>
+<!--@footer-->
 
 <!-- Back to top -->
 <button class="to-top" id="toTop" aria-label="Înapoi la început / Back to top">
@@ -1906,30 +1663,7 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 
-  /* ── Year ────────────────────────────────────────── */
-  document.getElementById('year').textContent = new Date().getFullYear();
-
-  /* ── Nav surface on scroll ───────────────────────── */
-  const nav = document.getElementById('nav');
-  const onScrollNav = () => nav.classList.toggle('solid', window.scrollY > 24);
-  onScrollNav();
-  window.addEventListener('scroll', onScrollNav, { passive: true });
-
-  /* ── Mobile menu ─────────────────────────────────── */
-  const menuBtn = document.getElementById('menuBtn');
-  const mMenu = document.getElementById('mMenu');
-  menuBtn.addEventListener('click', () => {
-    const open = mMenu.classList.toggle('open');
-    nav.classList.toggle('menu-open', open);
-    menuBtn.setAttribute('aria-expanded', open);
-    document.body.style.overflow = open ? 'hidden' : '';
-  });
-  mMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-    mMenu.classList.remove('open');
-    nav.classList.remove('menu-open');
-    menuBtn.setAttribute('aria-expanded', 'false');
-    document.body.style.overflow = '';
-  }));
+<!--@script-->
 
   /* ── Reveal on scroll ────────────────────────────── */
   const revealObs = new IntersectionObserver((entries) => {

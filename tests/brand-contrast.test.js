@@ -14,9 +14,11 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const PAGE = path.join(__dirname, '..', 'website', 'index.html');
-const html = fs.readFileSync(PAGE, 'utf8');
-const css = (html.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+// The single shared stylesheet. Every page links this one file; none of them
+// defines a token of its own any more, which is what the last test here
+// enforces.
+const SITE = path.join(__dirname, '..', 'website');
+const css = fs.readFileSync(path.join(SITE, 'assets', 'site.css'), 'utf8');
 
 const tokens = {};
 for (const m of (css.match(/:root\s*\{[\s\S]*?\}/) || [''])[0]
@@ -108,9 +110,38 @@ test('brand --steel is used as text only where it passes', () => {
     const body = rule[2];
     if (!/(^|[;\s])color:\s*var\(--steel\)/.test(body)) continue;
     const selector = rule[1].replace(/\/\*[\s\S]*?\*\//g, '').trim().replace(/\s+/g, ' ');
-    if (selector === 'footer') continue;
+    if (selector === '.site-bar') continue;
     offenders.push(selector);
   }
   assert.deepStrictEqual(offenders, [],
     'these set color: var(--steel); use var(--steel-ink) on dark or var(--ink-mute) on light');
+});
+
+test('no page defines its own tokens or shared components', () => {
+  // This is the guard that keeps the pages from drifting apart again. They
+  // drifted the first time because each carried its own :root and its own
+  // header and footer rules, so a change to one silently left the others
+  // behind -- which is how the privacy policy ended up a warm-beige site with
+  // a different lockup and two dead nav links.
+  const pages = ['index.html', 'en/index.html',
+    'politica-de-confidentialitate.html', 'en/privacy-policy.html'];
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(SITE, page), 'utf8');
+    const inline = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
+
+    assert.ok(html.includes('href="/assets/site.css"'), page + ' does not link the shared stylesheet');
+    assert.ok(!/:root\s*\{/.test(inline), page + ' defines its own :root tokens');
+
+    // The shared components, by the selectors that own them.
+    for (const owned of ['.brand ', '.nav ', '.nav-inner', '.site-bar ', '.lang-toggle ']) {
+      assert.ok(!inline.includes(owned + '{') && !inline.includes(owned.trim() + ' {'),
+        page + ' redefines the shared component ' + owned.trim());
+    }
+  }
+
+  // demo.css too: it is not built from a master, so nothing else would catch it.
+  const demo = fs.readFileSync(path.join(SITE, 'demo', 'demo.css'), 'utf8');
+  assert.ok(!/:root\s*\{/.test(demo), 'demo.css defines its own tokens');
+  const demoHtml = fs.readFileSync(path.join(SITE, 'demo', 'index.html'), 'utf8');
+  assert.ok(demoHtml.includes('href="/assets/site.css"'), 'the demo does not link the shared stylesheet');
 });

@@ -17,6 +17,7 @@
 <link rel="icon" href="/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 <meta name="theme-color" content="#0C3054" />
+<link rel="stylesheet" href="/assets/site.css" />
 <link rel="canonical" href="https://adaptivetech.ro/politica-de-confidentialitate.html" />
 <meta property="og:title" content="Politica de Confidențialitate — Adaptive Technologies" />
 <meta property="og:type" content="website" />
@@ -33,38 +34,10 @@
      the contrast that forced it. Keep this block in sync with index.html
      if either changes.
      ------------------------------------------------------------------ */
-  :root {
-    --navy: #0C3054;
-    --navy-700: #16406B;
-    --gold: #F2A91E;
-    --gold-deep: #B87D18;
-    --gold-ink: #8A5D07;
-    --gold-soft: #FDF1DB;
-    --ink: #10273E;
-    --ink-soft: #3D5266;
-    --ink-mute: #5C6B7C;   /* matches index.html: 5.46:1 on white */
-    --line: #DFE6EE;
-    --line-2: #808080;      /* 3.95:1 on white, 3.67:1 on Surface (cream-2), 3.14:1 on Sand */
-    /* Aliases for the redesigned homepage's names; values unchanged, since
-       this page's contrast was verified against its own backgrounds. */
-    --gold: var(--gold);
-    --navy-900: #081F38;
-    --steel: #8796A9;
-    --footer-h: 48px;
-    --white: #FFFFFF;
-    --on-navy: #EAF0F7;   /* light text on dark grounds */
-
-    --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-
-    --maxw: 1240px;
-    --pad: clamp(1.25rem, 4vw, 2.5rem);
-  }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   body {
-    font-family: var(--font-sans);
+    font-family: var(--sans);
     font-size: 17px;
     line-height: 1.6;
     color: var(--ink);
@@ -98,113 +71,7 @@
     margin: 0 auto;
     padding: 0 var(--pad);
   }
-
-  /* ─────────── NAV (copied from index.html) ─────────── */
-  .nav {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: rgba(244, 247, 250, 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--line);
-  }
-  .nav-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.1rem var(--pad);
-    max-width: var(--maxw);
-    margin: 0 auto;
-  }
-  .logo {
-    display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
-    font-weight: 700;
-    font-size: 1.05rem;
-    letter-spacing: -0.02em;
-    color: var(--navy);
-  }
-  .logo-mark {
-    width: 20px;
-    height: 20px;
-    align-self: center;
-    margin-right: 0.1rem;
-    fill: var(--gold);
-    transition: fill 0.2s, transform 0.2s;
-  }
-  .logo:hover .logo-mark { fill: var(--gold-deep); transform: translateY(-1px); }
-  .logo-dot {
-    width: 7px;
-    height: 7px;
-    margin: 0 2px;
-    background: var(--gold);
-    border-radius: 50%;
-    display: inline-block;
-  }
-  .logo-sub {
-    font-weight: 400;
-    color: var(--navy-700);   /* the lockup's own colour, not the ink scale */
-    letter-spacing: 0;
-  }
-  .nav-links {
-    display: flex;
-    gap: 2rem;
-    align-items: center;
-  }
-  .nav-links a {
-    font-size: 0.95rem;
-    color: var(--ink-soft);
-    transition: color 0.2s;
-  }
   .nav-links a:hover { color: var(--navy); }
-
-  .nav-right {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-  }
-  .lang-toggle {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--white);
-  }
-  .lang-toggle a {
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-family: inherit;
-    font-size: inherit;
-    color: var(--ink-mute);
-    transition: all 0.2s;
-  }
-  .lang-toggle a.active {
-    background: var(--navy);
-    color: var(--on-navy);
-  }
-  .btn-cta {
-    background: var(--navy);
-    color: var(--on-navy);
-    padding: 0.7rem 1.2rem;
-    border-radius: 999px;
-    font-size: 0.95rem;
-    font-weight: 500;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .btn-cta:hover {
-    background: var(--gold);
-    color: var(--navy);
-    transform: translateY(-1px);
-  }
   .btn-cta-amber {
     background: var(--gold);
     color: var(--navy);
@@ -213,8 +80,6 @@
     background: var(--navy);
     color: var(--on-navy);
   }
-
-  .mobile-toggle { display: none; }
 
   @media (max-width: 860px) {
     .nav-links { display: none; }
@@ -230,17 +95,7 @@
       gap: 1.2rem;
       border-bottom: 1px solid var(--line);
     }
-    .mobile-toggle {
-      display: flex;
-      width: 38px;
-      height: 38px;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--white);
-    }
-    .btn-cta-nav { display: none; }
+        .btn-cta-nav { display: none; }
   }
 
   /* ─────────── POLICY HERO ─────────── */
@@ -248,7 +103,7 @@
     padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(1.5rem, 4vw, 2.5rem);
   }
   .policy-eyebrow {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.8rem;
     color: var(--ink-soft);
     text-transform: uppercase;
@@ -273,7 +128,7 @@
     margin-bottom: 0.9rem;
   }
   .policy-updated {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.82rem;
     color: var(--ink-mute);
     text-transform: uppercase;
@@ -351,53 +206,13 @@
     padding: 2.5rem 0;
     border-top: 1px solid var(--navy-700);
   }
-  .footer-inner {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-    font-size: 0.85rem;
-  }
-  .footer-links {
+    .footer-links {
     display: flex;
     align-items: center;
     gap: 1.25rem;
     flex-wrap: wrap;
   }
-  .footer-inner a { color: var(--gold); }
-  .footer-inner a:hover { text-decoration: underline; }
-
-  /* No bilingual CSS: each built page carries one language only, and the
-     other language lives at its own URL. See tools/build-site.js. */
-
-/* ── Pinned site bar ──────────────────────────────────────────────────
-   Matches the homepage: contact and the privacy link stay reachable from
-   anywhere, at a height small enough not to cost the content its screen. */
-.site-bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-  background: #081F38; color: var(--steel);
-  border-top: 1px solid rgba(234,240,247,0.14);
-}
-.site-bar__inner {
-  max-width: 1240px; margin: 0 auto; padding: 0 var(--pad);
-  height: var(--footer-h);
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 1rem; font-size: 0.78rem; white-space: nowrap;
-}
-.site-bar__brand {
-  display: flex; align-items: center; gap: 0.6rem;
-  color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
-}
-.site-bar__brand svg { width: 16px; height: 16px; flex: none; }
-.site-bar__brand svg path { fill: var(--gold); }
-.site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
-.site-bar__sep { color: rgba(234,240,247,0.3); }
-/* On a light bar gold text would fail contrast; on this navy ground the
-   full-strength gold is the accessible one. */
-.site-bar a { color: var(--gold); border-bottom: none; }
-.site-bar a:hover { text-decoration: underline; }
-@media (max-width: 640px) {
+    @media (max-width: 640px) {
   .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
   .site-bar__inner { font-size: 0.72rem; }
 }
@@ -410,35 +225,54 @@
 <body>
 
 <!-- ─────────── NAV ─────────── -->
-<nav class="nav">
+<!-- THE header. Injected into every page by tools/build-site.js at the
+     <!--@header--> marker. Edit here, not in a page.
+
+     / is filled per page: empty on the homepage, so these stay
+     same-page anchors that scroll; "/" or "/en/" elsewhere, so they cross
+     back to the right language's homepage. The privacy page used to carry
+     its own copy of this, which is how it ended up linking to #cum-lucram
+     and #despre -- two sections that do not exist. -->
+<nav class="nav" id="nav">
   <div class="nav-inner">
-    <a href="/" class="logo">
-      <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"></path></svg>
-      adaptive<span class="logo-dot"></span><span class="logo-sub">technologies</span>
+    <a href="/#start" class="brand" aria-label="Adaptive Technologies">
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
+      <span class="brand-word"><span class="brand-name">adaptive</span><span class="brand-dot"></span><span class="brand-tag">technologies</span></span>
     </a>
-    <div class="nav-links" id="navLinks">
+    <div class="nav-links">
       <a href="/#solutii"><span data-ro>Soluții</span></a>
       <a href="/#studiu-de-caz"><span data-ro>Studii de caz</span></a>
       <a href="/#demo">Demo</a>
       <a href="/#proces"><span data-ro>Cum lucrăm</span></a>
       <a href="/#de-ce-noi"><span data-ro>De ce noi</span></a>
-      <a href="/#contact"><span data-ro>Contact</span></a>
+      <a href="/#contact">Contact</a>
     </div>
     <div class="nav-right">
-      <div class="lang-toggle">
+      <div class="lang-toggle" role="group" aria-label="Limbă / Language">
         <a id="lang-ro" class="active" href="/politica-de-confidentialitate.html" hreflang="ro" aria-current="true">RO</a>
         <a id="lang-en" href="/en/privacy-policy.html" hreflang="en">EN</a>
       </div>
-      <a href="/#contact" class="btn-cta btn-cta-nav">
+      <a href="/#contact" class="btn btn-gold btn-sm btn-cta-nav">
         <span data-ro>Consultație gratuită</span>
-        
       </a>
-      <button class="mobile-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Menu">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <button class="menu-btn" id="menuBtn" aria-label="Meniu" aria-expanded="false">
+        <svg class="ic-burger" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
+        <svg class="ic-close" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
       </button>
     </div>
   </div>
 </nav>
+
+<div class="m-menu" id="mMenu">
+  <a href="/#probleme"><span data-ro>Probleme</span><span class="mono">01</span></a>
+  <a href="/#solutii"><span data-ro>Soluții</span><span class="mono">02</span></a>
+  <a href="/#studiu-de-caz"><span data-ro>Studiu de caz</span><span class="mono">03</span></a>
+  <a href="/#demo">Demo<span class="mono">04</span></a>
+  <a href="/#proces"><span data-ro>Cum lucrăm</span><span class="mono">05</span></a>
+  <a href="/#de-ce-noi"><span data-ro>De ce noi</span><span class="mono">06</span></a>
+  <a href="/#contact">Contact<span class="mono">07</span></a>
+  <a href="/#contact" class="btn btn-gold"><span data-ro>Programați o consultație gratuită</span></a>
+</div>
 
 <!-- ─────────── POLICY HERO ─────────── -->
 <section class="policy-hero">
@@ -575,11 +409,17 @@
 </section>
 
 <!-- ─────────── FOOTER ─────────── -->
+<!-- THE footer. Injected at the <!--@footer--> marker.
+
+     The lockup here is the same component as the header's, just smaller --
+     it was previously spelled "ADAPTIVE · TECHNOLOGIES" in caps on all
+     three pages, which contradicted the lowercase wordmark directly above
+     it. /politica-de-confidentialitate.html points at the right language's policy. -->
 <footer class="site-bar">
   <div class="site-bar__inner">
     <span class="site-bar__brand">
       <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
-      <span>ADAPTIVE · TECHNOLOGIES</span>
+      <span class="brand-word"><span>adaptive</span><span class="brand-dot"></span><span class="brand-tag">technologies</span></span>
     </span>
     <span class="site-bar__meta">
       <a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>
@@ -592,12 +432,46 @@
 </footer>
 
 <script>
+/* THE header's behaviour. Injected at the <!--@script--> marker on every
+   page that carries the shared header, so the header cannot be present
+   without the code that makes it work.
 
-  document.getElementById('year').textContent = new Date().getFullYear();
+   This is not a theoretical tidy-up: the privacy page previously had its
+   own cut-down script that called getElementById('navLinks') -- an element
+   its markup no longer has -- and had no mobile-menu wiring at all. The
+   header worked on one page and not the other because the markup was
+   shared by copy and the behaviour was not shared at all. */
 
-  document.querySelectorAll('.nav-links a').forEach(a => {
-    a.addEventListener('click', () => document.getElementById('navLinks').classList.remove('open'));
-  });
+/* The year in the footer. */
+document.getElementById('year').textContent = new Date().getFullYear();
+
+/* The header gains a surface once the page scrolls off the top. */
+const nav = document.getElementById('nav');
+const onScrollNav = () => nav.classList.toggle('solid', window.scrollY > 24);
+onScrollNav();
+window.addEventListener('scroll', onScrollNav, { passive: true });
+
+/* Mobile menu. Locks body scroll while open, and closes on any link -- the
+   links are anchors, so without that the menu would stay over the section
+   it just scrolled to. */
+const menuBtn = document.getElementById('menuBtn');
+const mMenu = document.getElementById('mMenu');
+const closeMenu = () => {
+  mMenu.classList.remove('open');
+  nav.classList.remove('menu-open');
+  menuBtn.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+};
+menuBtn.addEventListener('click', () => {
+  const open = mMenu.classList.toggle('open');
+  nav.classList.toggle('menu-open', open);
+  menuBtn.setAttribute('aria-expanded', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+});
+mMenu.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeMenu));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && mMenu.classList.contains('open')) closeMenu();
+});
 </script>
 
 </body>

@@ -3,48 +3,10 @@
    new brand colours; every non-token colour below is computed and commented
    at the point of use, same convention as the main stylesheet.
    ------------------------------------------------------------------------ */
-:root {
-  --navy: #0C3054;
-  --navy-700: #16406B;
-  --gold: #F2A91E;
-  --gold-ink: #8A5D07;    /* 4.57:1 on Sand / 5.75:1 on White — gold TEXT on light */
-  --gold-soft: #FDF1DB;
-  --ink: #10273E;
-  --ink-soft: #3D5266;
-  --ink-mute: #5C6B7C;    /* canonical: 5.07:1 on Surface, 5.46:1 on white */
-  --line: #DFE6EE;
-  --line-2: #808080;      /* derived: darkened from #CBCECF (1.58:1 on white) to
-                             clear the 3:1 WCAG 1.4.11 non-text floor -- this is
-                             on form input borders -- 3.95:1 on white, 3.67:1
-                             on Surface (cream-2), 3.14:1 on Sand. The earlier
-                             #949494 cleared only white (3.03:1); it failed on
-                             Surface (2.82:1) and Sand (2.41:1). */
-  --white: #FFFFFF;
-  --on-navy: #EAF0F7;    /* light text on dark grounds */
-
-  /* derived: this page's only new colour pair, for form/network errors.
-     #A6291F — 7.10:1 on White, 6.60:1 on Surface (cream-2), 6.35:1 on the
-     amber-soft chip tint. All comfortably clear the 4.5:1 body-text floor. */
-  --error: #A6291F;
-  --error-soft: #FBEAE8; /* background only, never carries text alone */
-
-  --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-
-  --pad: clamp(1.25rem, 4vw, 2.5rem);
-
-  /* Aliases for the names the redesigned homepage uses, pointing at the
-     values already verified against THIS page's backgrounds. */
-  --surface: #F4F7FA;
-  --navy-900: #081F38;
-  --steel: #8796A9;
-  --footer-h: 48px;
-}
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-size: 17px;
   line-height: 1.6;
   color: var(--ink);
@@ -103,57 +65,6 @@ html[lang="en"] [data-en] { display: inline; }
   border-bottom: 1px solid var(--line);
   background: rgba(244, 247, 250, 0.9);
 }
-.demo__brand {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
-  color: var(--navy);
-}
-.demo__brand-mark {
-  width: 20px;
-  height: 20px;
-  align-self: center;
-  fill: var(--gold);
-}
-.demo__brand-dot {
-  width: 7px;
-  height: 7px;
-  margin: 0 2px;
-  background: var(--gold);
-  border-radius: 50%;
-  display: inline-block;
-}
-.demo__brand-sub { font-weight: 400; color: var(--ink-soft); }
-
-/* Copied from the main site's .lang-toggle so the same control reads the
-   same way on both pages. */
-.lang-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--white);
-}
-.lang-toggle button {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--ink-mute);
-  transition: all 0.2s;
-}
-.lang-toggle button.active {
-  background: var(--navy);
-  color: var(--on-navy);
-}
-
 /* ─────────── MAIN / PANELS ─────────── */
 .demo {
   flex: 1;
@@ -202,7 +113,7 @@ html[lang="en"] [data-en] { display: inline; }
    than a single field — that one keeps normal case and weight below. */
 form label[for] {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -217,7 +128,7 @@ form label[for] {
   width: 100%;
   padding: 0.75rem 1rem;
   background: var(--surface);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   color: var(--ink);
   font-family: inherit;
@@ -234,7 +145,7 @@ form label[for] {
 }
 
 #code {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   letter-spacing: 0.3em;
   font-size: 1.15rem;
   text-align: center;
@@ -314,7 +225,7 @@ button[type="submit"]:disabled {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  border: 2px solid var(--line-2);
+  border: 2px solid var(--line-strong);
   border-top-color: var(--navy);
   border-radius: 50%;
   animation: demo-spin 0.8s linear infinite;
@@ -339,7 +250,7 @@ button[type="submit"]:disabled {
   padding-bottom: 1rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--line);
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 #chat-filename {
   color: var(--navy);
@@ -406,7 +317,7 @@ button[type="submit"]:disabled {
   margin-top: 0.65rem;
 }
 .demo__sources li {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: 0.7rem;
   color: var(--gold-ink); /* 5.15:1 on amber-soft */
   background: var(--gold-soft);
@@ -426,41 +337,9 @@ button[type="submit"]:disabled {
 
 @media (max-width: 600px) {
   .demo__bar { padding: 0.9rem var(--pad); }
-  .demo__brand-sub { display: none; }
-  .demo__panel--chat { height: min(78vh, 720px); }
+    .demo__panel--chat { height: min(78vh, 720px); }
   .demo__msg { max-width: 92%; }
 }
-
-/* ─────────── FOOTER ─────────── */
-/* This page had no footer at all, and the consent checkbox's own privacy
-   link (see index.html) is the only other route to the policy from here --
-   worth a second, more visible one regardless of that link's placement. */
-/* ── Pinned site bar ──────────────────────────────────────────────────
-   Matches the homepage: contact and the privacy link stay reachable from
-   anywhere, at a height small enough not to cost the content its screen. */
-.site-bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-  background: #081F38; color: var(--steel);
-  border-top: 1px solid rgba(234,240,247,0.14);
-}
-.site-bar__inner {
-  max-width: 1240px; margin: 0 auto; padding: 0 var(--pad);
-  height: var(--footer-h);
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 1rem; font-size: 0.78rem; white-space: nowrap;
-}
-.site-bar__brand {
-  display: flex; align-items: center; gap: 0.6rem;
-  color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
-}
-.site-bar__brand svg { width: 16px; height: 16px; flex: none; }
-.site-bar__brand svg path { fill: var(--gold); }
-.site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
-.site-bar__sep { color: rgba(234,240,247,0.3); }
-/* On a light bar gold text would fail contrast; on this navy ground the
-   full-strength gold is the accessible one. */
-.site-bar a { color: var(--gold); border-bottom: none; }
-.site-bar a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
   .site-bar__inner { font-size: 0.72rem; }

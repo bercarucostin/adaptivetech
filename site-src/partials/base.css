@@ -1,0 +1,207 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   THE shared stylesheet. Every page links this and no page redefines any
+   of it.
+
+   Built to website/assets/site.css by tools/build-site.js. Edit here.
+
+   What lives here: the brand tokens, and the components that appear on
+   more than one page -- the lockup, the header, the footer, the language
+   toggle and the buttons. Page-specific styling stays with its page.
+
+   Why: the homepage and the privacy policy had drifted into two design
+   systems -- a warm beige page against a cool white one, a stacked
+   uppercase lockup against an inline lowercase one, two footers with the
+   same content under different class names. They looked like different
+   sites because they were built as different sites. One definition is the
+   only thing that keeps that from happening again.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─────────── BRAND TOKENS (Brand Book · Edition 2025) ─────────── */
+:root {
+  --navy: #0C3054;
+  --navy-700: #16406B;
+  --navy-850: #0A2846;
+  --navy-900: #081F38;
+  --gold: #F2A91E;
+  --gold-deep: #B87D18;   /* derived: darkened from #C2861A (2.91:1 on Surface)
+                             to clear the 3:1 large-text/UI floor -- 3.26:1 on
+                             Surface, 3.51:1 on white. Emphasis and borders. */
+  --gold-ink: #8A5D07;    /* derived: gold TEXT on light grounds -- 5.35:1 on
+                             Surface, 5.75:1 on white. */
+  --gold-soft: #FDF1DB;   /* pale gold tint, callout backgrounds only */
+  --steel: #8796A9;
+  --steel-ink: #8C9BAD;   /* derived: --steel as TEXT on dark grounds. Brand
+                             --steel is 4.45:1 on --navy, just under the floor;
+                             this is 4.73:1 on --navy, 5.27:1 on --navy-850,
+                             5.86:1 on --navy-900. Graphics keep --steel. */
+  /* --sand #E7E5DF is a Brand Book colour, deliberately UNUSED: it was the
+     one warm tone in a cool palette and read as a different site. */
+  --surface: #F4F7FA;
+  --white: #FFFFFF;
+
+  --ink: #10273E;
+  --ink-soft: #3D5266;
+  --ink-mute: #5C6B7C;    /* derived: darkened from #6E8095, which was 3.77:1 on
+                             Surface and 3.53:1 on the #EAF0F7 inset panel --
+                             below the 4.5 floor for the 0.58-0.9rem labels that
+                             use it. Now 4.76:1 on that panel, 5.07:1 on Surface,
+                             5.46:1 on white. Ramp ink < ink-soft < ink-mute holds. */
+  --line: #DFE6EE;
+  --line-strong: #808080; /* derived: form input borders need the 3:1 non-text
+                             floor -- 3.95:1 on white, 3.67:1 on Surface. */
+
+  --on-navy: #EAF0F7;
+  --on-navy-soft: rgba(234,240,247,0.72);
+  --line-dark: rgba(234,240,247,0.14);
+
+  --error: #A6291F;       /* 7.10:1 on white, 6.60:1 on Surface */
+  --error-soft: #FBEAE8;  /* background only, never carries text alone */
+
+  --sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --maxw: 1240px;
+  --pad: clamp(1.25rem, 4vw, 2.5rem);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --footer-h: 48px;
+}
+
+/* ─────────── THE LOCKUP ───────────
+   One lockup, one size, on every page. A logotype is exempt from the WCAG
+   contrast floors, which is what allows the gold mark on a light header. */
+.brand { display: flex; align-items: baseline; gap: 0.4rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
+.brand-mark { width: 20px; height: 20px; flex: none; align-self: center; }
+.brand-mark path { fill: var(--gold); transition: fill 0.3s; }
+.brand-word { line-height: 1; }
+.brand-name { color: var(--navy); transition: color 0.3s; }
+.brand-dot { width: 7px; height: 7px; margin: 0 2px; background: var(--gold); border-radius: 50%; display: inline-block; }
+.brand-tag { font-weight: 400; color: var(--navy-700); letter-spacing: 0; transition: color 0.3s; }
+
+/* ─────────── HEADER ───────────
+   Fixed on every page. It used to be fixed on the homepage and sticky on
+   the privacy policy, which is part of why moving between them felt like
+   changing sites. */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem var(--pad);
+  max-width: var(--maxw); margin: 0 auto;
+}
+.nav-links { display: flex; gap: 1.9rem; align-items: center; }
+.nav-links a {
+  font-size: 0.92rem; font-weight: 500; color: var(--ink-soft);
+  transition: color 0.2s; position: relative; padding: 4px 0;
+}
+.nav-links a::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+  background: var(--gold); transition: width 0.25s var(--ease);
+}
+.nav-links a:hover { color: var(--navy); }
+.nav-links a:hover::after { width: 100%; }
+.nav-right { display: flex; align-items: center; gap: 1rem; }
+.nav.solid { background: rgba(244,247,250,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line); }
+
+.menu-btn { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 9px; color: var(--navy); }
+.menu-btn .ic-close { display: none; }
+.nav.menu-open .menu-btn .ic-burger { display: none; }
+.nav.menu-open .menu-btn .ic-close { display: block; }
+
+.m-menu {
+  position: fixed; inset: 0; z-index: 190; background: var(--navy);
+  display: flex; flex-direction: column; justify-content: center; padding: 0 var(--pad);
+  opacity: 0; pointer-events: none; transition: opacity 0.3s var(--ease);
+}
+.m-menu.open { opacity: 1; pointer-events: auto; }
+.m-menu a {
+  font-size: 1.7rem; font-weight: 600; color: var(--on-navy); padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line-dark); display: flex; justify-content: space-between; align-items: center;
+}
+.m-menu a .mono { font-size: 0.7rem; color: var(--gold); }
+.m-menu a.btn {
+  margin-top: 2rem; justify-content: center; border-bottom: none;
+  font-size: 1.05rem; font-weight: 600; color: var(--navy); padding: 0.95rem 1.2rem;
+}
+
+.nav.menu-open, .nav.menu-open.solid { background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.nav.menu-open .brand-mark path { fill: var(--gold); }
+.nav.menu-open .brand-name { color: var(--white); }
+.nav.menu-open .brand-tag { color: var(--on-navy-soft); }
+.nav.menu-open .menu-btn { color: var(--white); }
+.nav.menu-open .lang-toggle { border-color: var(--line-dark); background: transparent; }
+.nav.menu-open .lang-toggle a { color: var(--on-navy-soft); }
+.nav.menu-open .lang-toggle a.active { color: var(--navy); }
+
+@media (max-width: 900px) {
+  .nav-links, .nav .btn-cta-nav { display: none; }
+  .menu-btn { display: flex; }
+}
+
+/* ─────────── LANGUAGE SWITCH ───────────
+   Two links to two real URLs, not a toggle: each language is its own page. */
+.lang-toggle {
+  display: flex; gap: 2px; font-family: var(--mono); font-size: 0.72rem;
+  padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--white);
+}
+.lang-toggle a,
+.lang-toggle button {
+  padding: 4px 9px; border-radius: 6px; color: var(--ink-mute);
+  transition: all 0.2s; font-family: inherit; font-size: inherit;
+}
+.lang-toggle a.active,
+.lang-toggle button.active { background: var(--gold); color: var(--navy); font-weight: 600; }
+
+/* ─────────── BUTTONS ─────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  padding: 0.78rem 1.35rem; border-radius: 10px;
+  font-size: 0.95rem; font-weight: 600; letter-spacing: 0.005em;
+  transition: transform 0.2s var(--ease), background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+.btn .arr { transition: transform 0.25s var(--ease); }
+.btn:hover .arr { transform: translateX(4px); }
+.btn-gold { background: var(--gold); color: var(--navy); }
+.btn-gold:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(242,169,30,0.32); }
+.btn-outline { border: 1px solid var(--line); color: var(--navy); background: var(--white); }
+.btn-outline:hover { border-color: var(--navy); }
+.btn-navy { background: var(--navy); color: var(--white); }
+.btn-navy:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(12,48,84,0.28); }
+.btn-sm { padding: 0.55rem 1.05rem; font-size: 0.88rem; }
+
+/* ─────────── FOOTER ───────────
+   Pinned, so contact and the privacy link are reachable from anywhere.
+   z-index sits under the mobile menu overlay (190) and the nav (200), so
+   the menu covers it. */
+.site-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+  background: var(--navy-900); color: var(--steel);
+  border-top: 1px solid var(--line-dark);
+}
+.site-bar__inner {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; height: var(--footer-h); font-size: 0.78rem;
+  flex-wrap: nowrap; white-space: nowrap;
+  max-width: var(--maxw); margin: 0 auto; padding: 0 var(--pad);
+}
+.site-bar__brand { display: flex; align-items: center; gap: 0.5rem; color: var(--on-navy); font-weight: 700; font-size: 0.9rem; letter-spacing: -0.02em; }
+.site-bar__brand svg { width: 18px; height: 18px; flex: none; }
+.site-bar__brand svg path { fill: var(--gold); }
+/* Same lockup, dark ground. --navy-700 is the second word's colour on a
+   light header and would be all but invisible on --navy-900, so it takes
+   the dark-ground variant here: --steel-ink is 5.86:1 on that background. */
+.site-bar__brand .brand-tag { color: var(--steel-ink); }
+.site-bar__meta { display: flex; align-items: center; gap: 0.75rem; overflow: hidden; text-overflow: ellipsis; }
+.site-bar__sep { color: var(--line-dark); }
+.site-bar a { color: var(--gold); }
+.site-bar a:hover { text-decoration: underline; }
+
+/* Below 640px only the mark, the address and the policy survive -- the bar
+   must stay one line, or it eats the viewport it was slimmed to save. */
+@media (max-width: 640px) {
+  .site-bar__brand .brand-tag, .site-bar__brand .brand-dot,
+  .site-bar__sep.opt, .site-bar__opt { display: none; }
+  .site-bar__inner { justify-content: space-between; font-size: 0.72rem; }
+}

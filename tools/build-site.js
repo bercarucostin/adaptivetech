@@ -33,6 +33,14 @@ const SRC = path.join(__dirname, '..', 'site-src');
 const OUT = path.join(__dirname, '..', 'website');
 const ORIGIN = 'https://adaptivetech.ro';
 
+// The shared components. One definition each, injected into every page, so
+// a page cannot quietly grow its own header or footer again.
+const PARTIALS = path.join(SRC, 'partials');
+const HEADER = fs.readFileSync(path.join(PARTIALS, 'header.html'), 'utf8').trimEnd();
+const FOOTER = fs.readFileSync(path.join(PARTIALS, 'footer.html'), 'utf8').trimEnd();
+const BASE_CSS = fs.readFileSync(path.join(PARTIALS, 'base.css'), 'utf8');
+const HEADER_JS = fs.readFileSync(path.join(PARTIALS, 'header.js'), 'utf8').trimEnd();
+
 // --check builds everything in memory and compares it to what is on disk,
 // writing nothing and failing if they differ. That is the guard against the
 // likeliest mistake here: editing a master, forgetting to rebuild, and
@@ -125,6 +133,8 @@ const PAGES = [
   {
     master: 'index.html',
     changefreq: 'monthly',
+    // Same-page anchors on the homepage; absolute from anywhere else.
+    home: { ro: '', en: '' },
     priority: '1.0',
     variants: {
       ro: { out: 'index.html', url: ORIGIN + '/' },
@@ -152,22 +162,17 @@ const PAGES = [
   {
     master: 'politica-de-confidentialitate.html',
     changefreq: 'yearly',
+    home: { ro: '/', en: '/en/' },
     priority: '0.3',
     variants: {
       ro: { out: 'politica-de-confidentialitate.html', url: ORIGIN + '/politica-de-confidentialitate.html' },
       en: { out: 'en/privacy-policy.html', url: ORIGIN + '/en/privacy-policy.html' },
     },
     text: { ro: {}, en: EN_PRIVACY },
-    linksEn: {
-      '/': '/en/',
-      '/#contact': '/en/#contact',
-      '/#demo': '/en/#demo',
-      '/#de-ce-noi': '/en/#de-ce-noi',
-      '/#proces': '/en/#proces',
-      '/#solutii': '/en/#solutii',
-      '/#studiu-de-caz': '/en/#studiu-de-caz',
-      '/politica-de-confidentialitate.html': '/en/privacy-policy.html',
-    },
+    // Empty on purpose: every navigational link on this page now comes from
+    // the shared header and footer, which are filled with the right language
+    // prefix at injection time. Nothing is left for a rewrite to catch.
+    linksEn: {},
   },
 ];
 
@@ -187,6 +192,15 @@ function build(page, lang) {
     }
     s = s.split(a).join(b);
   };
+
+  // ── 0. The shared components. Injected before anything else so their
+  //    language spans and their links go through every later step exactly
+  //    as the page's own markup does.
+  const home = page.home[lang];
+  const privacy = lang === 'en' ? '/en/privacy-policy.html' : '/politica-de-confidentialitate.html';
+  sub('<!--@header-->', HEADER.split('{{HOME}}').join(home), 'header');
+  sub('<!--@footer-->', FOOTER.split('{{PRIVACY}}').join(privacy), 'footer');
+  sub('<!--@script-->', HEADER_JS, 'header behaviour');
 
   // ── 1. Drop the other language outright. Verified safe to do with a
   //    non-greedy match: no data-span in either master contains a nested
@@ -285,6 +299,8 @@ emit(path.join(OUT, 'sitemap.xml'),
   '     and listing a noindex URL in a sitemap is a contradiction Search Console reports. -->\n' +
   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="' + XHTML + '">\n' +
   entries + '\n</urlset>\n');
+emit(path.join(OUT, 'assets', 'site.css'), BASE_CSS);
+console.log('  assets/site.css                   ' + (BASE_CSS.length/1024).toFixed(1) + ' KB');
 console.log('  sitemap.xml                       ' + built.length + ' urls');
 
 if (CHECK) {
