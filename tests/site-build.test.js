@@ -97,13 +97,29 @@ test('EN pages do not link back into the RO tree', () => {
     const s = read(page.file);
     // The language toggle is excluded: linking to the RO page is its purpose.
     const body = s.replace(/<div class="lang-toggle"[\s\S]*?<\/div>/, '');
-    for (const href of body.match(/href="\/[^"]*"/g) || []) {
+    // Anchors only. <link>/<img> pointing at /favicon.ico or /assets/... is a
+    // shared site-wide asset, not a Romanian page -- this is about where the
+    // reader can NAVIGATE to and land in the wrong language.
+    for (const a of body.match(/<a\b[^>]*href="\/[^"]*"/g) || []) {
+      const href = a.match(/href="([^"]*)"/)[1];
       // The demo is one bilingual app, not a translated page: it keeps its
       // single URL and is handed the language in the query string.
-      if (href === 'href="/demo/?lang=en"') continue;
-      assert.ok(href.startsWith('href="/en/'),
+      if (href === '/demo/?lang=en') continue;
+      assert.ok(href.startsWith('/en/'),
         page.file + ' links out of the EN tree: ' + href);
     }
+  }
+});
+
+test('no built page uses a relative asset path', () => {
+  // A relative href resolves against the DIRECTORY it is served from, so the
+  // same markup that works at / breaks at /en/. The privacy page shipped an
+  // apple-touch-icon as 'assets/png/...', which became /en/assets/png/... and
+  // 404'd on the English build only. Nothing about that is visible on the page.
+  for (const page of PAGES) {
+    const s = read(page.file);
+    const refs = s.match(/(?:href|src)="(?!https?:|\/|#|data:|mailto:)[^"]+"/g) || [];
+    assert.deepStrictEqual(refs, [], page.file + ' has relative asset paths');
   }
 });
 

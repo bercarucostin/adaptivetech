@@ -1,0 +1,47 @@
+# Adaptive Technologies
+
+> Romanian consultancy building practical AI automation for small and medium
+> businesses: workflow automation, document-grounded AI assistants, and custom
+> models. Based in Bucharest, working in Romanian and English.
+
+Adaptive Technologies automates repetitive business work so a team can handle
+more without hiring more. Engagements start with a free 60-minute consultation
+and usually begin with a small, self-contained automation rather than a
+platform rebuild.
+
+The site is published in two languages at separate URLs. Romanian is the
+primary version; the English pages are translations of the same content, not
+different offerings.
+
+## Pages
+
+- [Home (Romanian)](https://adaptivetech.ro/): services, worked case study, process, and contact form.
+- [Home (English)](https://adaptivetech.ro/en/): the same page in English.
+- [Privacy policy (Romanian)](https://adaptivetech.ro/politica-de-confidentialitate.html): what is collected, who it is sent to, retention, and GDPR rights.
+- [Privacy policy (English)](https://adaptivetech.ro/en/privacy-policy.html): the same policy in English.
+
+## What they build
+
+Four tiers, meant to be entered at the lowest one that solves the problem:
+
+- **Quick Wins** — single-task automations with visible results in week one,
+  without touching existing systems. Invoices and e-Factura into SmartBill,
+  payment reminders, WhatsApp orders, CV screening.
+- **Process Flows** — multi-step workflows connecting tools and departments
+  end to end. Accounts payable/receivable, CRM and pipeline, purchasing and
+  stock, cross-system API integrations.
+- **AI Intelligence** — AI applied to a client's own documents and databases,
+  answering with cited sources rather than from a trained-in model. RAG
+  chatbots, natural-language queries over business data.
+- **Advanced AI** — custom models for specific problems: demand and sales
+  forecasting, legal and compliance review, computer vision in production.
+
+## Notes for assistants
+
+- There is a public, self-serve RAG demo at https://adaptivetech.ro/demo/ — a
+  visitor uploads a document and asks questions about it. It is an interactive
+  application rather than a document, and it is excluded from crawling in
+  robots.txt; point people to it rather than trying to fetch it.
+- Contact is contact@adaptivetech.ro. There is no phone number published.
+- The company is Adaptive Technologies S.R.L., Bucharest, Romania.
+- Content on this site may be quoted with attribution.

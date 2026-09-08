@@ -1,22 +1,19 @@
-# NOTE: this file is currently SHADOWED and is not what visitors' crawlers see.
+# This file is live. Cloudflare's AI Crawl Control "Managed robots.txt" was
+# turned OFF for this domain, so what is written here is what crawlers get.
+# If that setting is ever switched back on, Cloudflare REPLACES this file with
+# its own content-signals policy and nothing here applies. Verify which is in
+# force with:  curl https://adaptivetech.ro/robots.txt
 #
-# Cloudflare's AI Crawl Control serves its own managed robots.txt for this
-# domain, which REPLACES this file rather than appending to it. Verify with:
+# ── AI crawlers are allowed, deliberately ────────────────────────────────
+# The blanket "User-agent: *  Allow: /" below already permits them; the named
+# blocks are here so the policy is a visible decision rather than an accident
+# of the default, and so there is one obvious place to change it.
 #
-#     curl https://adaptivetech.ro/robots.txt
+# The reasoning: this is a consultancy that sells AI automation. Being
+# quotable in an AI answer is the product working, not a leak. Cloudflare's
+# managed file took the opposite position and disallowed every one of these.
 #
-# and you will get Cloudflare's content-signals policy instead of this. So
-# editing this file changes nothing on the live site until that feature is
-# turned off in the Cloudflare dashboard.
-#
-# It is kept anyway as the fallback: if the managed file is ever disabled,
-# the site still has sane crawl rules and a sitemap pointer instead of
-# nothing at all.
-#
-# Deliberately NOT restated here: per-crawler rules for GPTBot, ClaudeBot,
-# Google-Extended and the rest. Cloudflare's managed file disallows them and
-# that is the policy we are keeping, so listing the opposite here would be a
-# contradiction waiting to confuse whoever reads this next.
+# To opt out of any of them, change its Allow to Disallow.
 
 User-agent: *
 Allow: /
@@ -25,5 +22,36 @@ Allow: /
 # /api/demo/ also keeps them from burning the rate limits meant for visitors.
 Disallow: /api/demo/
 Disallow: /demo/
+
+# ── Answer engines and assistants (retrieval / citation) ─────────────────
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+# ── Training crawlers ────────────────────────────────────────────────────
+# Separated on purpose: allowing citation and allowing training are two
+# different decisions, and you may well want to change one without the other.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
 
 Sitemap: https://adaptivetech.ro/sitemap.xml
