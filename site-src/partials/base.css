@@ -64,6 +64,9 @@
   --pad: clamp(1.25rem, 4vw, 2.5rem);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --footer-h: 48px;
+  --header-bg: rgba(244,247,250,0.92);  /* the header is opaque on every page:
+                             it used to be transparent and take the colour of
+                             whatever sat behind it, which differed per page. */
 }
 
 /* ─────────── THE LOCKUP ───────────
@@ -83,6 +86,8 @@
    changing sites. */
 .nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  background: var(--header-bg);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   transition: background 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 .nav-inner {
@@ -102,7 +107,7 @@
 .nav-links a:hover { color: var(--navy); }
 .nav-links a:hover::after { width: 100%; }
 .nav-right { display: flex; align-items: center; gap: 1rem; }
-.nav.solid { background: rgba(244,247,250,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line); }
+.nav.solid { box-shadow: 0 1px 0 var(--line); }
 
 .menu-btn { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 9px; color: var(--navy); }
 .menu-btn .ic-close { display: none; }

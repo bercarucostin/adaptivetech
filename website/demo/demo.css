@@ -63,7 +63,7 @@ html[lang="en"] [data-en] { display: inline; }
   justify-content: space-between;
   padding: 1.1rem var(--pad);
   border-bottom: 1px solid var(--line);
-  background: rgba(244, 247, 250, 0.9);
+  background: var(--header-bg);
 }
 /* ─────────── MAIN / PANELS ─────────── */
 .demo {
@@ -339,8 +339,4 @@ button[type="submit"]:disabled {
   .demo__bar { padding: 0.9rem var(--pad); }
     .demo__panel--chat { height: min(78vh, 720px); }
   .demo__msg { max-width: 92%; }
-}
-@media (max-width: 640px) {
-  .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
-  .site-bar__inner { font-size: 0.72rem; }
 }

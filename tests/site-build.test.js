@@ -190,3 +190,49 @@ test('cross-page anchor links point at sections that exist', () => {
     void prefix;
   }
 });
+
+test('partial comments do not terminate themselves', () => {
+  // HTML comments do not nest. Both partials described their own injection
+  // marker inside a comment, and the marker's closing bracket ended the
+  // comment early -- so the rest of the sentence rendered as visible text
+  // across the top of every page on the live site.
+  for (const f of ['header.html', 'footer.html']) {
+    const src = fs.readFileSync(path.join(SRC, 'partials', f), 'utf8');
+    for (const c of src.match(/<!--[\s\S]*?-->/g) || []) {
+      assert.ok(!c.slice(4, -3).includes('-->'),
+        f + ' has a comment containing "-->", which closes it early');
+    }
+  }
+});
+
+test('no built page leaks partial prose as page content', () => {
+  // The symptom of the above, checked from the other end: text that only
+  // exists inside a partial's comment must never appear outside one.
+  for (const page of PAGES) {
+    const html = read(page.file);
+    const visible = html.replace(/<!--[\s\S]*?-->/g, '');
+    for (const giveaway of ['tools/build-site.js at the', 'Edit here, not in a page',
+      'HTML comments do not nest']) {
+      assert.ok(!visible.includes(giveaway),
+        page.file + ' renders partial commentary as content: ' + giveaway);
+    }
+  }
+});
+
+test('no page overrides a shared component with an element selector', () => {
+  // The class-based cleanup missed a bare `footer { }` on the privacy page,
+  // which still applied to <footer class="site-bar"> and gave it 2.5rem of
+  // extra padding and the wrong navy -- a footer visibly taller and a
+  // different colour from the homepage's, out of one forgotten rule.
+  for (const page of PAGES) {
+    const html = read(page.file);
+    const inline = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
+    for (const el of ['footer', 'nav', 'header']) {
+      // String.raw, because this pattern needs real backslashes: written as a
+      // plain quoted string, "\s" collapses to the letter s and the guard
+      // silently matches nothing -- which is how it passed the first time.
+      assert.ok(!new RegExp(String.raw`(^|[};\s])${el}\s*\{`).test(inline),
+        page.file + ' styles the bare <' + el + '> element, which overrides the shared component');
+    }
+  }
+});

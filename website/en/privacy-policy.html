@@ -199,23 +199,6 @@
   }
   .policy-section a:hover { border-bottom-color: var(--gold-ink); }
 
-  /* ─────────── FOOTER (copied from index.html) ─────────── */
-  footer {
-    background: var(--navy);
-    color: rgba(231, 229, 223, 0.7);
-    padding: 2.5rem 0;
-    border-top: 1px solid var(--navy-700);
-  }
-    .footer-links {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-  }
-    @media (max-width: 640px) {
-  .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
-  .site-bar__inner { font-size: 0.72rem; }
-}
   body { padding-bottom: var(--footer-h); }
 </style>
 <link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/politica-de-confidentialitate.html" />
@@ -226,7 +209,11 @@
 
 <!-- ─────────── NAV ─────────── -->
 <!-- THE header. Injected into every page by tools/build-site.js at the
-     <!--@header--> marker. Edit here, not in a page.
+     header marker. Edit here, not in a page.
+
+     (The marker is not written out in this comment: HTML comments do not
+     nest, so its closing bracket would end this one early and spill the
+     rest of the text onto the page. That is exactly what happened.)
 
      /en/ is filled per page: empty on the homepage, so these stay
      same-page anchors that scroll; "/" or "/en/" elsewhere, so they cross
@@ -409,7 +396,9 @@
 </section>
 
 <!-- ─────────── FOOTER ─────────── -->
-<!-- THE footer. Injected at the <!--@footer--> marker.
+<!-- THE footer. Injected at the footer marker (not written out here --
+     HTML comments do not nest, and its closing bracket would end this
+     comment early).
 
      The lockup here is the same component as the header's, just smaller --
      it was previously spelled "ADAPTIVE · TECHNOLOGIES" in caps on all
