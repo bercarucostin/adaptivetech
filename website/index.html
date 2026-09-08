@@ -289,11 +289,11 @@
   .dark-band .sec-sub { color: var(--on-navy-soft); }
   /* --navy stays navy (it is a background elsewhere), so the handful of
      places that use it as TEXT are lifted by hand. */
-  .dark-band .prob-name,
-  .dark-band .how-step-title,
-  .dark-band .prob-panel-cta { color: var(--on-navy); }
-  .dark-band .how-step-meta { color: var(--gold); }
-  .dark-band .prob-idx, .dark-band .how-num { color: var(--steel); }
+  #probleme .prob-name,
+  #proces .how-step-title { color: var(--on-navy); }
+  #proces .how-step-meta { color: var(--gold); }
+  #probleme .prob-idx { color: var(--steel); }
+  #proces .how-num { color: var(--gold); }
 
   /* ── Light islands on a dark band ──────────────────────────────────────
      `probleme` and `proces` were composed as LIGHT grounds carrying a dark
@@ -326,29 +326,31 @@
   #proces .how-card.dark .how-title,
   #proces .how-card.dark .how-step-title { color: #10273E; }
   /* The gold bloom reads as a smudge on a light panel. */
-  .dark-band .prob-panel::after { opacity: 0.5; }
+  #probleme .prob-panel::after { opacity: 0.5; }
 
   /* The left-hand list keeps the band's ground, so its selected state has
-     to move the other way: navy-on-navy would vanish. */
-  .dark-band .prob-item.active { background: rgba(234,240,247,0.07); }
-  .dark-band .prob-item.active .prob-name { color: var(--on-navy); }
-  .dark-band .prob-item.active .prob-idx,
-  .dark-band .prob-item.active .prob-arr { color: var(--gold); }
-  .dark-band .prob-item.active .prob-ico { stroke: var(--gold); }
-  .dark-band .proc-note strong { color: var(--on-navy); }
+     to move the other way: navy-on-navy would vanish -- literally, at 1.1:1. Addressed by #id
+     because the base rules have EQUAL specificity and come later in the
+     file, so a .dark-band prefix silently loses to them on source order. */
+  #probleme .prob-item.active { background: rgba(234,240,247,0.07); }
+  #probleme .prob-item.active .prob-name { color: var(--on-navy); }
+  #probleme .prob-item.active .prob-idx,
+  #probleme .prob-item.active .prob-arr { color: var(--gold); }
+  #probleme .prob-item.active .prob-ico { stroke: var(--gold); }
+  #proces .proc-note strong { color: var(--on-navy); }
 
   /* Three rules that still won on specificity and would have gone
      invisible: a hover state, a title, and the mobile selected item. */
-  .dark-band .prob-item:hover .prob-name { color: var(--on-navy); }
-  .dark-band .how-title { color: var(--on-navy); }
-  .dark-band .how-label { color: var(--gold); }
+  #probleme .prob-item:hover .prob-name { color: var(--on-navy); }
+  #proces .how-title { color: var(--on-navy); }
+  #proces .how-label { color: var(--gold); }
   @media (max-width: 900px) {
-    .dark-band .prob-item, .dark-band .prob-item:first-child {
+    #probleme .prob-item, #probleme .prob-item:first-child {
       border-color: var(--line-dark); background: transparent;
     }
-    .dark-band .prob-item.active { border-color: var(--gold); background: var(--gold); }
-    .dark-band .prob-item.active .prob-name { color: #10273E; }
-    .dark-band .prob-item.active .prob-ico { stroke: #10273E; }
+    #probleme .prob-item.active { border-color: var(--gold); background: var(--gold); }
+    #probleme .prob-item.active .prob-name { color: #10273E; }
+    #probleme .prob-item.active .prob-ico { stroke: #10273E; }
   }
 
   /* ═══════════════ HERO ═══════════════ */
