@@ -138,11 +138,12 @@
     --gold-ink: #8A5D07;    /* derived: gold TEXT on light grounds -- 5.35:1 on
                                Surface, 5.75:1 on white. Same value demo.css uses. */
     --steel: #8796A9;
+    /* --sand #E7E5DF is a Brand Book colour, deliberately UNUSED: it was
+       the one warm tone in a cool palette and read as a different site. */
     --steel-ink: #8C9BAD;  /* derived: --steel as TEXT on dark grounds. Brand
                               --steel is 4.45:1 on --navy, just under the floor;
                               this is 4.73:1 on --navy, 5.27:1 on --navy-850,
                               5.86:1 on --navy-900. Graphics keep --steel. */
-    --sand: #E7E5DF;
     --surface: #F4F7FA;
     --white: #FFFFFF;
 
@@ -230,12 +231,17 @@
     padding: 1rem var(--pad);
     max-width: var(--maxw); margin: 0 auto;
   }
-  .brand { display: flex; align-items: center; gap: 0.65rem; }
-  .brand-mark { width: 26px; height: 26px; flex: none; }
-  .brand-mark path { fill: var(--navy); transition: fill 0.3s; }
-  .brand-word { display: flex; flex-direction: column; line-height: 1; }
-  .brand-name { font-weight: 700; font-size: 0.98rem; letter-spacing: 0.09em; color: var(--navy); transition: color 0.3s; }
-  .brand-tag  { font-family: var(--mono); font-size: 0.52rem; letter-spacing: 0.42em; color: var(--gold-ink); margin-top: 3px; transition: color 0.3s; }
+  /* The lockup. Metrics match demo.css .demo__brand exactly, so the mark
+     and wordmark are pixel-identical on the homepage, the demo and the
+     privacy policy. A logotype is exempt from the WCAG contrast floors,
+     which is what lets the gold mark sit on a light nav. */
+  .brand { display: flex; align-items: baseline; gap: 0.4rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
+  .brand-mark { width: 20px; height: 20px; flex: none; align-self: center; }
+  .brand-mark path { fill: var(--gold); transition: fill 0.3s; }
+  .brand-word { line-height: 1; }
+  .brand-name { color: var(--navy); transition: color 0.3s; }
+  .brand-dot { width: 7px; height: 7px; margin: 0 2px; background: var(--gold); border-radius: 50%; display: inline-block; }
+  .brand-tag  { font-weight: 400; color: var(--navy-700); letter-spacing: 0; transition: color 0.3s; }
 
   .nav-links { display: flex; gap: 1.9rem; align-items: center; }
   .nav-links a {
@@ -300,7 +306,7 @@
   .nav.menu-open, .nav.menu-open.solid { background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .nav.menu-open .brand-mark path { fill: var(--gold); }
   .nav.menu-open .brand-name { color: var(--white); }
-  .nav.menu-open .brand-tag { color: var(--gold); }
+  .nav.menu-open .brand-tag { color: var(--on-navy-soft); }
   .nav.menu-open .menu-btn { color: var(--white); }
   .nav.menu-open .lang-toggle { border-color: var(--line-dark); background: transparent; }
   .nav.menu-open .lang-toggle a { color: var(--on-navy-soft); }
@@ -732,7 +738,7 @@
   }
 
   /* Tree illustration palette (brand only) */
-  .tree-art .ta-ground { fill: var(--sand); }
+  .tree-art .ta-ground { fill: var(--line); }
   .tree-art .ta-leaf { fill: var(--navy); }
   .tree-art .ta-leaf2 { fill: var(--navy-700); }
   .tree-art .ta-gold { fill: var(--gold); }
@@ -1014,10 +1020,7 @@
   <div class="nav-inner">
     <a href="#start" class="brand" aria-label="Adaptive Technologies">
       <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
-      <span class="brand-word">
-        <span class="brand-name">ADAPTIVE</span>
-        <span class="brand-tag">TECHNOLOGIES</span>
-      </span>
+      <span class="brand-word"><span class="brand-name">adaptive</span><span class="brand-dot"></span><span class="brand-tag">technologies</span></span>
     </a>
     <div class="nav-links">
       <a href="#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>

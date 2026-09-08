@@ -35,27 +35,24 @@
      ------------------------------------------------------------------ */
   :root {
     --navy: #0C3054;
-    --navy-2: #16406B;
-    --navy-3: #32567B;
-    --amber: #F2A91E;
-    --amber-2: #D5951A;
+    --navy-700: #16406B;
+    --gold: #F2A91E;
+    --gold-deep: #B87D18;
     --gold-ink: #8A5D07;
-    --amber-soft: #FDF1DB;
-    --cream: #E7E5DF;
-    --cream-2: #F4F7FA;
-    --ink: #0C3054;
-    --ink-soft: #16406B;
-    --ink-mute: #506883;
-    --line: #D9D9D7;
+    --gold-soft: #FDF1DB;
+    --ink: #10273E;
+    --ink-soft: #3D5266;
+    --ink-mute: #5C6B7C;   /* matches index.html: 5.46:1 on white */
+    --line: #DFE6EE;
     --line-2: #808080;      /* 3.95:1 on white, 3.67:1 on Surface (cream-2), 3.14:1 on Sand */
     /* Aliases for the redesigned homepage's names; values unchanged, since
        this page's contrast was verified against its own backgrounds. */
-    --gold: var(--amber);
-    --sand: var(--cream);
+    --gold: var(--gold);
     --navy-900: #081F38;
     --steel: #8796A9;
     --footer-h: 48px;
     --white: #FFFFFF;
+    --on-navy: #EAF0F7;   /* light text on dark grounds */
 
     --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -71,7 +68,7 @@
     font-size: 17px;
     line-height: 1.6;
     color: var(--ink);
-    background: var(--cream);
+    background: var(--white);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
@@ -85,7 +82,7 @@
     outline-offset: 3px;
     border-radius: 4px;
   }
-  footer :focus-visible { outline-color: var(--amber); }
+  footer :focus-visible { outline-color: var(--gold); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -107,7 +104,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(231, 229, 223, 0.85);
+    background: rgba(244, 247, 250, 0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
@@ -125,29 +122,30 @@
     align-items: baseline;
     gap: 0.4rem;
     font-weight: 700;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     letter-spacing: -0.02em;
     color: var(--navy);
   }
   .logo-mark {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     align-self: center;
     margin-right: 0.1rem;
-    fill: var(--amber);
+    fill: var(--gold);
     transition: fill 0.2s, transform 0.2s;
   }
-  .logo:hover .logo-mark { fill: var(--amber-2); transform: translateY(-1px); }
+  .logo:hover .logo-mark { fill: var(--gold-deep); transform: translateY(-1px); }
   .logo-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--amber);
+    width: 7px;
+    height: 7px;
+    margin: 0 2px;
+    background: var(--gold);
     border-radius: 50%;
     display: inline-block;
   }
   .logo-sub {
     font-weight: 400;
-    color: var(--ink-soft);
+    color: var(--navy-700);   /* the lockup's own colour, not the ink scale */
     letter-spacing: 0;
   }
   .nav-links {
@@ -188,11 +186,11 @@
   }
   .lang-toggle a.active {
     background: var(--navy);
-    color: var(--cream);
+    color: var(--on-navy);
   }
   .btn-cta {
     background: var(--navy);
-    color: var(--cream);
+    color: var(--on-navy);
     padding: 0.7rem 1.2rem;
     border-radius: 999px;
     font-size: 0.95rem;
@@ -203,17 +201,17 @@
     gap: 0.4rem;
   }
   .btn-cta:hover {
-    background: var(--amber);
+    background: var(--gold);
     color: var(--navy);
     transform: translateY(-1px);
   }
   .btn-cta-amber {
-    background: var(--amber);
+    background: var(--gold);
     color: var(--navy);
   }
   .btn-cta-amber:hover {
     background: var(--navy);
-    color: var(--cream);
+    color: var(--on-navy);
   }
 
   .mobile-toggle { display: none; }
@@ -227,7 +225,7 @@
       left: 0;
       right: 0;
       flex-direction: column;
-      background: var(--cream);
+      background: var(--white);
       padding: 1.5rem var(--pad);
       gap: 1.2rem;
       border-bottom: 1px solid var(--line);
@@ -264,7 +262,7 @@
     content: '';
     width: 32px;
     height: 1px;
-    background: var(--amber);
+    background: var(--gold);
   }
   .policy-hero h1 {
     font-size: clamp(2rem, 5vw, 3.2rem);
@@ -284,9 +282,9 @@
 
   /* ─────────── DRAFT NOTICE ─────────── */
   .policy-notice {
-    background: var(--amber-soft);
-    border: 1px solid var(--amber-2);
-    border-left: 4px solid var(--amber-2);
+    background: var(--gold-soft);
+    border: 1px solid var(--gold-deep);
+    border-left: 4px solid var(--gold-deep);
     border-radius: 10px;
     padding: 1.1rem 1.3rem;
     margin: 1.75rem 0 0;
@@ -351,7 +349,7 @@
     background: var(--navy);
     color: rgba(231, 229, 223, 0.7);
     padding: 2.5rem 0;
-    border-top: 1px solid var(--navy-3);
+    border-top: 1px solid var(--navy-700);
   }
   .footer-inner {
     display: flex;
@@ -367,7 +365,7 @@
     gap: 1.25rem;
     flex-wrap: wrap;
   }
-  .footer-inner a { color: var(--amber); }
+  .footer-inner a { color: var(--gold); }
   .footer-inner a:hover { text-decoration: underline; }
 
   /* No bilingual CSS: each built page carries one language only, and the
@@ -392,12 +390,12 @@
   color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
 }
 .site-bar__brand svg { width: 16px; height: 16px; flex: none; }
-.site-bar__brand svg path { fill: var(--amber); }
+.site-bar__brand svg path { fill: var(--gold); }
 .site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
 .site-bar__sep { color: rgba(234,240,247,0.3); }
 /* On a light bar gold text would fail contrast; on this navy ground the
    full-strength gold is the accessible one. */
-.site-bar a { color: var(--amber); border-bottom: none; }
+.site-bar a { color: var(--gold); border-bottom: none; }
 .site-bar a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }
@@ -420,9 +418,10 @@
     </a>
     <div class="nav-links" id="navLinks">
       <a href="/#solutii"><span data-ro>Soluții</span></a>
+      <a href="/#studiu-de-caz"><span data-ro>Studii de caz</span></a>
       <a href="/#demo">Demo</a>
-      <a href="/#cum-lucram"><span data-ro>Cum lucrăm</span></a>
-      <a href="/#despre"><span data-ro>Despre</span></a>
+      <a href="/#proces"><span data-ro>Cum lucrăm</span></a>
+      <a href="/#de-ce-noi"><span data-ro>De ce noi</span></a>
       <a href="/#contact"><span data-ro>Contact</span></a>
     </div>
     <div class="nav-right">

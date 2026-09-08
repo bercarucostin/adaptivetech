@@ -165,3 +165,28 @@ for (const master of ['index.html', 'politica-de-confidentialitate.html']) {
     assert.deepStrictEqual(flush, []);
   });
 }
+
+test('cross-page anchor links point at sections that exist', () => {
+  // The privacy page linked to /#cum-lucram and /#despre for months. Neither
+  // id exists on the homepage -- the sections are #proces and #de-ce-noi -- so
+  // both silently dumped the visitor at the top of the page. A dead anchor
+  // does not 404 and nothing in a link check catches it.
+  const homes = { '': read('index.html'), '/en': read('en/index.html') };
+  for (const page of PAGES) {
+    const html = read(page.file);
+    const prefix = page.lang === 'en' ? '/en' : '';
+    for (const m of html.matchAll(/href="(\/(?:en\/)?)#([a-z-]+)"/g)) {
+      const home = homes[m[1] === '/' ? '' : '/en'];
+      assert.ok(home.includes('id="' + m[2] + '"'),
+        page.file + ' links to #' + m[2] + ', which no homepage section defines');
+    }
+    // Same-page anchors on the homepage itself.
+    if (page.file.endsWith('index.html')) {
+      for (const m of html.matchAll(/href="#([a-z-]+)"/g)) {
+        assert.ok(html.includes('id="' + m[1] + '"'),
+          page.file + ' links to #' + m[1] + ', which it does not define');
+      }
+    }
+    void prefix;
+  }
+});

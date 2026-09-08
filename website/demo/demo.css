@@ -5,18 +5,14 @@
    ------------------------------------------------------------------------ */
 :root {
   --navy: #0C3054;
-  --navy-2: #16406B;
-  --navy-3: #32567B;
-  --amber: #F2A91E;
-  --amber-2: #D5951A;
+  --navy-700: #16406B;
+  --gold: #F2A91E;
   --gold-ink: #8A5D07;    /* 4.57:1 on Sand / 5.75:1 on White — gold TEXT on light */
-  --amber-soft: #FDF1DB;
-  --cream: #E7E5DF;
-  --cream-2: #F4F7FA;
-  --ink: #0C3054;
-  --ink-soft: #16406B;
-  --ink-mute: #506883;    /* 4.57:1 on Sand and Surface, 5.76:1 on White */
-  --line: #D9D9D7;
+  --gold-soft: #FDF1DB;
+  --ink: #10273E;
+  --ink-soft: #3D5266;
+  --ink-mute: #5C6B7C;    /* canonical: 5.07:1 on Surface, 5.46:1 on white */
+  --line: #DFE6EE;
   --line-2: #808080;      /* derived: darkened from #CBCECF (1.58:1 on white) to
                              clear the 3:1 WCAG 1.4.11 non-text floor -- this is
                              on form input borders -- 3.95:1 on white, 3.67:1
@@ -24,6 +20,7 @@
                              #949494 cleared only white (3.03:1); it failed on
                              Surface (2.82:1) and Sand (2.41:1). */
   --white: #FFFFFF;
+  --on-navy: #EAF0F7;    /* light text on dark grounds */
 
   /* derived: this page's only new colour pair, for form/network errors.
      #A6291F — 7.10:1 on White, 6.60:1 on Surface (cream-2), 6.35:1 on the
@@ -38,9 +35,7 @@
 
   /* Aliases for the names the redesigned homepage uses, pointing at the
      values already verified against THIS page's backgrounds. */
-  --gold: var(--amber);
-  --sand: var(--cream);
-  --surface: var(--cream-2);
+  --surface: #F4F7FA;
   --navy-900: #081F38;
   --steel: #8796A9;
   --footer-h: 48px;
@@ -53,7 +48,7 @@ body {
   font-size: 17px;
   line-height: 1.6;
   color: var(--ink);
-  background: var(--cream-2);
+  background: var(--surface);
   padding-bottom: var(--footer-h);
   min-height: 100vh;
   display: flex;
@@ -121,13 +116,13 @@ html[lang="en"] [data-en] { display: inline; }
   width: 20px;
   height: 20px;
   align-self: center;
-  fill: var(--amber);
+  fill: var(--gold);
 }
 .demo__brand-dot {
   width: 7px;
   height: 7px;
   margin: 0 2px;
-  background: var(--amber);
+  background: var(--gold);
   border-radius: 50%;
   display: inline-block;
 }
@@ -156,7 +151,7 @@ html[lang="en"] [data-en] { display: inline; }
 }
 .lang-toggle button.active {
   background: var(--navy);
-  color: var(--cream);
+  color: var(--on-navy);
 }
 
 /* ─────────── MAIN / PANELS ─────────── */
@@ -221,7 +216,7 @@ form label[for] {
 #upload-form input[type="file"] {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: var(--cream-2);
+  background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: 10px;
   color: var(--ink);
@@ -275,7 +270,7 @@ button[type="submit"] {
   align-items: center;
   gap: 0.5rem;
   padding: 0.8rem 1.5rem;
-  background: var(--amber);
+  background: var(--gold);
   color: var(--navy);
   font-weight: 600;
   font-size: 0.95rem;
@@ -284,7 +279,7 @@ button[type="submit"] {
 }
 button[type="submit"]:hover:not(:disabled) {
   background: var(--navy);
-  color: var(--cream);
+  color: var(--on-navy);
 }
 button[type="submit"]:disabled {
   opacity: 0.55;
@@ -357,7 +352,7 @@ button[type="submit"]:disabled {
 
 .demo__remaining {
   flex-shrink: 0;
-  background: var(--amber-soft);
+  background: var(--gold-soft);
   color: var(--gold-ink); /* 5.15:1 on amber-soft */
   font-size: 0.72rem;
   padding: 0.3rem 0.7rem;
@@ -391,12 +386,12 @@ button[type="submit"]:disabled {
    keeping the same message reads the same colour in both places. */
 .demo__msg--user {
   background: var(--navy);
-  color: var(--cream); /* 10.64:1 */
+  color: var(--on-navy); /* 11.69:1 */
   margin-left: auto;
   border-bottom-right-radius: 4px;
 }
 .demo__msg--assistant {
-  background: var(--cream);
+  background: var(--surface);
   color: var(--ink-soft); /* 8.42:1 */
   border: 1px solid var(--line);
   margin-right: auto;
@@ -414,7 +409,7 @@ button[type="submit"]:disabled {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--gold-ink); /* 5.15:1 on amber-soft */
-  background: var(--amber-soft);
+  background: var(--gold-soft);
   border-radius: 6px;
   padding: 0.25rem 0.55rem;
 }
@@ -459,12 +454,12 @@ button[type="submit"]:disabled {
   color: #EAF0F7; font-weight: 600; letter-spacing: 0.06em; font-size: 0.78rem;
 }
 .site-bar__brand svg { width: 16px; height: 16px; flex: none; }
-.site-bar__brand svg path { fill: var(--amber); }
+.site-bar__brand svg path { fill: var(--gold); }
 .site-bar__meta { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
 .site-bar__sep { color: rgba(234,240,247,0.3); }
 /* On a light bar gold text would fail contrast; on this navy ground the
    full-strength gold is the accessible one. */
-.site-bar a { color: var(--amber); border-bottom: none; }
+.site-bar a { color: var(--gold); border-bottom: none; }
 .site-bar a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .site-bar__brand span, .site-bar__sep.opt, .site-bar__opt { display: none; }

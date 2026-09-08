@@ -161,10 +161,11 @@ const PAGES = [
     linksEn: {
       '/': '/en/',
       '/#contact': '/en/#contact',
-      '/#cum-lucram': '/en/#cum-lucram',
       '/#demo': '/en/#demo',
-      '/#despre': '/en/#despre',
+      '/#de-ce-noi': '/en/#de-ce-noi',
+      '/#proces': '/en/#proces',
       '/#solutii': '/en/#solutii',
+      '/#studiu-de-caz': '/en/#studiu-de-caz',
       '/politica-de-confidentialitate.html': '/en/privacy-policy.html',
     },
   },

@@ -39,12 +39,25 @@ test('Brand Book colours have not drifted', () => {
   assert.deepStrictEqual(
     {
       navy: tokens.navy, gold: tokens.gold, steel: tokens.steel,
-      sand: tokens.sand, surface: tokens.surface, white: tokens.white,
+      surface: tokens.surface, white: tokens.white,
     },
     {
       navy: '#0C3054', gold: '#F2A91E', steel: '#8796A9',
-      sand: '#E7E5DF', surface: '#F4F7FA', white: '#FFFFFF',
+      surface: '#F4F7FA', white: '#FFFFFF',
     });
+});
+
+test('Sand stays retired', () => {
+  // #E7E5DF is still a Brand Book colour, but it is deliberately out of use:
+  // it was the one warm tone in a cool palette, and the privacy page built on
+  // it read as a different site. It carried two unrelated jobs, and both have
+  // proper tokens now -- --on-navy for light text on dark, --surface for a
+  // panel tint. Reintroducing it should be a decision, not a reflex.
+  assert.strictEqual(tokens.sand, undefined, '--sand is defined again');
+  // Comments stripped first: the token block explains the retirement and names
+  // the value while doing so, which is not a use of it.
+  const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/#E7E5DF/i.test(declarations), 'the Sand literal is back in the stylesheet');
 });
 
 // [token, ground, floor, what]. Grounds are literal because some of them are
