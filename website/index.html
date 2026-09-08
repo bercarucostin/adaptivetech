@@ -4,8 +4,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Adaptive Technologies — Automatizare AI pentru IMM-uri din România</title>
-<meta name="description" content="Automatizăm sarcinile repetitive cu AI, ca echipa dumneavoastră să facă mai mult — fără să crească. Chatboți RAG, e-Factura, fluxuri n8n. Consultație gratuită de 60 min." />
+<title>Automatizare AI pentru IMM-uri — Adaptive Technologies</title>
+<meta name="description" content="Automatizăm sarcinile repetitive cu AI — echipa dumneavoastră face mai mult, fără să crească. Chatboți RAG, e-Factura, fluxuri n8n. Consultație gratuită." />
 <meta name="keywords" content="automatizare procese România, AI România, chatbot WhatsApp, RAG, n8n, e-Factura, automatizare facturi, IMM" />
 
 <!-- Open Graph -->
@@ -139,13 +139,21 @@
     --gold-ink: #8A5D07;    /* derived: gold TEXT on light grounds -- 5.35:1 on
                                Surface, 5.75:1 on white. Same value demo.css uses. */
     --steel: #8796A9;
+    --steel-ink: #8C9BAD;  /* derived: --steel as TEXT on dark grounds. Brand
+                              --steel is 4.45:1 on --navy, just under the floor;
+                              this is 4.73:1 on --navy, 5.27:1 on --navy-850,
+                              5.86:1 on --navy-900. Graphics keep --steel. */
     --sand: #E7E5DF;
     --surface: #F4F7FA;
     --white: #FFFFFF;
 
     --ink: #10273E;
     --ink-soft: #3D5266;
-    --ink-mute: #6E8095;
+    --ink-mute: #5C6B7C;   /* derived: darkened from #6E8095, which was 3.77:1 on
+                              Surface and 3.53:1 on the #EAF0F7 inset panel -- below
+                              the 4.5 floor for the 0.58-0.9rem labels and notes that
+                              use it. Now 4.76:1 on that panel, 5.07:1 on Surface,
+                              5.46:1 on white. Ramp ink < ink-soft < ink-mute holds. */
     --line: #DFE6EE;
 
     --on-navy: #EAF0F7;
@@ -326,7 +334,7 @@
   .rail-items a.active .rail-label { color: var(--navy); opacity: 1; font-weight: 700; }
 
   .rail.on-dark .rail-track { background: var(--line-dark); }
-  .rail.on-dark .rail-num, .rail.on-dark .rail-label { color: var(--steel); }
+  .rail.on-dark .rail-num, .rail.on-dark .rail-label { color: var(--steel-ink); }
   .rail.on-dark .rail-items a.active .rail-num { color: var(--gold); }
   .rail.on-dark .rail-items a.active .rail-label { color: var(--gold); }
 
@@ -365,7 +373,7 @@
   #probleme, #proces {
     --ink: var(--on-navy);
     --ink-soft: var(--on-navy-soft);
-    --ink-mute: var(--steel);
+    --ink-mute: var(--steel-ink);
     --line: var(--line-dark);
     --white: var(--navy-850);
     --surface: var(--navy-850);
@@ -379,7 +387,7 @@
   #probleme .prob-name,
   #proces .how-step-title { color: var(--on-navy); }
   #proces .how-step-meta { color: var(--gold); }
-  #probleme .prob-idx { color: var(--steel); }
+  #probleme .prob-idx { color: var(--steel-ink); }
   #proces .how-num { color: var(--gold); }
 
   /* ── Light islands on a dark band ──────────────────────────────────────
@@ -397,7 +405,7 @@
   #proces .how-card.dark {
     --ink: #10273E;
     --ink-soft: #3D5266;
-    --ink-mute: #6E8095;
+    --ink-mute: #5C6B7C;
     --line: #DFE6EE;
     --line-dark: #DFE6EE;
     --on-navy: #10273E;
@@ -612,7 +620,7 @@
     color: var(--white); line-height: 1.1; font-variant-numeric: tabular-nums;
   }
   .hstat-num em { font-style: normal; color: var(--gold); }
-  .hstat-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--steel); margin-top: 0.45rem; line-height: 1.5; }
+  .hstat-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); margin-top: 0.45rem; line-height: 1.5; }
   @media (max-width: 760px) {
     .stats-grid { grid-template-columns: 1fr 1fr; gap: 1.4rem 0; }
     .hstat { padding: 0 1rem 0 0; }
@@ -716,7 +724,7 @@
   }
   .sc-tag { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.7rem; }
   .sc-desc { font-size: 0.86rem; color: var(--on-navy-soft); line-height: 1.55; margin-bottom: 1rem; }
-  .sc-ex { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--steel); margin-bottom: 0.55rem; }
+  .sc-ex { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--steel-ink); margin-bottom: 0.55rem; }
   .sc-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .sc-pill {
     font-size: 0.74rem; font-weight: 500; color: var(--on-navy);
@@ -746,7 +754,7 @@
   .case-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
   .case-metrics { display: grid; grid-template-columns: repeat(3, auto); gap: 1.8rem; margin-top: 1.8rem; justify-content: start; }
   .cmetric-num { font-size: 1.5rem; font-weight: 700; color: var(--gold); letter-spacing: -0.02em; line-height: 1.15; }
-  .cmetric-label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); margin-top: 0.3rem; }
+  .cmetric-label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel-ink); margin-top: 0.3rem; }
 
   .chat-shell {
     background: var(--navy-850); border: 1px solid var(--navy-700); border-radius: 20px;
@@ -756,7 +764,7 @@
   .chat-top {
     display: flex; align-items: center; gap: 0.6rem; padding-bottom: 1rem; margin-bottom: 1.2rem;
     border-bottom: 1px solid var(--line-dark);
-    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--steel);
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--steel-ink);
   }
   .chat-body {
     height: 356px; display: flex; flex-direction: column; justify-content: flex-end;
@@ -884,7 +892,7 @@
   .contact-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(2.5rem, 6vw, 5rem); position: relative; }
   .contact-meta { margin-top: 2.4rem; }
   .cmeta { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.95rem 0; border-top: 1px solid var(--line-dark); font-size: 0.93rem; }
-  .cmeta-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--steel); }
+  .cmeta-label { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--steel-ink); }
   .cmeta-value { color: var(--on-navy); }
   .cmeta-value a { color: var(--gold); }
   .cmeta-value a:hover { text-decoration: underline; }
@@ -892,7 +900,7 @@
   .form-card { background: var(--white); border-radius: 18px; padding: clamp(1.6rem, 3vw, 2.3rem); box-shadow: 0 30px 80px rgba(4,14,26,0.4); }
   .form-row { margin-bottom: 1.15rem; }
   .form-row label { display: block; font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: 0.45rem; }
-  .form-row label .opt { color: var(--steel); text-transform: none; letter-spacing: 0.04em; }
+  .form-row label .opt { color: var(--ink-mute); text-transform: none; letter-spacing: 0.04em; }
   .form-row input, .form-row textarea {
     width: 100%; padding: 0.78rem 0.95rem;
     background: var(--surface); border: 1px solid var(--line); border-radius: 10px;

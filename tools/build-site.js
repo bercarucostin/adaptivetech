@@ -54,10 +54,10 @@ function emit(dest, content) {
 //    appear exactly once, so a reworded master fails the build loudly instead
 //    of quietly shipping a half-translated page.
 const EN_INDEX = {
-  '<title>Adaptive Technologies — Automatizare AI pentru IMM-uri din România</title>':
+  '<title>Automatizare AI pentru IMM-uri — Adaptive Technologies</title>':
     '<title>Adaptive Technologies — AI Automation for Romanian SMEs</title>',
 
-  '<meta name="description" content="Automatizăm sarcinile repetitive cu AI, ca echipa dumneavoastră să facă mai mult — fără să crească. Chatboți RAG, e-Factura, fluxuri n8n. Consultație gratuită de 60 min." />':
+  '<meta name="description" content="Automatizăm sarcinile repetitive cu AI — echipa dumneavoastră face mai mult, fără să crească. Chatboți RAG, e-Factura, fluxuri n8n. Consultație gratuită." />':
     '<meta name="description" content="We automate repetitive work with AI so your team can do more without growing. RAG chatbots, e-Factura, n8n workflows. Free 60-minute consultation." />',
 
   '<meta name="keywords" content="automatizare procese România, AI România, chatbot WhatsApp, RAG, n8n, e-Factura, automatizare facturi, IMM" />':
