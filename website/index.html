@@ -264,8 +264,14 @@
   .sec-hint::before { content: '→'; color: var(--gold); }
   #solutii .sec-head { margin-bottom: 1.1rem; }
 
-  .dark-band {
-    background: var(--navy); color: var(--on-navy);
+  .dark-band { background: var(--navy); color: var(--on-navy); }
+
+  /* The token remap belongs to the two sections that were INVERTED, not to
+     every dark band. studiu-de-caz and contact were designed dark from the
+     start and carry deliberately LIGHT elements -- .form-card is a white
+     card with a deep shadow, built to sit on navy. Remapping --white band-
+     wide turned that card navy and took its form inputs with it. */
+  #probleme, #proces {
     --ink: var(--on-navy);
     --ink-soft: var(--on-navy-soft);
     --ink-mute: var(--steel);
@@ -296,8 +302,8 @@
      Resetting the tokens is enough for almost everything, because every
      child rule reads them. Literals rather than the light tokens because
      those tokens are themselves remapped by .dark-band above. */
-  .dark-band .prob-panel,
-  .dark-band .how-card.dark {
+  #probleme .prob-panel,
+  #proces .how-card.dark {
     --ink: #10273E;
     --ink-soft: #3D5266;
     --ink-mute: #6E8095;
@@ -312,9 +318,9 @@
   }
   /* The three titles that hard-code var(--white); a token reset cannot
      reach them without making --white mean something it does not. */
-  .dark-band .prob-panel .prob-panel-title,
-  .dark-band .how-card.dark .how-title,
-  .dark-band .how-card.dark .how-step-title { color: #10273E; }
+  #probleme .prob-panel .prob-panel-title,
+  #proces .how-card.dark .how-title,
+  #proces .how-card.dark .how-step-title { color: #10273E; }
   /* The gold bloom reads as a smudge on a light panel. */
   .dark-band .prob-panel::after { opacity: 0.5; }
 
