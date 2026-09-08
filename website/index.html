@@ -13,6 +13,16 @@
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="ro_RO" />
 <meta property="og:locale:alternate" content="en_US" />
+<meta property="og:url" content="https://adaptivetech.ro/" />
+<meta property="og:site_name" content="Adaptive Technologies" />
+<meta property="og:image" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:alt" content="Adaptive Technologies" />
+
+<link rel="canonical" href="https://adaptivetech.ro/" />
+<meta name="theme-color" content="#0C3054" />
 
 <!-- Fonts: Space Grotesk (display & text) + JetBrains Mono (technical) per brand book -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,12 +35,89 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": "Adaptive Technologies S.R.L.",
-  "email": "contact@adaptivetech.ro",
-  "url": "https://www.adaptivetech.ro",
-  "address": { "@type": "PostalAddress", "addressLocality": "București", "addressCountry": "RO" },
-  "description": "Automatizare AI și fluxuri de lucru pentru IMM-uri din România."
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "@id": "https://adaptivetech.ro/#org",
+      "name": "Adaptive Technologies S.R.L.",
+      "alternateName": "Adaptive Technologies",
+      "url": "https://adaptivetech.ro/",
+      "email": "contact@adaptivetech.ro",
+      "description": "Automatizare AI și fluxuri de lucru pentru IMM-uri din România.",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "București",
+        "addressCountry": "RO"
+      },
+      "areaServed": {
+        "@type": "Country",
+        "name": "România"
+      },
+      "availableLanguage": [
+        "ro",
+        "en"
+      ],
+      "knowsAbout": [
+        "automatizare procese de business",
+        "inteligență artificială aplicată",
+        "RAG (retrieval-augmented generation)",
+        "n8n",
+        "e-Factura",
+        "integrări API"
+      ],
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Servicii de automatizare și AI",
+        "itemListElement": [
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Câștiguri Rapide",
+              "description": "Automatizări pe o singură sarcină, cu rezultat vizibil din prima săptămână — fără să atingem sistemele existente."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Fluxuri de Proces",
+              "description": "Fluxuri multi-pas care conectează instrumentele și departamentele, capăt la capăt."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Inteligență AI",
+              "description": "AI aplicat pe documentele și bazele dumneavoastră de date — răspunde cu surse citate. Chatboți RAG, interogări în limbaj natural."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "AI Avansat",
+              "description": "Modele construite pentru provocări specifice — predicții, computer vision, sisteme AI personalizate."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://adaptivetech.ro/#website",
+      "url": "https://adaptivetech.ro/",
+      "name": "Adaptive Technologies",
+      "publisher": {
+        "@id": "https://adaptivetech.ro/#org"
+      },
+      "inLanguage": [
+        "ro",
+        "en"
+      ]
+    }
+  ]
 }
 </script>
 

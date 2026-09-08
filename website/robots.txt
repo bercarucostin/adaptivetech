@@ -1,0 +1,36 @@
+User-agent: *
+Allow: /
+
+# The demo is noindex and its API is not content. Keeping crawlers out of
+# /api/demo/ also keeps them from burning the rate limits meant for visitors.
+Disallow: /api/demo/
+Disallow: /demo/
+
+# AI answer engines are allowed on purpose: for a consultancy selling AI
+# automation, being quotable in an AI answer is the point, not a leak.
+# To opt out, change any of these to Disallow: /
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://adaptivetech.ro/sitemap.xml
