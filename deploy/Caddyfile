@@ -32,6 +32,22 @@
 	}
 }
 
+# Defined BEFORE it is imported, deliberately. Caddy registers snippets as it
+# reads the file, so a snippet used above its definition fails config load --
+# and Caddy exits rather than starting with a partial config.
+(security_headers) {
+	header {
+		# Defaults to "all" so production stays indexable if this is never
+		# set -- a silently de-indexed live site is the worse failure. On a
+		# staging hostname set ROBOTS_TAG="noindex, nofollow".
+		X-Robots-Tag "{$ROBOTS_TAG:all}"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+	}
+}
+
 # ── The landing page ─────────────────────────────────────────────────────
 http://www.{$SITE_DOMAIN} {
 	encode gzip
@@ -104,18 +120,5 @@ http://{$N8N_HOST} {
 
 	handle {
 		reverse_proxy n8n:5678
-	}
-}
-
-(security_headers) {
-	header {
-		# Defaults to "all" so production stays indexable if this is never
-		# set -- a silently de-indexed live site is the worse failure. On a
-		# staging hostname set ROBOTS_TAG="noindex, nofollow".
-		X-Robots-Tag "{$ROBOTS_TAG:all}"
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "SAMEORIGIN"
 	}
 }
