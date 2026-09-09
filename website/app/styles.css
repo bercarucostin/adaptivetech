@@ -8990,6 +8990,58 @@ body.dashboard-production-maximized .kanban-col{
 }
 
 /* ==========================================================================
+   V18.29 — Mobile tooth editor visibility and touch multi-selection
+   ========================================================================== */
+
+.tooth-editor-hint-mobile{display:none}
+
+@media(max-width:860px), (pointer:coarse){
+  .tooth-editor-hint-desktop{display:none}
+  .tooth-editor-hint-mobile{display:inline}
+}
+
+@media(max-width:860px){
+  /* Keep the editor in the modal's normal scroll flow. A fixed bottom sheet
+     was clipped by the mobile keyboard and obscured most of the odontogram. */
+  #orderForm .tooth-editor-hint{
+    position:static!important;
+    padding:10px 12px!important;
+    font-size:11px!important;
+    line-height:1.4!important;
+  }
+
+  #orderForm .order-tooth-popover{
+    position:relative!important;
+    inset:auto!important;
+    flex:none!important;
+    width:calc(100% - 16px)!important;
+    max-width:none!important;
+    max-height:none!important;
+    margin:10px 8px 8px!important;
+    overflow:visible!important;
+    z-index:10!important;
+    border-radius:14px!important;
+  }
+
+  #orderForm .tooth-popover-actions{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)!important;
+    gap:8px!important;
+  }
+
+  #orderForm .tooth-popover-actions button{
+    width:100%!important;
+    min-width:0!important;
+    min-height:48px!important;
+    white-space:normal!important;
+  }
+
+  #orderForm .tooth-remove-btn{
+    grid-column:1/-1!important;
+  }
+}
+
+/* ==========================================================================
    V18.19 — Role-safe contract detail + no horizontal price scrolling
    ========================================================================== */
 

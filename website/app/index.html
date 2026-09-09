@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flowrise Dental Studio</title>
-  <link rel="stylesheet" href="styles.css?v=18.28" />
+  <link rel="stylesheet" href="styles.css?v=18.30" />
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -320,7 +320,10 @@
               <main class="tooth-studio-center">
                 <div id="orderToothChart" class="order-tooth-chart"></div>
                 <div id="orderToothMismatch" class="order-tooth-mismatch hidden"></div>
-                <div class="tooth-editor-hint">☝&nbsp;&nbsp; Click pentru editare · Ctrl (Windows) / Command (Mac) + click pentru selecție multiplă</div>
+                <div class="tooth-editor-hint">
+                  <span class="tooth-editor-hint-desktop">☝&nbsp;&nbsp; Click pentru editare · Ctrl (Windows) / Command (Mac) + click pentru selecție multiplă</span>
+                  <span class="tooth-editor-hint-mobile">☝&nbsp;&nbsp; Atinge unul sau mai mulți dinți, apoi configurează și salvează selecția.</span>
+                </div>
 
                 <div id="orderToothPopover" class="order-tooth-popover hidden" role="dialog" aria-modal="false" aria-labelledby="orderToothPopoverTitle">
                   <div class="tooth-popover-head">
@@ -516,6 +519,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=18.28"></script>
+  <script src="app.js?v=18.30"></script>
 </body>
 </html>

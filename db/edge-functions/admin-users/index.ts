@@ -160,19 +160,37 @@ Deno.serve(async (req) => {
     const legacyUserId = clean(data.User_ID);
     if (!legacyUserId) return json({ message: "Internal User ID is required." }, 400);
 
-    // Resolve the immutable internal/legacy ID case-insensitively.
-    const { data: activeProfiles, error: profileSearchError } = await admin
+    // Resolve inactive profiles too. Reactivation and deletion must still be
+    // possible after `profiles.active` has been set to false.
+    const targetSupabaseUserId = clean(data.Supabase_User_ID);
+    const { data: profiles, error: profileSearchError } = await admin
       .from("profiles")
-      .select("id,username,legacy_user_id,active")
-      .eq("active", true);
+      .select("id,username,legacy_user_id,active");
 
     if (profileSearchError) throw profileSearchError;
 
-    const existingMatches = (activeProfiles || []).filter(
+    const normalizedUserId = legacyUserId.toLowerCase();
+    const identifierMatches = (profiles || []).filter(
       (p: any) =>
-        String(p.legacy_user_id || "").trim().toLowerCase() === legacyUserId.toLowerCase()
+        String(p.legacy_user_id || "").trim().toLowerCase() === normalizedUserId ||
+        String(p.username || "").trim().toLowerCase() === normalizedUserId
     );
-    const existingProfile = existingMatches.length === 1 ? existingMatches[0] : null;
+    const uuidProfile = targetSupabaseUserId
+      ? (profiles || []).find((p: any) => p.id === targetSupabaseUserId) || null
+      : null;
+
+    if (targetSupabaseUserId && !uuidProfile) {
+      return json({ message: "User not found." }, 404);
+    }
+    if (uuidProfile && identifierMatches.some((p: any) => p.id !== uuidProfile.id)) {
+      return json({ message: "User identifiers refer to different accounts." }, 409);
+    }
+    if (!uuidProfile && identifierMatches.length > 1) {
+      return json({ message: "Internal User ID is ambiguous." }, 409);
+    }
+
+    const existingProfile = uuidProfile ||
+      (identifierMatches.length === 1 ? identifierMatches[0] : null);
 
     if (action === "create") {
       if (existingProfile?.id) return json({ message: "Internal User ID already exists." }, 409);
@@ -339,12 +357,16 @@ Deno.serve(async (req) => {
         return json({ message: "You cannot delete your own account." }, 400);
       }
 
-      await admin.from("organization_memberships").delete().eq("user_id", existingProfile.id);
-      await admin.from("legacy_user_directory").delete().eq("legacy_user_id", legacyUserId);
-      await admin.from("profiles").delete().eq("id", existingProfile.id);
-
+      // Deleting the Auth user cascades to profiles and memberships through
+      // their foreign keys, avoiding a partially deleted account.
       const { error: deleteAuthError } = await admin.auth.admin.deleteUser(existingProfile.id);
       if (deleteAuthError) throw deleteAuthError;
+
+      const { error: legacyDeleteError } = await admin
+        .from("legacy_user_directory")
+        .delete()
+        .eq("legacy_user_id", legacyUserId);
+      if (legacyDeleteError) throw legacyDeleteError;
 
       return json({ ok: true });
     }

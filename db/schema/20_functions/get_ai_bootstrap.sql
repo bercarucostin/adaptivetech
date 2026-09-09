@@ -59,11 +59,11 @@ begin
             jsonb_build_object('dataset','lab_profiles','description','Laboratory profile/discovery configuration.'),
             jsonb_build_object('dataset','lab_public_offers','description','Public laboratory offers.'),
             jsonb_build_object('dataset','relationship_terms','description','Clinic-Lab commercial terms.'),
-            jsonb_build_object('dataset','relationship_prices','description','Negotiated Clinic-Lab work-type prices.'),
-            jsonb_build_object('dataset','work_orders','description','All operational Work Orders and stage/payment fields.'),
+            jsonb_build_object('dataset','relationship_prices','description','Optional negotiated prices attached to new organization relationships. This table may be empty; do not use it for legacy Work Order financial summaries.'),
+            jsonb_build_object('dataset','work_orders','description','All operational Work Orders and stage/payment fields. Rows also include matched contract unit_price, list_price, final_price and price_matched for financial summaries by partner.'),
             jsonb_build_object('dataset','patient_cases','description','All dental prescription / patient case rows.'),
             jsonb_build_object('dataset','work_types','description','Configured work types.'),
-            jsonb_build_object('dataset','contract_prices','description','Contract/work-type client prices.'),
+            jsonb_build_object('dataset','contract_prices','description','Authoritative legacy Contract + work-type client price list. Use with work_orders for management financial summaries; do not substitute relationship_prices.'),
             jsonb_build_object('dataset','technician_costs','description','Technician cost configuration for all technicians.'),
             jsonb_build_object('dataset','calendar_events','description','Laboratory calendar events.'),
             jsonb_build_object('dataset','materials_inventory','description','Materials stock and reorder thresholds.'),
@@ -81,7 +81,7 @@ begin
             ),
             jsonb_build_object(
                 'dataset','my_receivables',
-                'description','Only this technician own compensation summary: accrued, paid and outstanding amounts.'
+                'description','Only this technician own compensation: accrued, paid and outstanding amounts, including a ready-to-use By_Partner summary. Use this for Technician financial summaries by partner; no client sale prices are needed.'
             ),
             jsonb_build_object(
                 'dataset','work_types',

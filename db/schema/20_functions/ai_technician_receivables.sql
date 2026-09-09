@@ -26,6 +26,7 @@ begin
         select
             wo.id as work_order_id,
             wo.nume_pacient,
+            wo.nume_partener,
             wo.tip_lucrare,
             s.stage_key,
             s.stage_label,
@@ -69,6 +70,7 @@ begin
                 jsonb_build_object(
                     'Work_Order_ID', work_order_id,
                     'Nume_Pacient', nume_pacient,
+                    'Nume_Partener', nume_partener,
                     'Tip_Lucrare', tip_lucrare,
                     'Stage', stage_key,
                     'Stage_Label', stage_label,
@@ -82,17 +84,45 @@ begin
             '[]'::jsonb
         ) as rows
         from assigned
+    ), by_partner as (
+        select coalesce(
+            jsonb_agg(
+                jsonb_build_object(
+                    'Nume_Partener', partner_name,
+                    'Stage_Count', stage_count,
+                    'Total_Accrued', accrued,
+                    'Total_Paid', paid,
+                    'Total_Outstanding', accrued - paid
+                )
+                order by accrued desc, partner_name
+            ),
+            '[]'::jsonb
+        ) as rows
+        from (
+            select
+                coalesce(nullif(trim(nume_partener),''),'Partener nespecificat') as partner_name,
+                count(*)::bigint as stage_count,
+                coalesce(sum(unit_cost * nr_elemente),0)::numeric as accrued,
+                coalesce(sum(
+                    case when lower(trim(payment_status)) = 'paid'
+                         then unit_cost * nr_elemente else 0 end
+                ),0)::numeric as paid
+            from assigned
+            group by coalesce(nullif(trim(nume_partener),''),'Partener nespecificat')
+        ) partner_totals
     )
     select jsonb_build_object(
         'Technician', public.current_technician_name(),
+        'Currency', 'RON',
         'Stage_Count', t.stage_count,
         'Total_Accrued', t.accrued,
         'Total_Paid', t.paid,
         'Total_Outstanding', (t.accrued - t.paid)::numeric,
+        'By_Partner', p.rows,
         'Breakdown', b.rows
     )
     into v_result
-    from totals t cross join breakdown b;
+    from totals t cross join breakdown b cross join by_partner p;
 
     return v_result;
 end;

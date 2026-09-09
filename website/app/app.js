@@ -4971,8 +4971,10 @@ async function adminCreateUser(){
 window.adminCreateUser=adminCreateUser;
 
 async function adminSaveUser(userId){
+  const existing=adminConfigData.users.find(x=>String(x.User_ID)===String(userId));
   const data={
     User_ID:String(userId||"").trim(),
+    Supabase_User_ID:String(existing?.Supabase_User_ID||"").trim(),
     Username:String($("editUsername")?.value||"").trim().toLowerCase(),
     Name:String($("editUserName")?.value||"").trim(),
     Email:String($("editUserEmail")?.value||"").trim(),
@@ -5009,7 +5011,10 @@ async function adminDeleteUser(userId){
   if(!confirm(`Ștergi utilizatorul "${u?.Name||id}" (${id})?\n\nAceastă acțiune este permanentă.`))return;
 
   try{
-    await adminConfigRequest("user","delete",{User_ID:id});
+    await adminConfigRequest("user","delete",{
+      User_ID:id,
+      Supabase_User_ID:String(u?.Supabase_User_ID||"").trim()
+    });
     selectedAdminUser="";
     renderAdminConfig();
   }catch(err){
@@ -5655,9 +5660,9 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
   syncBatchToothHighlight();
   positionOrderToothPopover(anchor);
 
-  // For Ctrl/Cmd multi-select, keep keyboard focus on the odontogram so
-  // the user can continue selecting teeth without the popup stealing focus.
-  if(!append && teeth.length===1){
+  // Avoid opening the on-screen keyboard or moving the scroll position on
+  // touch devices. This also lets the user tap more teeth before editing.
+  if(!append && teeth.length===1 && !window.matchMedia("(max-width: 860px), (pointer: coarse)").matches){
     setTimeout(()=>orderToothType.focus(),0);
   }
 }
@@ -5749,7 +5754,9 @@ function renderOrderToothPicker(){
     el.addEventListener("click",e=>{
       e.stopPropagation();
       if(doctorModalReadOnly())return;
-      openOrderToothPopover(tooth,el,{append:Boolean(e.ctrlKey||e.metaKey)});
+      const touchMultiSelect=window.matchMedia("(max-width: 860px), (pointer: coarse)").matches
+        && activeOrderTeeth.length>0;
+      openOrderToothPopover(tooth,el,{append:Boolean(e.ctrlKey||e.metaKey||touchMultiSelect)});
     });
 
     el.addEventListener("keydown",e=>{
