@@ -7,7 +7,7 @@
         "path": "dental-lab-ai",
         "responseMode": "responseNode",
         "options": {
-          "allowedOrigins": "*"
+          "allowedOrigins": "https://app.flowrisedental.ro"
         }
       },
       "id": "3a173c4b-7fad-4f89-97dc-0c96b8fb4d74",
@@ -254,7 +254,7 @@
             },
             {
               "name": "Authorization",
-              "value": "={{ $('AI - Unified').first().json.auth_header }}"
+              "value": "={{ $('AI - Normalize Input').first().json.auth_header }}"
             },
             {
               "name": "Content-Type",
@@ -265,7 +265,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ p_session_id: $('AI - Unified').first().json.session_id }) }}",
+        "body": "={{ JSON.stringify({ p_session_id: $('AI - Normalize Input').first().json.session_id }) }}",
         "options": {}
       },
       "id": "f3ca21f0-7bbf-4cca-ac3f-1f964fbabc3a",
@@ -275,7 +275,8 @@
       "position": [
         944,
         -2416
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -600,6 +601,36 @@
         3696,
         -2336
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Re-emit the normalized request, binary included.\n//\n// The HTTP node above replaced the item with Supabase's response, but\n// the router switches on input_type and the image and audio nodes need\n// the uploaded file. Reaching back to the named node is what keeps the\n// branches working after the gate was moved in front of them.\nconst src = $('AI - Normalize Input').first();\nreturn [{ json: src.json, binary: src.binary }];"
+      },
+      "id": "a7f1c2d4-auth-gate-0001",
+      "name": "AI - Auth Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        -2416
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"unauthorized\", message: \"Sesiune expirată sau invalidă. Autentificați-vă din nou.\" }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a7f1c2d4-auth-denied-001",
+      "name": "AI - Auth Denied",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1144,
+        -2196
+      ]
     }
   ],
   "pinData": {},
@@ -619,7 +650,7 @@
       "main": [
         [
           {
-            "node": "AI - Route Input",
+            "node": "Supabase - AI Bootstrap",
             "type": "main",
             "index": 0
           }
@@ -710,7 +741,7 @@
       "main": [
         [
           {
-            "node": "Supabase - AI Bootstrap",
+            "node": "AI - Build Retrieval Plan",
             "type": "main",
             "index": 0
           }
@@ -721,7 +752,14 @@
       "main": [
         [
           {
-            "node": "AI - Build Retrieval Plan",
+            "node": "AI - Auth Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI - Auth Denied",
             "type": "main",
             "index": 0
           }
@@ -912,6 +950,17 @@
         [
           {
             "node": "AI - Mutation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Auth Gate": {
+      "main": [
+        [
+          {
+            "node": "AI - Route Input",
             "type": "main",
             "index": 0
           }
