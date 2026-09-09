@@ -20,12 +20,18 @@ window.FLOWRISE_SUPABASE = {
 };
 
 
-// Transitional runtime configuration.
-// When n8n is moved to the client environment, change ONLY n8nBaseUrl here.
+// Runtime configuration.
+//
+// n8nBaseUrl is same-origin now. Caddy on app.flowrisedental.ro maps
+// /api/ai/* onto n8n's /webhook/*, so the browser never talks to the n8n
+// hostname directly. That removes the CORS surface entirely and puts one
+// front door in front of a paid API, which is where rate limiting belongs.
+// The n8n editor stays at n8n.flowrisedental.ro and no longer serves
+// production webhooks.
 // Operational Work Orders / Production / Patient Cases / reference data are already Supabase-native in V16.
 window.FLOWRISE_RUNTIME = {
   environment: "production",
-  n8nBaseUrl: "https://n8n.flowrisedental.ro/webhook",
+  n8nBaseUrl: "/api/ai",
   legacyModules: {
     ai: true,
     chatHistory: false,

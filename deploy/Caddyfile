@@ -1,0 +1,121 @@
+# Flowrise Dental — three hostnames, one Caddy.
+#
+#   www.flowrisedental.ro   the static landing page
+#   app.flowrisedental.ro   the web platform, and the AI API under /api/ai/
+#   n8n.flowrisedental.ro   the n8n editor
+#
+# ─────────────────────────────────────────────────────────────────────────
+# BEFORE DEPLOYING, CONFIRM ONE THING: does something already terminate TLS
+# in front of this container?
+#
+# This file assumes YES -- that Coolify's proxy owns :80/:443 and forwards
+# over the Docker network, which is why the site blocks are http:// and
+# auto_https is off. That matches how the other Hetzner box runs and why the
+# compose file publishes no ports.
+#
+# If Caddy is instead facing the internet directly, change three things:
+#   1. delete `auto_https off`
+#   2. change every `http://` site address below to `https://`
+#   3. publish 80 and 443 in docker-compose.yml, and set an email for ACME
+# Getting this wrong does not fail loudly: Caddy will try to provision
+# certificates for hostnames it cannot validate, and serve nothing.
+# ─────────────────────────────────────────────────────────────────────────
+
+{
+	auto_https off
+
+	# Caddy's direct peer is the proxy on the compose network, not the
+	# visitor and not Cloudflare -- so private ranges are what to trust.
+	# Cloudflare's ranges are deliberately absent: Caddy never sees it.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# ── The landing page ─────────────────────────────────────────────────────
+http://www.{$SITE_DOMAIN} {
+	encode gzip
+
+	root * /srv/site
+	try_files {path} {path}/ {path}.html
+	file_server
+
+	import security_headers
+}
+
+# The apex redirects to www, which is where the landing page lives.
+# 308 rather than 302: cacheable, and it preserves the method.
+http://{$SITE_DOMAIN} {
+	redir https://www.{$SITE_DOMAIN}{uri} 308
+}
+
+# ── The web platform ─────────────────────────────────────────────────────
+http://app.{$SITE_DOMAIN} {
+	encode gzip
+
+	# The AI endpoint, same-origin with the app that calls it.
+	#
+	# handle_path, NOT handle. Caddy runs the directives inside a handle
+	# block in its own fixed order rather than the order they are written,
+	# and `rewrite` sorts before `uri`. So a `uri strip_prefix` written
+	# above a `rewrite` runs AFTER it: the rewrite fires on the untouched
+	# path, produces /webhook/api/ai/dental-lab-ai, and strip_prefix then
+	# finds no /api/ai at the front of that and silently does nothing. The
+	# symptom is a 500 from n8n saying the webhook is not registered.
+	#
+	# handle_path strips its matched prefix on entry, before anything inside
+	# runs, so the ordering cannot bite. /api/ai/dental-lab-ai therefore
+	# reaches n8n as /webhook/dental-lab-ai.
+	#
+	# {uri} rather than {path} so query strings survive.
+	handle_path /api/ai/* {
+		rewrite * /webhook{uri}
+		reverse_proxy n8n:5678
+	}
+
+	handle {
+		root * /srv/app
+		try_files {path} {path}/ {path}.html
+		file_server
+	}
+
+	import security_headers
+}
+
+# ── The n8n editor ───────────────────────────────────────────────────────
+http://{$N8N_HOST} {
+	# No IP allowlist and no basic auth: n8n's own accounts are the gate.
+	# That makes MFA on the owner account mandatory rather than advisable --
+	# it is the only thing in front of every credential n8n stores.
+	#
+	# A fresh n8n serves an UNAUTHENTICATED setup screen until an owner
+	# account exists, and whoever reaches it first claims the instance.
+	# Never expose a newly provisioned n8n here before completing setup.
+
+	# Production webhooks are NOT served from the editor hostname. The AI
+	# endpoint is reachable only through app.flowrisedental.ro/api/ai/,
+	# which is the one place rate limiting can sit in front of a paid API.
+	# /webhook-test/ is deliberately still allowed: it is what the editor's
+	# "listen for test event" uses, and it only runs while a developer is
+	# watching for it.
+	handle /webhook/* {
+		respond "Not here. Use https://app.{$SITE_DOMAIN}/api/ai/" 404
+	}
+
+	handle {
+		reverse_proxy n8n:5678
+	}
+}
+
+(security_headers) {
+	header {
+		# Defaults to "all" so production stays indexable if this is never
+		# set -- a silently de-indexed live site is the worse failure. On a
+		# staging hostname set ROBOTS_TAG="noindex, nofollow".
+		X-Robots-Tag "{$ROBOTS_TAG:all}"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+	}
+}

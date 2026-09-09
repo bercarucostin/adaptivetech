@@ -1,15 +1,59 @@
 services:
+  # Caddy serves both public hostnames and rewrites the AI endpoint to n8n.
+  # It is new here: n8n and postgres are unchanged from what was already
+  # running on this box, apart from the proxy-hop count noted below.
+  caddy:
+    build:
+      # The repository root, because the site lives outside deploy/.
+      context: ..
+      dockerfile: deploy/caddy.Dockerfile
+    restart: always
+    # NO published ports, deliberately: Coolify's proxy owns :80 and :443 on
+    # the host and terminates TLS. If this box has no such proxy and Caddy is
+    # meant to face the internet directly, publish them here AND make the
+    # three changes described at the top of the Caddyfile -- doing one
+    # without the other leaves the site unreachable or without certificates.
+    #
+    #   ports: ["80:80", "443:443"]
+    expose:
+      - '80'
+    environment:
+      # Caddy reads these from its own process environment at runtime, so
+      # each must be listed explicitly -- the compose `env_file` does not
+      # reach inside the container's Caddy process for {$VAR} expansion.
+      - 'SITE_DOMAIN=${SITE_DOMAIN}'
+      - 'N8N_HOST=${N8N_HOST}'
+      # Defaulted in the Caddyfile to "all". Set to "noindex, nofollow" on a
+      # staging hostname: it serves the same unfinished site, and subdomains
+      # are discoverable through certificate transparency logs.
+      - 'ROBOTS_TAG=${ROBOTS_TAG:-all}'
+    depends_on:
+      - n8n
+    volumes:
+      # Caddy's own state only. The Caddyfile and both site roots are in the
+      # image, on purpose -- see caddy.Dockerfile.
+      - 'caddy_data:/data'
+      - 'caddy_config:/config'
+
   n8n:
     image: 'n8nio/n8n:2.28.3'
     restart: always
     depends_on:
       postgres:
         condition: service_healthy
+    # No published ports: n8n is reachable only through Caddy, on the compose
+    # network, at n8n:5678.
     environment:
       - 'N8N_HOST=${N8N_HOST}'
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
       - 'N8N_EDITOR_BASE_URL=https://${N8N_HOST}/'
+      # Left on the n8n hostname deliberately. This only controls the URL the
+      # editor DISPLAYS for a production webhook; it does not affect routing.
+      # The real public entry point is https://app.${SITE_DOMAIN}/api/ai/,
+      # which Caddy rewrites to /webhook/ -- so neither value shows a URL
+      # that is correct end to end, and changing it would only move which
+      # half is misleading.
       - 'WEBHOOK_URL=https://${N8N_HOST}/'
       - 'N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}'
       - DB_TYPE=postgresdb
@@ -23,7 +67,19 @@ services:
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_PERSONALIZATION_ENABLED=false
       - N8N_HIRING_BANNER_ENABLED=false
-      - N8N_PROXY_HOPS=1
+      # CHANGED, and worth checking against reality: this counts the proxies
+      # between the visitor and n8n, and adding Caddy adds one.
+      #
+      #   Cloudflare -> Coolify's proxy -> Caddy -> n8n   = 3
+      #   Coolify's proxy -> Caddy -> n8n                 = 2  (before Cloudflare)
+      #   Caddy -> n8n                                    = 1  (Caddy at the edge)
+      #
+      # It was 1 when nothing but the Coolify proxy sat in front. Undercount
+      # and n8n logs Caddy's address as the client; overcount and a client
+      # can spoof its own address by sending X-Forwarded-For. Nothing here
+      # gates on IP today, so this is about honest logs -- but set it to
+      # match the chain that actually exists.
+      - N8N_PROXY_HOPS=3
       - N8N_RUNNERS_ENABLED=true
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
@@ -39,9 +95,11 @@ services:
       - TZ=Europe/Bucharest
     volumes:
       - 'n8n_data:/home/node/.n8n'
+
   postgres:
     image: 'postgres:17-alpine'
     restart: always
+    # n8n's own store only. The application's data lives in Supabase.
     environment:
       - POSTGRES_DB=n8n
       - POSTGRES_USER=n8n
@@ -61,6 +119,9 @@ services:
       - max_connections=50
       - '-c'
       - shared_buffers=256MB
+
 volumes:
   n8n_data: null
   postgres_data: null
+  caddy_data: null
+  caddy_config: null
