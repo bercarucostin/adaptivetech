@@ -280,7 +280,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input=$('AI - Unified').first().json;\nconst b=$json;\n\nif(b?.allowed===false){\n  return [{json:{\n    blocked:true,\n    reply:b?.message||\"AI is not available for this role.\",\n    input,\n    bootstrap:b\n  }}];\n}\n\nconst role=String(b.role||\"\").toLowerCase();\nconst catalog=Array.isArray(b.catalog)?b.catalog:[];\n\nconst rules=role===\"technician\"\n? `TECHNICIAN DATA ACCESS IS STRICTLY LIMITED.\nYou may retrieve ONLY:\n- my_work_orders\n- my_receivables\n- work_types\nNever request users, patient cases, partner commercial data, client prices, discounts, contracts, relationship terms/prices, other technicians' costs, materials, calendar, files, chat history or any other dataset.\nTechnician may CREATE a new Work Order through AI, but cannot UPDATE or DELETE through AI.`\n: `ADMIN/MANAGER AI MAY READ ANY DATASET LISTED IN THE CATALOG.\nThe catalog intentionally excludes credentials/secrets/password hashes/tokens.\nChoose only the datasets needed to answer the question.\nFor a broad cross-business question you may request multiple datasets.`;\n\nconst prompt=`You are the data retrieval planner for Flowrise Dental AI.\n\nROLE: ${role}\n\n${rules}\n\nUSER QUESTION:\n${input.normalized_text}\n\nAVAILABLE DATASETS:\n${JSON.stringify(catalog)}\n\nRECENT CHAT:\n${JSON.stringify(b.history||[])}\n\nReturn ONLY valid JSON:\n{\n  \"datasets\":[\"dataset_name\"],\n  \"limit\":1000,\n  \"reason\":\"short reason\"\n}\n\nRules:\n- datasets must come EXACTLY from AVAILABLE DATASETS.\n- use [] only if the question can be answered without any Supabase business data.\n- maximum 8 datasets for a normal question.\n- use limit between 1 and 5000.\n- for Technician, use only my_work_orders, my_receivables and/or work_types.\n- do not answer the user yet.`;\n\nreturn [{json:{blocked:false,prompt,input,bootstrap:b}}];"
+        "jsCode": "const input=$('AI - Unified').first().json;\n// Named, not positional: this node used to sit directly after the\n// Bootstrap call, so $json was the bootstrap payload. It now runs after\n// AI - Unified, and $json would be the merged request instead -- which\n// made b.allowed undefined and this blocked-check quietly stop firing.\nconst b=$('Supabase - AI Bootstrap').first().json;\n\nif(b?.allowed===false){\n  return [{json:{\n    blocked:true,\n    reply:b?.message||\"AI is not available for this role.\",\n    input,\n    bootstrap:b\n  }}];\n}\n\nconst role=String(b.role||\"\").toLowerCase();\nconst catalog=Array.isArray(b.catalog)?b.catalog:[];\n\nconst rules=role===\"technician\"\n? `TECHNICIAN DATA ACCESS IS STRICTLY LIMITED.\nYou may retrieve ONLY:\n- my_work_orders\n- my_receivables\n- work_types\nNever request users, patient cases, partner commercial data, client prices, discounts, contracts, relationship terms/prices, other technicians' costs, materials, calendar, files, chat history or any other dataset.\nTechnician may CREATE a new Work Order through AI, but cannot UPDATE or DELETE through AI.`\n: `ADMIN/MANAGER AI MAY READ ANY DATASET LISTED IN THE CATALOG.\nThe catalog intentionally excludes credentials/secrets/password hashes/tokens.\nChoose only the datasets needed to answer the question.\nFor a broad cross-business question you may request multiple datasets.`;\n\nconst prompt=`You are the data retrieval planner for Flowrise Dental AI.\n\nROLE: ${role}\n\n${rules}\n\nUSER QUESTION:\n${input.normalized_text}\n\nAVAILABLE DATASETS:\n${JSON.stringify(catalog)}\n\nRECENT CHAT:\n${JSON.stringify(b.history||[])}\n\nReturn ONLY valid JSON:\n{\n  \"datasets\":[\"dataset_name\"],\n  \"limit\":1000,\n  \"reason\":\"short reason\"\n}\n\nRules:\n- datasets must come EXACTLY from AVAILABLE DATASETS.\n- use [] only if the question can be answered without any Supabase business data.\n- maximum 8 datasets for a normal question.\n- use limit between 1 and 5000.\n- for Technician, use only my_work_orders, my_receivables and/or work_types.\n- do not answer the user yet.`;\n\nreturn [{json:{blocked:false,prompt,input,bootstrap:b}}];"
       },
       "id": "3cdc093a-2b3b-4103-80ef-a6b206ad74fd",
       "name": "AI - Build Retrieval Plan",
@@ -618,9 +618,9 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($('Supabase - AI Bootstrap').first().json.role ? { type: \"answer\", intent: \"answer\", reply: ($('Supabase - AI Bootstrap').first().json.message || \"AI is not available for this role.\"), session_id: $('AI - Normalize Input').first().json.session_id } : { ok: false, error: \"unauthorized\", message: \"Sesiune expirată sau invalidă. Autentificați-vă din nou.\" }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"unauthorized\", message: \"Sesiune expirată sau invalidă. Autentificați-vă din nou.\" }) }}",
         "options": {
-          "responseCode": "={{ $('Supabase - AI Bootstrap').first().json.role ? 200 : 401 }}"
+          "responseCode": 401
         }
       },
       "id": "a7f1c2d4-auth-denied-001",
@@ -663,6 +663,57 @@
       "position": [
         272,
         -2416
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ type: \"answer\", intent: \"answer\", reply: ($('Supabase - AI Bootstrap').first().json.message || \"AI is not available for this role.\"), session_id: $('AI - Normalize Input').first().json.session_id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "c1a9e7d2-role-blocked-01",
+      "name": "AI - Role Blocked",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1364,
+        -2046
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1a9e7d2-hasrole-000001",
+              "leftValue": "={{ $('Supabase - AI Bootstrap').first().json.role }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1a9e7d2-hasrole-node01",
+      "name": "AI - Known Caller?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1144,
+        -2116
       ]
     }
   ],
@@ -1005,6 +1056,24 @@
         [
           {
             "node": "AI - Route Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI - Known Caller?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Known Caller?": {
+      "main": [
+        [
+          {
+            "node": "AI - Role Blocked",
             "type": "main",
             "index": 0
           }
