@@ -88,9 +88,24 @@ n8n and postgres were first deployed here as a Coolify resource with an
 inline compose file. Coolify cannot convert that into a Git-backed one, so
 this stack **adopts its volumes** rather than migrating them:
 
+```yaml
+n8n_data:
+  external: true
+  name: y128uoi1ogj31ec21iecbnh4_n8n-data
+postgres_data:
+  external: true
+  name: y128uoi1ogj31ec21iecbnh4_postgres-data
+```
 
+Note the hyphens in the real volume names — `n8n-data`, not `n8n_data`.
+They were read off the running containers with:
 
-No copy and no downtime window.  means Docker will not
+```bash
+docker inspect <container> --format \
+  '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
+```
+
+No copy and no downtime window. `external: true` means Docker will not
 create them, so a wrong name fails the deploy instead of starting n8n
 against an empty database — which matters, because an empty n8n looks
 like a working n8n until someone notices every workflow is gone.
@@ -99,12 +114,15 @@ like a working n8n until someone notices every workflow is gone.
 
 1. **Back up first**, off this box:
 
-   
+   ```bash
+   docker exec postgres-y128uoi1ogj31ec21iecbnh4 \
+     pg_dump -U n8n -d n8n --clean --if-exists > n8n-$(date +%F).sql
+   ```
 
    That dump holds every workflow and *encrypted* credential. Restoring it
    needs the encryption key too, which is why both matter.
 
-2. **Copy  and  out of the old
+2. **Copy `N8N_ENCRYPTION_KEY` and `POSTGRES_PASSWORD` out of the old
    resource's environment screen.** They live in Coolify, not in Git. A
    different encryption key against the adopted volume leaves every stored
    credential undecryptable.
