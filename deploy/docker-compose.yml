@@ -70,16 +70,17 @@ services:
       # CHANGED, and worth checking against reality: this counts the proxies
       # between the visitor and n8n, and adding Caddy adds one.
       #
-      #   Cloudflare -> Coolify's proxy -> Caddy -> n8n   = 3
-      #   Coolify's proxy -> Caddy -> n8n                 = 2  (before Cloudflare)
-      #   Caddy -> n8n                                    = 1  (Caddy at the edge)
+      #   Traefik (coolify-proxy) -> Caddy -> n8n         = 2  <- today
+      #   Cloudflare -> Traefik -> Caddy -> n8n           = 3  <- after the DNS move
       #
-      # It was 1 when nothing but the Coolify proxy sat in front. Undercount
-      # and n8n logs Caddy's address as the client; overcount and a client
-      # can spoof its own address by sending X-Forwarded-For. Nothing here
-      # gates on IP today, so this is about honest logs -- but set it to
-      # match the chain that actually exists.
-      - N8N_PROXY_HOPS=3
+      # It was 1 while Traefik reached n8n directly. Set it to 3 when
+      # Cloudflare goes in front -- in the same change as the DNS move.
+      #
+      # Undercount and n8n logs Caddy's address as the client; overcount and
+      # a client can spoof its own address with X-Forwarded-For. Nothing here
+      # gates on IP today, so this is about honest logs rather than access
+      # control -- but it should match the chain that actually exists.
+      - N8N_PROXY_HOPS=2
       - N8N_RUNNERS_ENABLED=true
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
