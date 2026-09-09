@@ -618,9 +618,9 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, error: \"unauthorized\", message: \"Sesiune expirată sau invalidă. Autentificați-vă din nou.\" }) }}",
+        "responseBody": "={{ JSON.stringify($('Supabase - AI Bootstrap').first().json.role ? { type: \"answer\", intent: \"answer\", reply: ($('Supabase - AI Bootstrap').first().json.message || \"AI is not available for this role.\"), session_id: $('AI - Normalize Input').first().json.session_id } : { ok: false, error: \"unauthorized\", message: \"Sesiune expirată sau invalidă. Autentificați-vă din nou.\" }) }}",
         "options": {
-          "responseCode": 401
+          "responseCode": "={{ $('Supabase - AI Bootstrap').first().json.role ? 200 : 401 }}"
         }
       },
       "id": "a7f1c2d4-auth-denied-001",
@@ -630,6 +630,39 @@
       "position": [
         1144,
         -2196
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1a9e7d2-authorized-0001",
+              "leftValue": "={{ $('Supabase - AI Bootstrap').first().json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1a9e7d2-authorized-node1",
+      "name": "AI - Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        -2416
       ]
     }
   ],
@@ -960,7 +993,25 @@
       "main": [
         [
           {
+            "node": "AI - Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Authorized?": {
+      "main": [
+        [
+          {
             "node": "AI - Route Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI - Auth Denied",
             "type": "main",
             "index": 0
           }
