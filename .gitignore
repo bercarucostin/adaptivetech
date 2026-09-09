@@ -1,0 +1,3 @@
+# Real deployment secrets. deploy/.env.example is the committed template;
+# deploy/.env holds live values and must never be tracked.
+deploy/.env
