@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowrise Dental Studio</title>
+  <link rel="stylesheet" href="styles.css?v=18.28" />
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <img class="login-brand-image" src="assets/flowrise-brand.jpg" alt="Flowrise Dental Studio" />
+      <h1 class="sr-only">Flowrise Dental Studio</h1>
+      <p>Operațiuni laborator & AI</p>
+
+      <form id="loginForm">
+        <label>Nickname sau email
+          <input id="loginUser" autocomplete="username" placeholder="alex_florea sau email@domeniu.ro" required />
+        </label>
+        <label>Password
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <button id="loginBtn" class="primary-btn full" type="submit">Autentificare</button>
+      </form>
+
+      <div id="loginError" class="login-error"></div>
+      <div class="poc-note">Acces securizat · nickname sau email</div>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <button id="mobileSidebarCloseBtn" class="mobile-drawer-close" type="button" aria-label="Close menu">×</button>
+        <button id="sidebarCollapseBtn" class="desktop-panel-collapse sidebar-collapse-btn" type="button" aria-label="Minimize left menu" title="Minimize menu">‹</button>
+        <img class="sidebar-brand-image" src="assets/flowrise-brand.jpg" alt="Flowrise Dental Studio" />
+      </div>
+
+      <div class="user-card">
+        <div id="userAvatar" class="user-avatar">A</div>
+        <div class="user-card-main">
+          <div id="userName" class="user-name"></div>
+          <div id="userRole" class="user-role"></div>
+          <button id="logoutBtn" class="logout-btn user-logout-btn" type="button">Deconectare</button>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="workorders" data-permission="Can_View_Work_Orders"><span class="nav-icon">▤</span><span>Lucrări</span></button>
+        <button class="nav-item" data-view="production" data-permission="Can_View_Production"><span class="nav-icon">⌁</span><span>Producție</span></button>
+        <button class="nav-item doctor-management-only" data-view="partnerships"><span class="nav-icon">⇄</span><span id="partnershipNavLabel">Parteneriate</span></button>
+        <button class="nav-item" data-view="partners" data-permission="Can_View_Partners"><span class="nav-icon">◇</span><span>Parteneri</span></button>
+        <button class="nav-item" data-view="patients" data-permission="Can_View_Client_Pricing"><span class="nav-icon">◉</span><span>Pacienți</span></button>
+        <button class="nav-item" data-view="technicians" data-permission="Can_View_Technicians"><span class="nav-icon">◎</span><span>Tehnicieni</span></button>
+        <button class="nav-item management-only" data-view="calendar"><span class="nav-icon">◫</span><span>Calendar</span></button>
+        <button class="nav-item doctor-hidden" data-view="materials"><span class="nav-icon">⬡</span><span>Materiale</span></button>
+        <button class="nav-item admin-only hidden" data-view="adminconfig"><span class="nav-icon">⚙</span><span>Configurare admin</span></button>
+      </nav>
+
+    </aside>
+
+    <button id="sidebarExpandBtn" class="desktop-panel-expand sidebar-expand-btn" type="button" aria-label="Expand left menu" title="Show menu">›</button>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title-row">
+          <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Open menu">☰</button>
+          <div>
+            <h1 id="pageTitle">Lucrări</h1>
+            <p id="pageSubtitle">Date operaționale ale laboratorului</p>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <div id="connectionBadge" class="connection-badge">Se conectează...</div>
+          <button id="loadOlderBtn" class="secondary-btn" type="button" title="By default only orders with Deadline in the last 45 days are loaded">Încarcă mai vechi</button>
+          <button id="toggleOldBtn" class="secondary-btn" type="button" title="Old = deadline before today and status Finished, Shipped, List Sent or Paid">Ascunde vechi</button>
+          <button id="refreshBtn" class="secondary-btn">↻ Reîmprospătează</button>
+          <button id="newOrderBtn" class="primary-btn" type="button" onclick="openNewOrder()">+ Lucrare nouă</button>
+        </div>
+      </header>
+
+      <div class="refresh-meta">
+        <span id="lastRefresh">Neactualizat încă</span>
+        <span id="datasetScope">Implicit: ultimele 45 de zile după termen</span>
+        <span>Actualizare automată: 5 min</span>
+      </div>
+
+      <section id="content" class="content"></section>
+    </main>
+
+    <aside class="ai-panel">
+      <div class="ai-header">
+        <div>
+          <div class="ai-title">FlowRise AI</div>
+          <div id="aiMode" class="ai-subtitle"></div>
+        </div>
+        <div class="ai-header-actions">
+          <button id="aiCollapseBtn" class="desktop-panel-collapse ai-collapse-btn" type="button" aria-label="Minimize AI panel" title="Minimize AI">›</button>
+          <button id="newChatBtn" class="mini-btn">Chat nou</button>
+          <button id="mobileAiCloseBtn" class="mobile-ai-close" type="button" aria-label="Close AI">×</button>
+        </div>
+      </div>
+
+      <div class="quick-actions">
+        <button class="chip technician-only" data-prompt="Care sunt urmatoarele lucrari pe care trebuie sa lucrez?">Următoarea mea lucrare</button>
+        <button class="chip management-only" data-prompt="Analizeaza lucrarile active si spune-mi prioritatile principale.">Lucrări active</button>
+        <button class="chip management-only" data-prompt="Care sunt urmatoarele deadline-uri si ce lucrari par in risc?">Termene</button>
+        <button class="chip management-only" data-prompt="Fa-mi un rezumat financiar pe parteneri folosind lucrarile si preturile din tabele.">Parteneri</button>
+        <button class="chip management-only" data-prompt="Analizează stocul de materiale și spune-mi ce materiale sunt sub pragul minim sau necesită atenție.">Materiale</button>
+      </div>
+
+      <div id="chatMessages" class="chat-messages"></div>
+
+      <div class="input-tools">
+        <label class="tool-btn" title="Upload photo">📷
+          <input id="photoInput" type="file" accept="image/*" hidden />
+        </label>
+        <button id="voiceBtn" class="tool-btn" title="Start voice recording">🎙️</button>
+        <span id="voiceState" class="voice-state"></span>
+      </div>
+
+      <form id="chatForm" class="chat-form">
+        <textarea id="chatInput" rows="2" placeholder="Ask or update a work order..."></textarea>
+        <button id="sendBtn" class="send-btn" type="submit">Trimite</button>
+      </form>
+      <div class="chat-hint">Enter = trimite · Shift+Enter = rând nou</div>
+    </aside>
+
+    <button id="aiExpandBtn" class="desktop-panel-expand ai-expand-btn" type="button" aria-label="Expand AI panel" title="Show AI">‹</button>
+
+    <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+      <button class="mobile-nav-item active" data-view="workorders" data-permission="Can_View_Work_Orders" type="button">
+        <span class="mobile-nav-icon">▤</span><span>Lucrări</span>
+      </button>
+      <button class="mobile-nav-item" data-view="production" data-permission="Can_View_Production" type="button">
+        <span class="mobile-nav-icon">◫</span><span>Producție</span>
+      </button>
+      <button class="mobile-nav-item" data-view="partners" data-permission="Can_View_Partners" type="button">
+        <span class="mobile-nav-icon">◇</span><span>Parteneri</span>
+      </button>
+      <button class="mobile-nav-item" data-view="patients" data-permission="Can_View_Client_Pricing" type="button">
+        <span class="mobile-nav-icon">◉</span><span>Pacienți</span>
+      </button>
+      <button class="mobile-nav-item" data-view="technicians" data-permission="Can_View_Technicians" type="button">
+        <span class="mobile-nav-icon">◎</span><span>Tehnicieni</span>
+      </button>
+      <button id="mobileAiBtn" class="mobile-nav-item mobile-ai-nav" type="button">
+        <span class="mobile-nav-icon">✦</span><span>AI</span>
+      </button>
+    </nav>
+
+    <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
+  </div>
+
+  <div id="flowLoading" class="flow-loading hidden">
+    <div class="flow-loading-card">
+      <div class="spinner"></div>
+      <div>
+        <strong id="flowLoadingTitle">Se încarcă...</strong>
+        <div id="flowLoadingText">Se sincronizează datele</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h2 id="modalTitle">Lucrare nouă</h2>
+          <div id="modalSubtitle" class="modal-subtitle"></div>
+        </div>
+        <button id="closeModalBtn" class="icon-btn">×</button>
+      </div>
+
+      <form id="orderForm" class="job-definition-form">
+        <input type="hidden" id="orderId" />
+<div class="job-definition-layout">
+          <section class="job-panel job-project-panel">
+            <div class="job-panel-head">
+              <div>
+                <h3>Informații caz</h3>
+              </div>
+            </div>
+
+            <div class="job-field-grid">
+              <label>Termen
+                <div class="date-input-with-picker">
+                  <input id="dueDate" type="date" />
+                  <button class="date-picker-btn" type="button" data-date-picker="dueDate" aria-label="Deschide calendar pentru termen" title="Alege data din calendar">📅</button>
+                </div>
+              </label>
+
+              <label class="doctor-hidden-field">Data recepție
+                <div class="date-input-with-picker">
+                  <input id="receptionDate" type="date" />
+                  <button class="date-picker-btn" type="button" data-date-picker="receptionDate" aria-label="Deschide calendar pentru data recepției" title="Alege data din calendar">📅</button>
+                </div>
+              </label>
+
+              <label class="management-field doctor-visible-field">Status
+                <select id="status"></select>
+              </label>
+
+              <label class="job-wide">Nume pacient
+                <div class="partial-autocomplete">
+                  <input id="patient" type="text" autocomplete="off" required placeholder="Scrie sau selectează un pacient..." />
+                  <div id="patientSuggestions" class="partial-suggestions hidden"></div>
+                </div>
+              </label>
+
+              <label class="job-wide doctor-hidden-field">Nume partener
+                <div class="partial-autocomplete">
+                  <input id="partner" type="text" autocomplete="off" required placeholder="Scrie sau selectează un partener..." />
+                  <div id="partnerSuggestions" class="partial-suggestions hidden"></div>
+                </div>
+              </label>
+
+              <label class="management-field job-wide contract-derived-field">Contract
+                <select id="contract"></select>
+              </label>
+
+              <label class="job-wide tooth-derived-field">Tip lucrare
+                <select id="workType" required></select>
+              </label>
+
+              <label class="job-wide tooth-derived-field">Material
+                <input id="orderMaterial" list="caseMaterialList" placeholder="Zirconiu, metalo-ceramică, PMMA..." />
+              </label>
+
+              <label class="tooth-derived-field">Nr. elemente
+                <input id="elements" type="number" min="1" value="1" required />
+              </label>
+
+              <label class="management-field">Discount %
+                <input id="discount" type="number" min="0" max="100" step="0.01" value="0" />
+              </label>
+
+              <label class="technician-create-field hidden job-wide">Etapa mea
+                <select id="myStage">
+                  <option value="Model">Model</option>
+                  <option value="Modelare">Modelare</option>
+                  <option value="Cer_Fin">Cer Fin</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="job-notes-block">
+              <label>Notă clinică
+                <textarea id="orderClinicNote" rows="3" placeholder="Try-in, contact, ocluzie, instrucțiuni clinică..."></textarea>
+              </label>
+              <label class="doctor-hidden-field">Instrucțiuni producție
+                <textarea id="orderProductionNotes" rows="4" placeholder="Detalii care trebuie să ajungă cu lucrarea în laborator..."></textarea>
+              </label>
+            </div>
+
+            <div class="case-files-block">
+              <div class="case-files-head">
+                <div>
+                  <div class="job-eyebrow">FIȘIERE CAZ</div>
+                  <h4>Fișiere pentru laborator</h4>
+                  <p>ZIP / STL / PLY / OBJ / PDF / imagini. Fișierele sunt păstrate în spațiul securizat al cazului.</p>
+                </div>
+                <span id="caseFilesPlanBadge" class="case-files-plan-badge">Max. 45 MB / fișier</span>
+              </div>
+
+              <div id="caseFilesSetupNotice" class="case-files-setup-notice"></div>
+
+              <div class="case-files-upload-row">
+                <input id="caseFileInput" type="file" multiple
+                  accept=".zip,.stl,.ply,.obj,.pdf,.jpg,.jpeg,.png,application/zip,application/pdf,image/jpeg,image/png" />
+                <button id="caseFileUploadBtn" class="secondary-btn" type="button">Încarcă fișiere</button>
+              </div>
+
+              <div id="caseFileQueue" class="case-file-queue"></div>
+              <div id="caseFileList" class="case-file-list"></div>
+
+              <div class="case-files-foot">
+                <span>Fișiere acceptate acum: max. 45 MB / fișier.</span>
+                <span>Pentru fișiere foarte mari vom extinde limita într-o etapă viitoare.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="job-panel job-tooth-panel">
+            <div class="tooth-studio-titlebar">
+              <div>
+                <div class="job-eyebrow">DINȚI & PRESCRIPȚIE</div>
+                <h3>Definire caz dentar</h3>
+                <p>Click / tap pe un dinte pentru a configura tipul lucrării și nuanța.</p>
+              </div>
+              <div class="job-count-badge"><strong id="orderTeethSelected">0</strong><span>configurați</span></div>
+            </div>
+
+            <div id="orderToothStage" class="tooth-studio-shell tooth-studio-popup-mode">
+              <div class="tooth-center-tools">
+                <div class="tooth-center-legend">
+                  <div class="tooth-center-tool-title">Legendă tip lucrare</div>
+                  <div id="orderWorkTypeLegend" class="order-work-type-legend"></div>
+                </div>
+
+                <div class="tooth-center-actions">
+                  <div class="tooth-view-inline">
+                    <button class="tooth-view-btn active" type="button" data-tooth-view="upperlower">Superior / Inferior</button>
+                    <button class="tooth-view-btn" type="button" data-tooth-view="quadrants">Cadrane</button>
+                    <button class="tooth-view-btn" type="button" data-tooth-view="both">Ambele arcade</button>
+                  </div>
+                  <button id="orderClearTeethBtn" class="tooth-clear-compact" type="button">Șterge selecția</button>
+                </div>
+
+                <div class="tooth-hidden-controls">
+                  <button id="orderSelectAnteriorBtn" type="button">Anterior</button>
+                  <label>
+                    <input id="orderSyncElements" type="checkbox" checked />
+                    Sincronizează nr. elemente
+                  </label>
+                </div>
+              </div>
+
+              <main class="tooth-studio-center">
+                <div id="orderToothChart" class="order-tooth-chart"></div>
+                <div id="orderToothMismatch" class="order-tooth-mismatch hidden"></div>
+                <div class="tooth-editor-hint">☝&nbsp;&nbsp; Click pentru editare · Ctrl (Windows) / Command (Mac) + click pentru selecție multiplă</div>
+
+                <div id="orderToothPopover" class="order-tooth-popover hidden" role="dialog" aria-modal="false" aria-labelledby="orderToothPopoverTitle">
+                  <div class="tooth-popover-head">
+                    <div class="tooth-popover-identity">
+                      <div id="orderToothPreview" class="tooth-popover-preview"></div>
+                      <div>
+                        <div class="tooth-popover-kicker">DETALII DINTE / SELECȚIE</div>
+                        <h4 id="orderToothPopoverTitle">Dinte</h4>
+                        <div id="orderToothPopoverMeta" class="tooth-popover-meta"></div>
+                        <div id="orderToothTypeBadge" class="tooth-detail-type-badge"></div>
+                      </div>
+                    </div>
+                    <button id="orderToothPopoverClose" class="icon-btn tooth-popover-close" type="button" aria-label="Close tooth details">×</button>
+                  </div>
+
+                  <div class="tooth-popover-fields">
+                    <label>Tip lucrare
+                      <div class="partial-autocomplete">
+                        <input id="orderToothType" type="text" autocomplete="off" placeholder="Type to search work type..." />
+                        <div id="orderToothTypeSuggestions" class="partial-suggestions hidden"></div>
+                      </div>
+                    </label>
+
+                    <div class="tooth-color-field">
+                      <label for="orderToothShade">Culoare</label>
+                      <input id="orderToothShade" list="caseShadeList" placeholder="A1, A2, BL2..." />
+                      <label id="orderSameShadeWrap" class="same-shade-toggle hidden">
+                        <input id="orderApplySameShade" type="checkbox" />
+                        <span>Aceeași culoare pentru toți dinții selectați</span>
+                      </label>
+                    </div>
+
+                    <label>Note explicative
+                      <textarea id="orderToothNote" rows="3" placeholder="Add notes (optional)"></textarea>
+                    </label>
+                  </div>
+
+                  <div class="tooth-popover-actions">
+                    <button id="orderToothRemoveBtn" class="danger-btn tooth-remove-btn hidden" type="button">Elimină dintele</button>
+                    <span class="tooth-popover-spacer"></span>
+                    <button id="orderToothCancelBtn" class="secondary-btn" type="button">Renunță</button>
+                    <button id="orderToothSaveBtn" class="primary-btn" type="button">Salvează dintele</button>
+                  </div>
+                </div>
+              </main>
+            </div>
+
+            <div class="order-selected-teeth-details tooth-configured-data-hidden">
+              <div class="table-wrap order-selected-table">
+                <table>
+                  <thead><tr><th>FDI</th><th>US</th><th>Tip</th><th>Material</th><th>Nuanță</th><th></th></tr></thead>
+                  <tbody id="orderToothDetailsBody">
+                    <tr><td colspan="6">Niciun dinte configurat.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <datalist id="caseShadeList">
+              <option value="A1"></option><option value="A2"></option><option value="A3"></option>
+              <option value="A3.5"></option><option value="A4"></option><option value="B1"></option>
+              <option value="B2"></option><option value="B3"></option><option value="B4"></option>
+              <option value="C1"></option><option value="C2"></option><option value="C3"></option>
+              <option value="C4"></option><option value="D2"></option><option value="D3"></option>
+              <option value="D4"></option><option value="BL1"></option><option value="BL2"></option>
+              <option value="BL3"></option><option value="BL4"></option>
+            </datalist>
+          </section>
+
+          <section class="job-panel job-production-panel">
+            <div class="job-panel-head doctor-hidden-field">
+              <div>
+                <div class="job-eyebrow">PRODUCȚIE</div>
+                <h3>Etape & tehnicieni</h3>
+              </div>
+            </div>
+
+            <div id="technicianAssignmentSummary" class="technician-assignment-summary hidden" aria-label="Etape și tehnicieni asignați"></div>
+
+            <div class="production-stage-card management-field">
+              <div class="production-stage-title">MODEL</div>
+              <label class="stage-na-toggle"><input id="modelNotApplicable" type="checkbox" /> Etapa nu se aplică</label>
+              <label>Tehnician
+                <select id="modelTech"></select>
+              </label>
+              <label>Status
+                <select id="statusModel"></select>
+              </label>
+              <label>Paid
+                <select id="paidModel"></select>
+              </label>
+            </div>
+
+            <div class="production-stage-card management-field">
+              <div class="production-stage-title">MODELARE</div>
+              <label class="stage-na-toggle"><input id="modelingNotApplicable" type="checkbox" /> Etapa nu se aplică</label>
+              <label>Tehnician
+                <select id="modelingTech"></select>
+              </label>
+              <label>Status
+                <select id="statusModeling"></select>
+              </label>
+              <label>Paid
+                <select id="paidModeling"></select>
+              </label>
+            </div>
+
+            <div class="production-stage-card management-field">
+              <div class="production-stage-title">CER / FIN</div>
+              <label class="stage-na-toggle"><input id="ceramicNotApplicable" type="checkbox" /> Etapa nu se aplică</label>
+              <label>Tehnician
+                <select id="ceramicTech"></select>
+              </label>
+              <label>Status
+                <select id="statusCerFin"></select>
+              </label>
+              <label>Paid
+                <select id="paidCerFin"></select>
+              </label>
+            </div>
+
+            <div class="job-price-summary management-field doctor-visible-price">
+              <div id="priceBreakdown" class="price-breakdown"></div>
+              <div class="price-compat-values hidden" aria-hidden="true">
+                <input id="unitPrice" readonly tabindex="-1" />
+                <input id="listPrice" readonly tabindex="-1" />
+                <input id="finalPrice" readonly tabindex="-1" />
+              </div>
+              <div id="priceHint" class="price-hint"></div>
+            </div>
+          </section>
+        </div>
+
+        <datalist id="caseRestorationList">
+          <option value="Coroană"></option>
+          <option value="Corp de punte"></option>
+          <option value="Fațetă"></option>
+          <option value="Inlay / Onlay"></option>
+          <option value="Coroană pe implant"></option>
+          <option value="Abutment"></option>
+          <option value="Provizoriu"></option>
+          <option value="Element arcadă completă"></option>
+          <option value="Structură"></option>
+          <option value="Altul"></option>
+        </datalist>
+
+        <datalist id="caseMaterialList">
+          <option value="Zirconia"></option>
+          <option value="Metalo-ceramică"></option>
+          <option value="Lithium Disilicate / e.max"></option>
+          <option value="PMMA"></option>
+          <option value="Compozit"></option>
+          <option value="CoCr"></option>
+          <option value="Titanium"></option>
+          <option value="PEEK"></option>
+          <option value="Altul"></option>
+        </datalist>
+
+        <div class="modal-actions job-modal-actions">
+          <button type="button" id="cancelModalBtn" class="secondary-btn">Renunță</button>
+          <button type="button" id="orderCasePdfBtn" class="secondary-btn case-export-btn">Fișă lucrare / PDF</button>
+          <button type="submit" id="saveOrderBtn" class="primary-btn">Salvează lucrarea</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <div id="caseSheetBackdrop" class="case-sheet-backdrop hidden">
+    <div class="case-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="caseSheetTitle">
+      <div class="case-sheet-header">
+        <div>
+          <h2 id="caseSheetTitle">Fișă lucrare</h2>
+          <div id="caseSheetSubtitle" class="case-sheet-subtitle"></div>
+        </div>
+        <button id="closeCaseSheetBtn" class="icon-btn" type="button" aria-label="Close case sheet">×</button>
+      </div>
+
+      <div id="caseSheetContent" class="case-sheet-content"></div>
+
+      <div class="case-sheet-footer">
+        <div id="caseSheetFooterHint" class="case-sheet-footer-hint">
+          Selecțiile dentare sunt păstrate în sesiunea curentă.
+        </div>
+        <div class="case-sheet-footer-actions">
+          <button id="cancelCaseSheetBtn" class="secondary-btn" type="button">Închide</button>
+          <button id="saveCaseSheetBtn" class="secondary-btn" type="button">Salvează fișa</button>
+          <button id="printCaseSheetBtn" class="primary-btn" type="button">Salvează + Tipărește / PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js?v=18.28"></script>
+</body>
+</html>
