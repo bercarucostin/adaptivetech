@@ -122,7 +122,38 @@ services:
       - shared_buffers=256MB
 
 volumes:
-  n8n_data: null
-  postgres_data: null
+  # ── The two volumes below already exist and hold live data. ──────────────
+  #
+  # n8n and postgres were first deployed on this box as a Coolify resource
+  # with an inline compose file, which created these volumes under that
+  # resource's id. Coolify cannot convert such a resource into a Git-backed
+  # one, so this stack ADOPTS the volumes rather than migrating anything:
+  # no copy, no downtime window, no chance of a half-finished transfer.
+  #
+  # `external: true` means Docker will not create them. If a name here is
+  # wrong the deploy FAILS instead of quietly starting n8n against an empty
+  # database -- which is the failure you want, because an empty n8n looks
+  # like a working n8n until someone notices every workflow is gone.
+  #
+  # Names verified on the box with:
+  #   docker inspect <container> --format \
+  #     '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
+  #
+  # Note the hyphens: n8n-data, not n8n_data.
+  #
+  # THE OLD RESOURCE MUST BE STOPPED BEFORE THIS ONE STARTS. Two postgres
+  # instances writing one data directory will corrupt it. Stop it -- do not
+  # delete it -- until this stack is confirmed working: deleting a Coolify
+  # resource can remove its volumes, and that is the only irreversible step
+  # in this whole change.
+  n8n_data:
+    external: true
+    name: y128uoi1ogj31ec21iecbnh4_n8n-data
+  postgres_data:
+    external: true
+    name: y128uoi1ogj31ec21iecbnh4_postgres-data
+
+  # New, and empty on purpose: Caddy's certificate store and autosaved
+  # config. Nothing here needs preserving.
   caddy_data: null
   caddy_config: null

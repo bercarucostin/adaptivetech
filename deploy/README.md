@@ -82,6 +82,43 @@ https://www.flowrisedental.ro:80,https://flowrisedental.ro:80
 
 and set `N8N_PROXY_HOPS=3` in the same change, because Cloudflare adds a hop.
 
+## Adopting the existing n8n and postgres data
+
+n8n and postgres were first deployed here as a Coolify resource with an
+inline compose file. Coolify cannot convert that into a Git-backed one, so
+this stack **adopts its volumes** rather than migrating them:
+
+
+
+No copy and no downtime window.  means Docker will not
+create them, so a wrong name fails the deploy instead of starting n8n
+against an empty database — which matters, because an empty n8n looks
+like a working n8n until someone notices every workflow is gone.
+
+### Order, and the one irreversible step
+
+1. **Back up first**, off this box:
+
+   
+
+   That dump holds every workflow and *encrypted* credential. Restoring it
+   needs the encryption key too, which is why both matter.
+
+2. **Copy  and  out of the old
+   resource's environment screen.** They live in Coolify, not in Git. A
+   different encryption key against the adopted volume leaves every stored
+   credential undecryptable.
+
+3. **Stop the old resource — do not delete it.** Two postgres instances
+   writing one data directory will corrupt it. Deleting a Coolify resource
+   can remove its volumes, and that is the only irreversible action here.
+
+4. Deploy this stack, then confirm n8n came up with its **existing**
+   workflows and credentials rather than an empty instance.
+
+5. Only then delete the old resource, after checking its volumes are the
+   ones now in use.
+
 ## Verifying before DNS exists
 
 Traefik routes by `Host`, so the whole stack can be exercised from the box
