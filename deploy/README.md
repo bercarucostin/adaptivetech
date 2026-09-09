@@ -82,60 +82,68 @@ https://www.flowrisedental.ro:80,https://flowrisedental.ro:80
 
 and set `N8N_PROXY_HOPS=3` in the same change, because Cloudflare adds a hop.
 
-## Adopting the existing n8n and postgres data
+## Moving data between Coolify resources
 
 n8n and postgres were first deployed here as a Coolify resource with an
 inline compose file. Coolify cannot convert that into a Git-backed one, so
-this stack **adopts its volumes** rather than migrating them:
+the data has to move to the new resource.
 
-```yaml
-n8n_data:
-  external: true
-  name: y128uoi1ogj31ec21iecbnh4_n8n-data
-postgres_data:
-  external: true
-  name: y128uoi1ogj31ec21iecbnh4_postgres-data
-```
+**Pinning the old volumes with `external: true` does not work.** Coolify
+rewrites the volumes block when it deploys a compose file from Git: both
+`external: true` and the explicit `name:` are discarded, and it creates its
+own empty pair.
 
-Note the hyphens in the real volume names — `n8n-data`, not `n8n_data`.
-They were read off the running containers with:
+The failure mode is the dangerous kind. `external: true` exists precisely so
+Docker refuses to create a missing volume — with it stripped, the stack
+starts cleanly against an empty database instead. An empty n8n looks
+completely healthy until someone notices every workflow is gone.
 
-```bash
-docker inspect <container> --format \
-  '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
-```
+So copy the data, with both stacks stopped.
 
-No copy and no downtime window. `external: true` means Docker will not
-create them, so a wrong name fails the deploy instead of starting n8n
-against an empty database — which matters, because an empty n8n looks
-like a working n8n until someone notices every workflow is gone.
-
-### Order, and the one irreversible step
+### Order
 
 1. **Back up first**, off this box:
 
    ```bash
-   docker exec postgres-y128uoi1ogj31ec21iecbnh4 \
+   docker exec <old-postgres-container> \
      pg_dump -U n8n -d n8n --clean --if-exists > n8n-$(date +%F).sql
    ```
 
-   That dump holds every workflow and *encrypted* credential. Restoring it
-   needs the encryption key too, which is why both matter.
-
 2. **Copy `N8N_ENCRYPTION_KEY` and `POSTGRES_PASSWORD` out of the old
-   resource's environment screen.** They live in Coolify, not in Git. A
-   different encryption key against the adopted volume leaves every stored
-   credential undecryptable.
+   resource.** They live in Coolify, not in Git.
 
-3. **Stop the old resource — do not delete it.** Two postgres instances
-   writing one data directory will corrupt it. Deleting a Coolify resource
-   can remove its volumes, and that is the only irreversible action here.
+   If the key does not match, n8n still shows every workflow — definitions
+   are not encrypted — but no credential will decrypt. That is why
+   "the workflows are there" is not sufficient proof the move worked. The
+   original key is inside the volume at `/home/node/.n8n/config` if it is
+   ever needed:
 
-4. Deploy this stack, then confirm n8n came up with its **existing**
-   workflows and credentials rather than an empty instance.
+   ```bash
+   docker run --rm -v <id>_n8n-data:/v alpine cat /v/config
+   ```
 
-5. Only then delete the old resource, after checking its volumes are the
-   ones now in use.
+3. **Stop both resources.** Two postgres instances writing one data
+   directory will corrupt it.
+
+4. **Copy each volume**, with the source mounted read-only so the original
+   remains a rollback:
+
+   ```bash
+   docker run --rm \
+     -v <old-id>_postgres-data:/from:ro \
+     -v <new-id>_postgres-data:/to \
+     alpine sh -c 'rm -rf /to/* /to/.[!.]* 2>/dev/null; cp -a /from/. /to/; du -sh /to'
+   ```
+
+   Repeat for `n8n-data`. `cp -a` preserves ownership numerically, which
+   postgres requires — it refuses to start on a data directory it does not
+   own. Compare the reported sizes against the originals before starting.
+
+5. Start the new resource. Confirm the workflows are present **and that a
+   credential decrypts** — the first does not imply the second.
+
+6. Only then delete the old resource, and keep its volumes for a while
+   after that.
 
 ## Verifying before DNS exists
 

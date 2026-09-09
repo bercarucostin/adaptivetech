@@ -122,38 +122,36 @@ services:
       - shared_buffers=256MB
 
 volumes:
-  # ── The two volumes below already exist and hold live data. ──────────────
+  # Plain named volumes. Coolify prefixes each with its resource id, so the
+  # real names on the box look like <resource-id>_n8n-data.
   #
-  # n8n and postgres were first deployed on this box as a Coolify resource
-  # with an inline compose file, which created these volumes under that
-  # resource's id. Coolify cannot convert such a resource into a Git-backed
-  # one, so this stack ADOPTS the volumes rather than migrating anything:
-  # no copy, no downtime window, no chance of a half-finished transfer.
+  # ── Do not try to pin these to specific volumes with `external: true`. ──
   #
-  # `external: true` means Docker will not create them. If a name here is
-  # wrong the deploy FAILS instead of quietly starting n8n against an empty
-  # database -- which is the failure you want, because an empty n8n looks
-  # like a working n8n until someone notices every workflow is gone.
+  # That was tried, to adopt the volumes from the earlier inline-compose
+  # resource without copying anything. Coolify REWRITES the volumes block
+  # when it deploys a compose file from Git: both `external: true` and the
+  # explicit `name:` were discarded, and it created its own empty pair.
   #
-  # Names verified on the box with:
-  #   docker inspect <container> --format \
-  #     '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}'
+  # The failure mode is the dangerous kind. `external: true` is supposed to
+  # make Docker refuse to create a missing volume, so a wrong name fails the
+  # deploy. Because Coolify strips it, the stack started cleanly against an
+  # empty database instead -- and an empty n8n looks completely healthy
+  # until someone notices every workflow is gone.
   #
-  # Note the hyphens: n8n-data, not n8n_data.
+  # Migrating data between resources therefore means copying it, with both
+  # stacks stopped:
   #
-  # THE OLD RESOURCE MUST BE STOPPED BEFORE THIS ONE STARTS. Two postgres
-  # instances writing one data directory will corrupt it. Stop it -- do not
-  # delete it -- until this stack is confirmed working: deleting a Coolify
-  # resource can remove its volumes, and that is the only irreversible step
-  # in this whole change.
-  n8n_data:
-    external: true
-    name: y128uoi1ogj31ec21iecbnh4_n8n-data
-  postgres_data:
-    external: true
-    name: y128uoi1ogj31ec21iecbnh4_postgres-data
+  #   docker run --rm \
+  #     -v <old-resource-id>_postgres-data:/from:ro \
+  #     -v <new-resource-id>_postgres-data:/to \
+  #     alpine sh -c 'rm -rf /to/* /to/.[!.]* 2>/dev/null; cp -a /from/. /to/'
+  #
+  # cp -a preserves ownership numerically, which postgres requires -- it
+  # refuses to start on a data directory it does not own. Mount the source
+  # :ro so the original stays a rollback until the new stack is proven.
+  n8n_data: null
+  postgres_data: null
 
-  # New, and empty on purpose: Caddy's certificate store and autosaved
-  # config. Nothing here needs preserving.
+  # Caddy's certificate store and autosaved config. Nothing to preserve.
   caddy_data: null
   caddy_config: null
