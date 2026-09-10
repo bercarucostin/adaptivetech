@@ -9,4 +9,5 @@ CREATE POLICY "profiles self read" ON "public"."profiles" AS PERMISSIVE FOR SELE
 -- Deliberately dropped and NOT recreated. See 40_grants.sql for why.
 DROP POLICY IF EXISTS "profiles self update" ON "public"."profiles";
 
-CREATE TRIGGER profiles_set_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS profiles_set_updated_at ON public.profiles;
+CREATE TRIGGER profiles_set_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
