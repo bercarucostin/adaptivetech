@@ -16,6 +16,7 @@ declare
     v_offset integer := greatest(0,coalesce(p_offset,0));
     v_rows jsonb := '[]'::jsonb;
     v_total bigint := 0;
+    v_today date := (current_timestamp at time zone 'Europe/Bucharest')::date;
 begin
     if v_role = 'technician' then
 
@@ -38,6 +39,19 @@ begin
                 'dataset',v_dataset,
                 'total_rows',jsonb_array_length(public.ai_technician_work_types()),
                 'rows',public.ai_technician_work_types()
+            );
+
+        elsif v_dataset = 'materials_inventory' then
+            return jsonb_build_object(
+                'dataset',v_dataset,'total_rows',jsonb_array_length(public.ai_read_materials()),
+                'rows',public.ai_read_materials()
+            );
+
+        elsif v_dataset = 'calendar_events' then
+            return jsonb_build_object(
+                'dataset',v_dataset,
+                'total_rows',jsonb_array_length(public.ai_read_calendar(v_today-30,v_today+336)),
+                'rows',public.ai_read_calendar(v_today-30,v_today+336)
             );
 
         else
@@ -176,7 +190,7 @@ begin
         from (select * from public.relationship_prices order by updated_at desc limit v_limit offset v_offset) q;
 
     elsif v_dataset = 'work_orders' then
-        select count(*) into v_total from public.lab_work_orders where lab_organization_id=v_lab;
+        select count(*) into v_total from public.lab_work_orders where lab_organization_id=v_lab and archived_at is null;
         select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) into v_rows
         from (
             select

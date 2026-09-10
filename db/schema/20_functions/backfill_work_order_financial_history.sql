@@ -113,4 +113,4 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.backfill_work_order_financial_history(uuid) FROM public;
-REVOKE ALL ON FUNCTION public.backfill_work_order_financial_history(uuid) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.backfill_work_order_financial_history(uuid) TO authenticated;

@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS "public"."lab_work_orders" (
     "discount" numeric NOT NULL DEFAULT 0,
     "data_receptie" timestamptz,
     "locked" boolean NOT NULL DEFAULT false,
+    "model_not_applicable" boolean NOT NULL DEFAULT false,
+    "modelare_not_applicable" boolean NOT NULL DEFAULT false,
+    "cer_fin_not_applicable" boolean NOT NULL DEFAULT false,
     "migrated_at" timestamptz NOT NULL DEFAULT now()
 );
 
@@ -82,6 +85,9 @@ CREATE INDEX IF NOT EXISTS lab_work_orders_type_idx ON public.lab_work_orders US
 -- Financial values are fixed when the Work Order is created.  They live on
 -- the order instead of being recomputed from the mutable contract catalog.
 ALTER TABLE public.lab_work_orders
+    ADD COLUMN IF NOT EXISTS model_not_applicable boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS modelare_not_applicable boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS cer_fin_not_applicable boolean NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS snapshot_unit_price numeric(14,2),
     ADD COLUMN IF NOT EXISTS snapshot_list_price numeric(14,2),
     ADD COLUMN IF NOT EXISTS snapshot_final_price numeric(14,2),
@@ -89,6 +95,22 @@ ALTER TABLE public.lab_work_orders
     ADD COLUMN IF NOT EXISTS price_fixed_at timestamptz,
     ADD COLUMN IF NOT EXISTS price_migrated boolean NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+UPDATE public.lab_work_orders
+SET model_not_applicable = coalesce(model_not_applicable,false),
+    modelare_not_applicable = coalesce(modelare_not_applicable,false),
+    cer_fin_not_applicable = coalesce(cer_fin_not_applicable,false)
+WHERE model_not_applicable IS NULL
+   OR modelare_not_applicable IS NULL
+   OR cer_fin_not_applicable IS NULL;
+
+ALTER TABLE public.lab_work_orders
+    ALTER COLUMN model_not_applicable SET DEFAULT false,
+    ALTER COLUMN model_not_applicable SET NOT NULL,
+    ALTER COLUMN modelare_not_applicable SET DEFAULT false,
+    ALTER COLUMN modelare_not_applicable SET NOT NULL,
+    ALTER COLUMN cer_fin_not_applicable SET DEFAULT false,
+    ALTER COLUMN cer_fin_not_applicable SET NOT NULL;
 
 DO $$
 BEGIN

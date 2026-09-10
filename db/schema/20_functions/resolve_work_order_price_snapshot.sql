@@ -49,4 +49,4 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) FROM public;
-GRANT EXECUTE ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) TO authenticated;
+REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) FROM authenticated;

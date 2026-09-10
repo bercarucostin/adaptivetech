@@ -20,7 +20,7 @@ begin
     from public.lab_work_orders
     where lab_organization_id = p_lab_organization_id
       and id = p_work_order_id
-    limit 1;
+    for update;
 
     if not found or not public.doctor_matches_partner(v_order.nume_partener) then
         raise exception 'Work Order access denied';
@@ -60,6 +60,25 @@ begin
         updated_at = now()
     where lab_organization_id = p_lab_organization_id
       and id = p_work_order_id;
+
+    if v_order.nr_elemente is distinct from p_nr_elemente then
+        insert into public.work_order_financial_audit (
+            lab_organization_id,work_order_id,entity_type,entity_id,action,
+            before_value,after_value,changed_by_user_id
+        )
+        select p_lab_organization_id,p_work_order_id,'work_order_price',p_work_order_id::text,
+            'quantity_change',
+            jsonb_build_object(
+                'quantity',v_order.nr_elemente,'unit_price',v_order.snapshot_unit_price,
+                'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price
+            ),
+            jsonb_build_object(
+                'quantity',wo.nr_elemente,'unit_price',wo.snapshot_unit_price,
+                'list_price',wo.snapshot_list_price,'final_price',wo.snapshot_final_price
+            ),auth.uid()
+        from public.lab_work_orders wo
+        where wo.lab_organization_id=p_lab_organization_id and wo.id=p_work_order_id;
+    end if;
 
     return true;
 end;

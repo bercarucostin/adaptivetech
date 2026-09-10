@@ -70,3 +70,4 @@ $function$
 -- Security definer: True
 -- Return type: jsonb
 -- Identity arguments: p_action text, p_payload jsonb
+REVOKE ALL ON FUNCTION public.ai_mutate_work_order_role_safe(text,jsonb) FROM public,authenticated;

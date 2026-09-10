@@ -20,7 +20,10 @@ declare
     v_list numeric;
     v_final numeric;
     v_lines jsonb;
+    v_before_lines jsonb;
     v_matched_all boolean;
+    v_order_price_source text;
+    v_order_price_fixed_at timestamptz;
 begin
     if v_role not in ('admin','manager','doctor') then
         raise exception 'Work Order item update denied';
@@ -34,6 +37,15 @@ begin
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id
     for update;
     if not found then raise exception 'Work Order not found'; end if;
+
+    select coalesce(jsonb_agg(jsonb_build_object(
+        'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
+        'contract',contract,'unit_price',unit_price,'subtotal',line_total,
+        'price_source',price_source
+    ) order by tooth_number),'[]'::jsonb)
+    into v_before_lines
+    from public.lab_work_order_items
+    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
 
     if v_role='doctor' then
         if not public.doctor_matches_partner(v_order.nume_partener) then raise exception 'Work Order access denied'; end if;
@@ -139,8 +151,11 @@ begin
                'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
                'contract',contract,'unit_price',unit_price,'subtotal',line_total,
                'matched',unit_price is not null,'price_source',price_source
-           ) order by tooth_number),'[]'::jsonb)
-      into v_count,v_list,v_matched_all,v_lines
+           ) order by tooth_number),'[]'::jsonb),
+           case when bool_and(price_source='admin_override') then 'admin_override'
+                else 'item_snapshots' end,
+           max(price_fixed_at)
+      into v_count,v_list,v_matched_all,v_lines,v_order_price_source,v_order_price_fixed_at
     from public.lab_work_order_items
     where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
 
@@ -152,9 +167,27 @@ begin
         discount=case when v_role='doctor' then 0 else discount end,
         snapshot_unit_price=case when v_list is null or v_count=0 then null else round(v_list/v_count,2) end,
         snapshot_list_price=v_list,snapshot_final_price=v_final,
-        price_source='item_snapshots',price_fixed_at=now(),price_migrated=false,
+        price_source=v_order_price_source,price_fixed_at=coalesce(v_order_price_fixed_at,now()),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
+
+    if (v_order.snapshot_list_price,v_order.snapshot_final_price,v_order.nr_elemente,v_before_lines)
+       is distinct from (v_list,v_final,v_count,v_lines) then
+        insert into public.work_order_financial_audit (
+            lab_organization_id,work_order_id,entity_type,entity_id,action,
+            before_value,after_value,changed_by_user_id
+        ) values (
+            p_lab_organization_id,p_work_order_id,'work_order_price',p_work_order_id::text,
+            'item_change',
+            jsonb_build_object(
+                'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price,
+                'quantity',v_order.nr_elemente,'items',v_before_lines
+            ),
+            jsonb_build_object(
+                'list_price',v_list,'final_price',v_final,'quantity',v_count,'items',v_lines
+            ),auth.uid()
+        );
+    end if;
 
     update public.lab_patient_cases
     set tip_lucrare=v_first_type,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()

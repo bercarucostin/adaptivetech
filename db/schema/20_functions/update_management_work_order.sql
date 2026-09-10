@@ -12,6 +12,13 @@ declare
     v_before jsonb;
     v_after jsonb;
     v_old_order public.lab_work_orders%rowtype;
+    v_saved_order public.lab_work_orders%rowtype;
+    v_model_changed boolean;
+    v_modelare_changed boolean;
+    v_cer_fin_changed boolean;
+    v_paid_model text;
+    v_paid_modelare text;
+    v_paid_cer_fin text;
 begin
     if not public.is_lab_management(p_lab_organization_id) then
         raise exception 'Management access denied';
@@ -21,6 +28,22 @@ begin
     where lab_organization_id = p_lab_organization_id and id = p_work_order_id
     for update;
     if not found then raise exception 'Work Order not found'; end if;
+
+    v_model_changed := lower(trim(coalesce(v_old_order.tehnician_model,'')))
+        is distinct from lower(trim(coalesce(p_tehnician_model,'')));
+    v_modelare_changed := lower(trim(coalesce(v_old_order.tehnician1_modelare,'')))
+        is distinct from lower(trim(coalesce(p_tehnician1_modelare,'')));
+    v_cer_fin_changed := lower(trim(coalesce(v_old_order.tehnician2_cer_fin,'')))
+        is distinct from lower(trim(coalesce(p_tehnician2_cer_fin,'')));
+    v_paid_model := case when nullif(trim(coalesce(p_tehnician_model,'')),'') is null
+        then 'Not Paid' else coalesce(nullif(trim(p_paid_model),''),'Not Paid') end;
+    v_paid_modelare := case when nullif(trim(coalesce(p_tehnician1_modelare,'')),'') is null
+        then 'Not Paid' else coalesce(nullif(trim(p_paid_modelare),''),'Not Paid') end;
+    v_paid_cer_fin := case when nullif(trim(coalesce(p_tehnician2_cer_fin,'')),'') is null
+        then 'Not Paid' else coalesce(nullif(trim(p_paid_cer_fin),''),'Not Paid') end;
+    if v_model_changed then v_paid_model:='Not Paid'; end if;
+    if v_modelare_changed then v_paid_modelare:='Not Paid'; end if;
+    if v_cer_fin_changed then v_paid_cer_fin:='Not Paid'; end if;
 
     select jsonb_build_object(
         'list_price', snapshot_list_price,
@@ -62,10 +85,25 @@ begin
         raise exception 'Tip_Lucrare is not active';
     end if;
 
+    if v_model_changed then
+        perform public.prepare_stage_reassignment(
+            p_lab_organization_id,p_work_order_id,'model',p_tehnician_model,null);
+    end if;
+    if v_modelare_changed then
+        perform public.prepare_stage_reassignment(
+            p_lab_organization_id,p_work_order_id,'modelare',p_tehnician1_modelare,null);
+    end if;
+    if v_cer_fin_changed then
+        perform public.prepare_stage_reassignment(
+            p_lab_organization_id,p_work_order_id,'cer_fin',p_tehnician2_cer_fin,null);
+    end if;
+
     update public.lab_work_orders
     set
         deadline = p_deadline,
-        status = coalesce(nullif(trim(p_status),''),'Not Started'),
+        status = case when (v_model_changed or v_modelare_changed or v_cer_fin_changed)
+                           and coalesce(nullif(trim(p_status),''),'Not Started') not in ('Not Started','Started')
+                      then 'Started' else coalesce(nullif(trim(p_status),''),'Not Started') end,
         nume_pacient = trim(p_nume_pacient),
         nume_partener = trim(p_nume_partener),
         contract = coalesce(nullif(trim(p_contract),''),'General'),
@@ -77,9 +115,12 @@ begin
         tehnician_model = nullif(trim(coalesce(p_tehnician_model,'')),''),
         tehnician1_modelare = nullif(trim(coalesce(p_tehnician1_modelare,'')),''),
         tehnician2_cer_fin = nullif(trim(coalesce(p_tehnician2_cer_fin,'')),''),
-        status_model = coalesce(nullif(trim(p_status_model),''),'Not Started'),
-        status_modelare = coalesce(nullif(trim(p_status_modelare),''),'Not Started'),
-        status_cer_fin = coalesce(nullif(trim(p_status_cer_fin),''),'Not Started'),
+        status_model = case when v_model_changed then 'Not Started'
+            else coalesce(nullif(trim(p_status_model),''),'Not Started') end,
+        status_modelare = case when v_modelare_changed then 'Not Started'
+            else coalesce(nullif(trim(p_status_modelare),''),'Not Started') end,
+        status_cer_fin = case when v_cer_fin_changed then 'Not Started'
+            else coalesce(nullif(trim(p_status_cer_fin),''),'Not Started') end,
 
         locked = coalesce(p_locked,false),
         updated_by_user_id = public.current_legacy_user_id(),
@@ -94,7 +135,8 @@ begin
                 where i.lab_organization_id = p_lab_organization_id
                   and i.work_order_id = p_work_order_id
             ) then (
-                select sum(i.line_total) from public.lab_work_order_items i
+                select case when bool_and(i.line_total is not null) then sum(i.line_total) end
+                from public.lab_work_order_items i
                 where i.lab_organization_id = p_lab_organization_id
                   and i.work_order_id = p_work_order_id
             )
@@ -107,7 +149,8 @@ begin
                 where i.lab_organization_id = p_lab_organization_id
                   and i.work_order_id = p_work_order_id
             ) then round((
-                select sum(i.line_total) from public.lab_work_order_items i
+                select case when bool_and(i.line_total is not null) then sum(i.line_total) end
+                from public.lab_work_order_items i
                 where i.lab_organization_id = p_lab_organization_id
                   and i.work_order_id = p_work_order_id
             ) * (1 - coalesce(p_discount,0) / 100), 2)
@@ -116,6 +159,21 @@ begin
         end
     where wo.lab_organization_id = p_lab_organization_id
       and wo.id = p_work_order_id;
+
+    -- A reassignment starts a new payable assignment. Keep payments made to
+    -- the previous technician in history while resetting the live indicator.
+    update public.lab_work_orders
+    set paid_model = case when v_model_changed then 'Not Paid' else paid_model end,
+        paid_modelare = case when v_modelare_changed then 'Not Paid' else paid_modelare end,
+        paid_cer_fin = case when v_cer_fin_changed then 'Not Paid' else paid_cer_fin end
+    where lab_organization_id = p_lab_organization_id and id = p_work_order_id;
+
+    select * into v_saved_order
+    from public.lab_work_orders
+    where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
+    if v_saved_order.tehnician_model is null then v_paid_model:='Not Paid'; end if;
+    if v_saved_order.tehnician1_modelare is null then v_paid_modelare:='Not Paid'; end if;
+    if v_saved_order.tehnician2_cer_fin is null then v_paid_cer_fin:='Not Paid'; end if;
 
     select jsonb_build_object(
         'list_price', snapshot_list_price,
@@ -148,18 +206,21 @@ begin
     where lab_organization_id = p_lab_organization_id
       and work_order_id = p_work_order_id;
 
-    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'model',p_tehnician_model);
-    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'modelare',p_tehnician1_modelare);
-    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'cer_fin',p_tehnician2_cer_fin);
+    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'model',v_saved_order.tehnician_model);
+    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'modelare',v_saved_order.tehnician1_modelare);
+    perform public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'cer_fin',v_saved_order.tehnician2_cer_fin);
 
-    if coalesce(nullif(trim(p_paid_model),''),'Not Paid') is distinct from coalesce(v_old_order.paid_model,'Not Paid') then
-        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'model',p_paid_model);
+    if v_saved_order.tehnician_model is not null
+       and v_paid_model is distinct from coalesce(v_saved_order.paid_model,'Not Paid') then
+        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'model',v_paid_model);
     end if;
-    if coalesce(nullif(trim(p_paid_modelare),''),'Not Paid') is distinct from coalesce(v_old_order.paid_modelare,'Not Paid') then
-        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'modelare',p_paid_modelare);
+    if v_saved_order.tehnician1_modelare is not null
+       and v_paid_modelare is distinct from coalesce(v_saved_order.paid_modelare,'Not Paid') then
+        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'modelare',v_paid_modelare);
     end if;
-    if coalesce(nullif(trim(p_paid_cer_fin),''),'Not Paid') is distinct from coalesce(v_old_order.paid_cer_fin,'Not Paid') then
-        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'cer_fin',p_paid_cer_fin);
+    if v_saved_order.tehnician2_cer_fin is not null
+       and v_paid_cer_fin is distinct from coalesce(v_saved_order.paid_cer_fin,'Not Paid') then
+        perform public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'cer_fin',v_paid_cer_fin);
     end if;
 
     return true;

@@ -11,7 +11,7 @@ SET search_path = public
 AS $$
 DECLARE
     v_assignment public.lab_work_order_stage_assignments%rowtype;
-    v_existing uuid;
+    v_existing public.technician_payments%rowtype;
     v_paid numeric;
     v_outstanding numeric;
     v_id uuid;
@@ -26,9 +26,17 @@ BEGIN
     IF p_amount IS NULL OR p_amount <= 0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;
     IF p_paid_on IS NULL THEN RAISE EXCEPTION 'Payment date is required'; END IF;
 
-    SELECT id INTO v_existing FROM public.technician_payments
+    SELECT * INTO v_existing FROM public.technician_payments
     WHERE lab_organization_id=v_assignment.lab_organization_id AND request_key=p_request_key;
-    IF FOUND THEN RETURN v_existing; END IF;
+    IF FOUND THEN
+        IF v_existing.recorded_by_user_id IS DISTINCT FROM auth.uid()
+           OR v_existing.assignment_id<>p_assignment_id
+           OR v_existing.amount<>round(p_amount,2)
+           OR v_existing.paid_on IS DISTINCT FROM p_paid_on THEN
+            RAISE EXCEPTION 'Payment request key was already used for another payment';
+        END IF;
+        RETURN v_existing.id;
+    END IF;
     IF v_assignment.agreed_amount IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
 
     SELECT coalesce(sum(amount),0) INTO v_paid

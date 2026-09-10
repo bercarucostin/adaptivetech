@@ -14,6 +14,8 @@ DECLARE
     v_order public.lab_work_orders%rowtype;
     v_before jsonb;
     v_after jsonb;
+    v_before_items jsonb;
+    v_after_items jsonb;
     v_list numeric;
     v_final numeric;
 BEGIN
@@ -43,8 +45,22 @@ BEGIN
         'discount', v_order.discount,
         'source', v_order.price_source
     );
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'tooth_number',tooth_number,'work_type',work_type,'unit_price',unit_price,
+        'quantity',quantity,'line_total',line_total,'source',price_source
+    ) ORDER BY tooth_number),'[]'::jsonb)
+    INTO v_before_items
+    FROM public.lab_work_order_items
+    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
     v_list := round(p_unit_price * coalesce(v_order.nr_elemente, 0), 2);
     v_final := round(v_list * (1 - p_discount / 100), 2);
+
+    UPDATE public.lab_work_order_items
+    SET unit_price=round(p_unit_price,2),
+        line_total=round(p_unit_price*quantity,2),
+        price_source='admin_override',price_fixed_at=now(),price_migrated=false,
+        updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
+    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
 
     UPDATE public.lab_work_orders
     SET snapshot_unit_price = round(p_unit_price, 2),
@@ -66,6 +82,15 @@ BEGIN
         'source', 'admin_override',
         'reason', trim(p_reason)
     );
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'tooth_number',tooth_number,'work_type',work_type,'unit_price',unit_price,
+        'quantity',quantity,'line_total',line_total,'source',price_source
+    ) ORDER BY tooth_number),'[]'::jsonb)
+    INTO v_after_items
+    FROM public.lab_work_order_items
+    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
+    v_before:=v_before||jsonb_build_object('items',v_before_items);
+    v_after:=v_after||jsonb_build_object('items',v_after_items);
     INSERT INTO public.work_order_financial_audit (
         lab_organization_id, work_order_id, entity_type, entity_id, action,
         before_value, after_value, changed_by_user_id

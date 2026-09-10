@@ -106,3 +106,37 @@ revoke insert, update, delete on table public.lab_work_order_stage_assignments f
 revoke insert, update, delete on table public.lab_work_order_assignment_cost_lines from authenticated;
 revoke insert, update, delete on table public.technician_payments from authenticated;
 revoke insert, update, delete on table public.work_order_financial_audit from authenticated;
+revoke insert, update, delete on table public.ai_operation_previews from authenticated;
+revoke insert, update, delete on table public.ai_operation_requests from authenticated;
+revoke insert, update, delete on table public.lab_work_order_items from anon, authenticated;
+revoke insert, update, delete on table public.lab_work_orders from anon, authenticated;
+revoke insert (
+    lab_organization_id,work_order_id,tooth_number,work_type,contract,unit_price,
+    quantity,line_total,price_source,price_fixed_at,price_migrated,
+    created_by_user_id,updated_by_user_id,created_at,updated_at
+) on public.lab_work_order_items from anon, authenticated;
+revoke update (
+    lab_organization_id,work_order_id,tooth_number,work_type,contract,unit_price,
+    quantity,line_total,price_source,price_fixed_at,price_migrated,
+    created_by_user_id,updated_by_user_id,created_at,updated_at
+) on public.lab_work_order_items from anon, authenticated;
+revoke insert (
+    lab_organization_id,id,deadline,status,nume_pacient,nume_partener,contract,
+    tip_lucrare,tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
+    status_model,status_modelare,status_cer_fin,paid_model,paid_modelare,
+    paid_cer_fin,created_by_user_id,created_at,updated_by_user_id,updated_at,
+    nr_elemente,discount,data_receptie,locked,model_not_applicable,
+    modelare_not_applicable,cer_fin_not_applicable,migrated_at,
+    snapshot_unit_price,snapshot_list_price,snapshot_final_price,price_source,
+    price_fixed_at,price_migrated,archived_at
+) on public.lab_work_orders from anon, authenticated;
+revoke update (
+    lab_organization_id,id,deadline,status,nume_pacient,nume_partener,contract,
+    tip_lucrare,tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
+    status_model,status_modelare,status_cer_fin,paid_model,paid_modelare,
+    paid_cer_fin,created_by_user_id,created_at,updated_by_user_id,updated_at,
+    nr_elemente,discount,data_receptie,locked,model_not_applicable,
+    modelare_not_applicable,cer_fin_not_applicable,migrated_at,
+    snapshot_unit_price,snapshot_list_price,snapshot_final_price,price_source,
+    price_fixed_at,price_migrated,archived_at
+) on public.lab_work_orders from anon, authenticated;

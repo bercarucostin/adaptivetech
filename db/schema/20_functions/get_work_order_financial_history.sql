@@ -16,6 +16,17 @@ BEGIN
         SELECT 1 FROM public.lab_work_orders wo
         WHERE wo.lab_organization_id=p_lab AND wo.id=p_work_order_id
     ) THEN RAISE EXCEPTION 'Work Order not found'; END IF;
+    IF v_role='technician' AND NOT EXISTS (
+        SELECT 1 FROM public.lab_work_order_stage_assignments a
+        WHERE a.lab_organization_id=p_lab AND a.work_order_id=p_work_order_id
+          AND (
+              a.technician_user_id=auth.uid()
+              OR (
+                  a.technician_user_id IS NULL
+                  AND lower(trim(a.technician_name))=lower(trim(coalesce(public.current_technician_name(),'')))
+              )
+          )
+    ) THEN RAISE EXCEPTION 'Financial history access denied'; END IF;
 
     SELECT jsonb_build_object(
         'Work_Order_ID',wo.id,

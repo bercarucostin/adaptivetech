@@ -35,7 +35,8 @@ BEGIN
         when 'modelare' then v_order.paid_modelare else v_order.paid_cer_fin end;
     v_technician := case v_stage when 'model' then v_order.tehnician_model
         when 'modelare' then v_order.tehnician1_modelare else v_order.tehnician2_cer_fin end;
-    IF lower(coalesce(v_current,'not paid')) = lower(v_paid) THEN RETURN true; END IF;
+    IF lower(v_paid)='not paid'
+       AND lower(coalesce(v_current,'not paid'))='not paid' THEN RETURN true; END IF;
 
     SELECT * INTO v_assignment FROM public.lab_work_order_stage_assignments
     WHERE lab_organization_id=p_lab_organization_id AND work_order_id=p_work_order_id
@@ -56,7 +57,7 @@ BEGIN
         IF v_assignment.agreed_amount IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
         IF v_outstanding > 0 THEN
             PERFORM public.record_technician_payment(
-                v_assignment.id,v_outstanding,current_date,
+                v_assignment.id,v_outstanding,(current_timestamp at time zone 'Europe/Bucharest')::date,
                 'legacy-paid:'||v_assignment.id::text||':'||txid_current()::text
             );
         END IF;
@@ -64,6 +65,7 @@ BEGIN
         SELECT p.id INTO v_payment_id
         FROM public.technician_payments p
         WHERE p.assignment_id=v_assignment.id AND p.amount>0
+          AND p.request_key LIKE 'legacy-paid:%'
           AND NOT EXISTS (SELECT 1 FROM public.technician_payments r WHERE r.reversal_of=p.id)
         ORDER BY p.recorded_at DESC LIMIT 1;
         IF v_payment_id IS NOT NULL THEN

@@ -11,7 +11,7 @@ AS $$
 DECLARE
     v_payment public.technician_payments%rowtype;
     v_assignment public.lab_work_order_stage_assignments%rowtype;
-    v_existing uuid;
+    v_existing public.technician_payments%rowtype;
     v_id uuid;
 BEGIN
     SELECT * INTO v_payment FROM public.technician_payments WHERE id=p_payment_id FOR UPDATE;
@@ -21,9 +21,15 @@ BEGIN
     IF trim(coalesce(p_reason,'')) = '' THEN RAISE EXCEPTION 'Reversal reason is required'; END IF;
     IF trim(coalesce(p_request_key,'')) = '' THEN RAISE EXCEPTION 'Reversal request key is required'; END IF;
 
-    SELECT id INTO v_existing FROM public.technician_payments
+    SELECT * INTO v_existing FROM public.technician_payments
     WHERE lab_organization_id=v_payment.lab_organization_id AND request_key=p_request_key;
-    IF FOUND THEN RETURN v_existing; END IF;
+    IF FOUND THEN
+        IF v_existing.recorded_by_user_id IS DISTINCT FROM auth.uid()
+           OR v_existing.reversal_of IS DISTINCT FROM p_payment_id THEN
+            RAISE EXCEPTION 'Reversal request key was already used for another payment';
+        END IF;
+        RETURN v_existing.id;
+    END IF;
     IF EXISTS (SELECT 1 FROM public.technician_payments WHERE reversal_of=p_payment_id) THEN
         RAISE EXCEPTION 'Payment is already reversed';
     END IF;
@@ -33,7 +39,7 @@ BEGIN
         request_key,reversal_of,note
     ) VALUES (
         v_payment.lab_organization_id,v_payment.assignment_id,-v_payment.amount,
-        current_date,auth.uid(),p_request_key,p_payment_id,trim(p_reason)
+        (current_timestamp at time zone 'Europe/Bucharest')::date,auth.uid(),p_request_key,p_payment_id,trim(p_reason)
     ) RETURNING id INTO v_id;
 
     INSERT INTO public.work_order_financial_audit (

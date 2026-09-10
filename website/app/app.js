@@ -97,6 +97,24 @@ const activeControllers=new Set();
 let hideOldOrders=localStorage.getItem("flowrise_hide_old_orders")==="true";
 let mediaRecorder=null,mediaStream=null,audioChunks=[],isRecording=false;
 let SESSION_ID=null;
+let aiPendingOperation=null;
+
+function aiPendingStorageKey(sessionId=SESSION_ID){return `flowrise_ai_pending_${String(sessionId||"")}`;}
+function setAiPendingOperation(operation){
+  aiPendingOperation=operation&&typeof operation==="object"?operation:null;
+  if(!SESSION_ID)return;
+  if(aiPendingOperation)sessionStorage.setItem(aiPendingStorageKey(),JSON.stringify(aiPendingOperation));
+  else sessionStorage.removeItem(aiPendingStorageKey());
+}
+function restoreAiPendingOperation(){
+  try{aiPendingOperation=JSON.parse(sessionStorage.getItem(aiPendingStorageKey())||"null");}
+  catch{aiPendingOperation=null;}
+}
+function trackAiOperationResponse(data){
+  if(data?.pending_operation)setAiPendingOperation(data.pending_operation);
+  else if((data?.intent==="execute"&&data?.mutation?.ok)||data?.clear_pending)setAiPendingOperation(null);
+}
+function aiClientRequestId(){return crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;}
 
 function normalize(v){return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"").trim();}
 function num(v){const n=Number(v);return Number.isFinite(n)?n:0;}
@@ -232,10 +250,12 @@ function makeSessionId(userId){
 }
 
 function startFreshSession(userId){
+  if(SESSION_ID)sessionStorage.removeItem(aiPendingStorageKey());
   SESSION_ID=makeSessionId(userId);
   sessionStorage.setItem("dental_lab_session_id",SESSION_ID);
   sessionStorage.setItem("dental_lab_session_user",String(userId||""));
   activeChatGeneration++;
+  aiPendingOperation=null;
   chatMessages.innerHTML="";
 }
 
@@ -244,6 +264,7 @@ function restoreSessionForUser(userId){
   const savedSession=sessionStorage.getItem("dental_lab_session_id");
   if(savedUser===String(userId||"")&&savedSession){
     SESSION_ID=savedSession;
+    restoreAiPendingOperation();
   }else{
     startFreshSession(userId);
   }
@@ -557,7 +578,9 @@ function clearAuth({skipSupabaseSignOut=false}={}){
   sessionStorage.removeItem("dental_lab_auth");
   sessionStorage.removeItem("dental_lab_session_id");
   sessionStorage.removeItem("dental_lab_session_user");
+  if(SESSION_ID)sessionStorage.removeItem(aiPendingStorageKey());
   SESSION_ID=null;
+  aiPendingOperation=null;
   auth=null;
   authEpoch++;
   resetRuntimeState();
@@ -4488,7 +4511,7 @@ function renderMaterials(){
     ${materialSaving?`<div class="material-save-overlay"><span class="spinner"></span><strong>${materialEditor.id?"Se salvează modificările...":"Se adaugă materialul..."}</strong><small>Mai durează doar puțin...</small></div>`:""}
     <div class="calendar-editor-head"><div><span>${materialEditor.id?`Material #${materialEditor.id}`:"Material nou"}</span><h3>${materialEditor.id?"Editează material":"Adaugă material"}</h3></div><button class="icon-btn" type="button" onclick="closeMaterialEditor()" ${materialSaving?"disabled":""}>×</button></div><input id="materialId" type="hidden" value="${materialEditor.id||0}"><div class="calendar-editor-grid"><label>Furnizor<input id="materialSupplier" value="${escapeHtml(materialEditor.supplier||"")}" ${materialSaving?"disabled":""}></label><label>Material<input id="materialName" value="${escapeHtml(materialEditor.material||"")}" ${materialSaving?"disabled":""}></label><label>UM<input id="materialUm" list="materialUmList" value="${escapeHtml(materialEditor.um||"")}" ${materialSaving?"disabled":""}><datalist id="materialUmList">${MATERIAL_UM.map(x=>`<option value="${escapeHtml(x)}"></option>`).join("")}</datalist></label><label>Cantitate<input id="materialQty" type="number" min="0" step="0.01" value="${materialEditor.quantity}" ${materialSaving?"disabled":""}></label><label>Prag minim<input id="materialMin" type="number" min="0" step="0.01" value="${materialEditor.minStock}" ${materialSaving?"disabled":""}></label><label>Ultima actualizare<div class="date-input-with-picker"><input id="materialUpdated" type="date" value="${escapeHtml(materialEditor.lastUpdate||"")}" ${materialSaving?"disabled":""}><button class="date-picker-btn" type="button" data-date-picker="materialUpdated" ${materialSaving?"disabled":""}>📅</button></div></label><label class="wide">Observații<textarea id="materialNotes" rows="4" ${materialSaving?"disabled":""}>${escapeHtml(materialEditor.notes||"")}</textarea></label></div><div class="calendar-editor-actions">${materialEditor.id?`<button class="danger-btn" type="button" onclick="deleteMaterial(${materialEditor.id})" ${materialSaving?"disabled":""}>Șterge</button>`:""}<span></span><button class="secondary-btn" type="button" onclick="closeMaterialEditor()" ${materialSaving?"disabled":""}>Anulează</button><button class="primary-btn material-save-btn" type="button" onclick="saveMaterialEditor()" ${materialSaving?"disabled":""}>${materialSaving?'<span class="inline-spinner"></span> Se salvează...':"Salvează"}</button></div></div></div>`:"";
 
-  content.innerHTML=`${dateBar}<div class="materials-toolbar card"><div><strong>Stoc materiale</strong><span>${rows.length} poziții · ${low} stoc scăzut</span></div><div class="materials-toolbar-actions"><input id="materialsSearch" class="filter-input" value="${escapeHtml(materialsSearch)}" placeholder="Caută furnizor, material, UM..."><button id="materialsClearSearch" class="secondary-btn" type="button">Resetează</button>${isManagement()?'<button id="materialAdd" class="primary-btn" type="button">+ Material</button>':""}</div></div><div class="card panel"><div class="table-wrap"><table class="materials-table"><thead><tr><th>Furnizor</th><th>Material</th><th>UM</th><th>Cantitate</th><th>Prag minim</th><th>Ultima actualizare</th><th>Observații</th>${isManagement()?"<th>Acțiuni</th>":""}</tr></thead><tbody>${rows.length?rows.map(m=>{const lowStock=m.minStock>0&&m.quantity<=m.minStock;return `<tr class="${lowStock?"material-low-stock":""}"><td>${escapeHtml(m.supplier)||"—"}</td><td><strong>${escapeHtml(m.material)||"—"}</strong>${lowStock?'<span class="low-stock-badge">STOC SCĂZUT</span>':""}</td><td>${escapeHtml(m.um)||"—"}</td><td><div class="material-qty-control">${(isManagement()||isTechnician())?`<button type="button" onclick="adjustMaterialQuantity(${m.id},-1)">−</button>`:""}<strong>${m.quantity}</strong>${(isManagement()||isTechnician())?`<button type="button" onclick="adjustMaterialQuantity(${m.id},1)">+</button>`:""}</div></td><td>${m.minStock||"—"}</td><td>${fmtDate(m.lastUpdate)}</td><td class="material-notes">${escapeHtml(m.notes)||"—"}</td>${isManagement()?`<td><div class="row-actions"><button class="edit-btn" type="button" onclick="openMaterialEditor(${m.id})">Editează</button><button class="danger-btn" type="button" onclick="deleteMaterial(${m.id})">Șterge</button></div></td>`:""}</tr>`;}).join(""):`<tr><td colspan="${isManagement()?8:7}">Nu există materiale.</td></tr>`}</tbody></table></div></div>${editor}`;
+  content.innerHTML=`${dateBar}<div class="materials-toolbar card"><div><strong>Stoc materiale</strong><span>${rows.length} poziții · ${low} stoc scăzut</span></div><div class="materials-toolbar-actions"><input id="materialsSearch" class="filter-input" value="${escapeHtml(materialsSearch)}" placeholder="Caută furnizor, material, UM..."><button id="materialsClearSearch" class="secondary-btn" type="button">Resetează</button>${isManagement()?'<button id="materialAdd" class="primary-btn" type="button">+ Material</button>':""}</div></div><div class="card panel"><div class="table-wrap"><table class="materials-table"><thead><tr><th>Furnizor</th><th>Material</th><th>UM</th><th>Cantitate</th><th>Prag minim</th><th>Ultima actualizare</th><th>Observații</th>${isManagement()?"<th>Acțiuni</th>":""}</tr></thead><tbody>${rows.length?rows.map(m=>{const lowStock=m.minStock>0&&m.quantity<=m.minStock;return `<tr class="${lowStock?"material-low-stock":""}"><td>${escapeHtml(m.supplier)||"—"}</td><td><strong>${escapeHtml(m.material)||"—"}</strong>${lowStock?'<span class="low-stock-badge">STOC SCĂZUT</span>':""}</td><td>${escapeHtml(m.um)||"—"}</td><td><div class="material-qty-control">${(isManagement()||isTechnician())?`<button type="button" onclick="adjustMaterialQuantity(${m.id},-1)" ${m.quantity<1?"disabled":""}>−</button>`:""}<strong>${m.quantity}</strong>${(isManagement()||isTechnician())?`<button type="button" onclick="adjustMaterialQuantity(${m.id},1)">+</button>`:""}</div></td><td>${m.minStock||"—"}</td><td>${fmtDate(m.lastUpdate)}</td><td class="material-notes">${escapeHtml(m.notes)||"—"}</td>${isManagement()?`<td><div class="row-actions"><button class="edit-btn" type="button" onclick="openMaterialEditor(${m.id})">Editează</button><button class="danger-btn" type="button" onclick="deleteMaterial(${m.id})">Șterge</button></div></td>`:""}</tr>`;}).join(""):`<tr><td colspan="${isManagement()?8:7}">Nu există materiale.</td></tr>`}</tbody></table></div></div>${editor}`;
 
   $("materialsSearch")?.addEventListener("input",e=>{materialsSearch=e.target.value;renderMaterials();const n=$("materialsSearch");if(n){n.focus();n.selectionStart=n.selectionEnd=n.value.length;}});
   $("materialsClearSearch")?.addEventListener("click",()=>{materialsSearch="";clearViewDateRange("materials");renderMaterials();});
@@ -6769,14 +6792,13 @@ chatForm.addEventListener("submit",async e=>{
   try{
     const data=await sendText(text);
     if(!requestContextValid(requestEpoch,requestUser,requestGeneration))return;
+    trackAiOperationResponse(data);
     clearInterval(progressTimer);
     clearTimeout(longWaitTimer);
     removeThinkingMessage(thinking);
 
     addMessage("assistant",data?.reply??JSON.stringify(data));
-    if(data?.reply)appendChatMessage("assistant",data.reply).catch(()=>{});
-
-    if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)){
+    if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)||(data?.intent==="execute"&&data?.mutation?.ok)){
       await loadAll(false);
     }
   }catch(err){
@@ -6826,13 +6848,16 @@ photoInput.addEventListener("change",async e=>{
     fd.append("data",file);
     fd.append("input_type","image");
     fd.append("session_id",SESSION_ID);
+    fd.append("client_request_id",aiClientRequestId());
+    if(aiPendingOperation)fd.append("pending_operation",JSON.stringify(aiPendingOperation));
 
     const data=await fetchForm(API.ai,fd);
     if(!requestContextValid(requestEpoch,requestUser,requestGeneration))return;
+    trackAiOperationResponse(data);
     removeThinkingMessage(thinking);
     addMessage("assistant",data?.reply??JSON.stringify(data));
 
-    if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)){
+    if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)||(data?.intent==="execute"&&data?.mutation?.ok)){
       await loadAll(false);
     }
   }catch(err){
@@ -6874,13 +6899,17 @@ async function startRecording(){
       fd.append("data",blob,"voice.webm");
       fd.append("input_type","audio");
       fd.append("session_id",SESSION_ID);
+      fd.append("client_request_id",aiClientRequestId());
+      if(aiPendingOperation)fd.append("pending_operation",JSON.stringify(aiPendingOperation));
 
       const data=await fetchForm(API.ai,fd);
+      if(!requestContextValid(requestEpoch,requestUser,requestGeneration))return;
+      trackAiOperationResponse(data);
       removeThinkingMessage(thinking);
       addMessage("assistant",data?.reply??JSON.stringify(data));
       if(data?.reply)appendChatMessage("assistant",data.reply).catch(()=>{});
 
-      if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)){
+      if(["create_work_order","update_work_order","delete_work_order"].includes(data?.type)||(data?.intent==="execute"&&data?.mutation?.ok)){
         await loadAll(false);
       }
     }catch(err){
@@ -7459,7 +7488,7 @@ fetchPatientCase=async function(workOrderId){
   };
 };
 
-persistPatientCase=async function(workOrderId,draft){
+persistPatientCase=async function(workOrderId,draft,{replaceItems=true}={}){
   const labId=await resolveLabOrganizationId();
   const data=caseDraftPayload(draft);
   const snapshot={
@@ -7508,43 +7537,77 @@ persistPatientCase=async function(workOrderId,draft){
     p_clinic_note:data.clinic_note||null,
     p_production_notes:data.production_notes||null
   });
-  await sbRpc("replace_work_order_items",{
-    p_lab_organization_id:labId,
-    p_work_order_id:Number(workOrderId),
-    p_items:workOrderToothItems(draft),
-    p_requested_contract:String(contract?.value||"General")
-  });
+  if(replaceItems){
+    await sbRpc("replace_work_order_items",{
+      p_lab_organization_id:labId,
+      p_work_order_id:Number(workOrderId),
+      p_items:workOrderToothItems(draft),
+      p_requested_contract:String(contract?.value||"General")
+    });
+  }
   return {ok:true,ID:result};
 };
 
-async function saveManagementWorkOrderSupabase(id,fields){
+function outstandingAssignmentError(error){
+  const match=String(error?.message||error||"").match(/OUTSTANDING_ASSIGNMENT:(modelare|cer_fin|model):([0-9]+(?:\.[0-9]+)?)/i);
+  if(!match)return null;
+  return {stage:match[1].toLowerCase(),amount:Number(match[2])};
+}
+
+function confirmKeepOutstanding({stage,amount}){
+  const label={model:"Model",modelare:"Modelare",cer_fin:"Ceramică / Finisare"}[stage]||stage;
+  const keep=window.confirm(
+    `Etapa ${label} are un sold restant de ${money(amount)} pentru tehnicianul actual.\n\n`+
+    `OK: păstrează soldul pe atribuirea veche și continuă reasignarea.\n`+
+    `Anulează: oprește salvarea ca să poți înregistra plata înainte.`
+  );
+  if(!keep)throw new Error("Reasignarea a fost oprită. Înregistrează plata vechiului tehnician sau reia și păstrează soldul restant.");
+  return "keep_outstanding";
+}
+
+async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
   const labId=await resolveLabOrganizationId();
-  return sbRpc("update_management_work_order_v188",{
-    p_lab_organization_id:labId,
-    p_work_order_id:Number(id),
-    p_deadline:fields.Deadline||null,
-    p_status:fields.Status||"Not Started",
-    p_nume_pacient:fields.Nume_Pacient||"",
-    p_nume_partener:fields.Nume_Partener||"",
-    p_contract:fields.Contract||"General",
-    p_tip_lucrare:fields.Tip_Lucrare||"",
-    p_nr_elemente:Number(fields.Nr_Elemente)||1,
-    p_discount:Number(fields.Discount)||0,
-    p_data_receptie:fields.Data_Receptie||null,
-    p_tehnician_model:fields.Tehnician_Model||null,
-    p_tehnician1_modelare:fields.Tehnician1_Modelare||null,
-    p_tehnician2_cer_fin:fields.Tehnician2_Cer_Fin||null,
-    p_status_model:fields.Status_Model||"Not Started",
-    p_status_modelare:fields.Status_Modelare||"Not Started",
-    p_status_cer_fin:fields.Status_Cer_Fin||"Not Started",
-    p_paid_model:fields.Paid_Model||"Not Paid",
-    p_paid_modelare:fields.Paid_Modelare||"Not Paid",
-    p_paid_cer_fin:fields.Paid_Cer_Fin||"Not Paid",
-    p_model_not_applicable:Boolean(fields.Model_Not_Applicable),
-    p_modelare_not_applicable:Boolean(fields.Modelare_Not_Applicable),
-    p_cer_fin_not_applicable:Boolean(fields.Cer_Fin_Not_Applicable),
-    p_locked:Boolean(fields.Locked)
-  });
+  const choices={...settlements};
+  for(let attempt=0;attempt<4;attempt+=1){
+    try{
+      return await sbRpc("update_management_work_order_v188",{
+        p_lab_organization_id:labId,
+        p_work_order_id:Number(id),
+        p_deadline:fields.Deadline||null,
+        p_status:fields.Status||"Not Started",
+        p_nume_pacient:fields.Nume_Pacient||"",
+        p_nume_partener:fields.Nume_Partener||"",
+        p_contract:fields.Contract||"General",
+        p_tip_lucrare:fields.Tip_Lucrare||"",
+        p_nr_elemente:Number(fields.Nr_Elemente)||1,
+        p_discount:Number(fields.Discount)||0,
+        p_data_receptie:fields.Data_Receptie||null,
+        p_tehnician_model:fields.Tehnician_Model||null,
+        p_tehnician1_modelare:fields.Tehnician1_Modelare||null,
+        p_tehnician2_cer_fin:fields.Tehnician2_Cer_Fin||null,
+        p_status_model:fields.Status_Model||"Not Started",
+        p_status_modelare:fields.Status_Modelare||"Not Started",
+        p_status_cer_fin:fields.Status_Cer_Fin||"Not Started",
+        p_paid_model:fields.Paid_Model||"Not Paid",
+        p_paid_modelare:fields.Paid_Modelare||"Not Paid",
+        p_paid_cer_fin:fields.Paid_Cer_Fin||"Not Paid",
+        p_model_not_applicable:Boolean(fields.Model_Not_Applicable),
+        p_modelare_not_applicable:Boolean(fields.Modelare_Not_Applicable),
+        p_cer_fin_not_applicable:Boolean(fields.Cer_Fin_Not_Applicable),
+        p_locked:Boolean(fields.Locked),
+        p_model_settlement:choices.model||null,
+        p_modelare_settlement:choices.modelare||null,
+        p_cer_fin_settlement:choices.cer_fin||null,
+        p_items:workOrderToothItems(orderCaseDraft),
+        p_requested_contract:String(fields.Contract||"General")
+      });
+    }catch(error){
+      const outstanding=outstandingAssignmentError(error);
+      if(!outstanding||choices[outstanding.stage])throw error;
+      choices[outstanding.stage]=confirmKeepOutstanding(outstanding);
+    }
+  }
+  throw new Error("Nu am putut confirma decontarea tuturor etapelor reasignate.");
 }
 
 async function handleSupabaseOrderSubmit(e){
@@ -7624,6 +7687,10 @@ async function handleSupabaseOrderSubmit(e){
           p_discount:Number(fields.Discount)||0,
           p_data_receptie:fields.Data_Receptie||null
         }));
+        // Persist the returned ID before the compatibility update. If that
+        // second RPC fails, retry edits this row instead of creating a duplicate.
+        orderId.value=String(savedId);
+        if(orderCaseDraft)orderCaseDraft.orderId=savedId;
         await saveManagementWorkOrderSupabase(savedId,{...fields,Locked:false});
       }
     }
@@ -7635,7 +7702,7 @@ async function handleSupabaseOrderSubmit(e){
 
     if(savedId>0&&(id>0||hasMeaningfulCaseData(orderCaseDraft))&&!isTechnician()){
       try{
-        await persistPatientCase(savedId,orderCaseDraft);
+        await persistPatientCase(savedId,orderCaseDraft,{replaceItems:!isManagement()});
       }catch(caseErr){
         setConnection(false,`Lucrarea #${savedId} salvată · fișa clinică necesită retry`);
         alert(`Lucrarea #${savedId} a fost salvată în baza de date, dar fișa clinică nu a putut fi salvată. Formularul rămâne deschis.\n\n${caseErr.message}`);
@@ -7719,8 +7786,19 @@ quickUpdate=async function(id,field,value){
       };
       const column=map[field];
       if(!column)throw new Error(`Câmp nesuportat: ${field}`);
-      const {error}=await supabaseClient.from("lab_work_orders").update({[column]:value,updated_by_user_id:auth.user.User_ID,updated_at:new Date().toISOString()}).eq("lab_organization_id",labId).eq("id",Number(id));
-      if(error)throw new Error(error.message);
+      let settlement=null;
+      try{
+        await sbRpc("update_management_work_order_stage_field",{
+          p_lab_organization_id:labId,p_work_order_id:Number(id),p_field:column,p_value:value,p_settlement:settlement
+        });
+      }catch(error){
+        const outstanding=outstandingAssignmentError(error);
+        if(!outstanding)throw error;
+        settlement=confirmKeepOutstanding(outstanding);
+        await sbRpc("update_management_work_order_stage_field",{
+          p_lab_organization_id:labId,p_work_order_id:Number(id),p_field:column,p_value:value,p_settlement:settlement
+        });
+      }
     }else{
       throw new Error("Nu ai dreptul să modifici acest câmp.");
     }
@@ -8389,9 +8467,11 @@ loadChatHistory=async function(){
 };
 
 sendText=async function(text){
+  const sessionId=SESSION_ID;
+  const pendingOperation=aiPendingOperation;
   await appendChatMessage("user",text);
-  const data=await fetchAiJson({session_id:SESSION_ID,text});
-  if(data?.reply)await appendChatMessage("assistant",data.reply);
+  const data=await fetchAiJson({session_id:sessionId,text,pending_operation:pendingOperation,client_request_id:aiClientRequestId()});
+  if(SESSION_ID===sessionId&&data?.reply)await appendChatMessage("assistant",data.reply);
   return data;
 };
 
@@ -9750,18 +9830,24 @@ adjustMaterialQuantity=async function(id,delta){
   const m=materialsInventory.find(x=>Number(x.id)===Number(id));
   if(!m)return;
 
-  const next=Math.max(0,num(m.quantity)+Number(delta||0));
+  const change=Number(delta||0);
+  if(!change)return;
   showLoading("Materiale","Actualizez cantitatea...");
   try{
     const labId=await resolveLabOrganizationId();
-    await sbRpc("update_material_quantity",{
+    await sbRpc("adjust_material_quantity",{
       p_lab_organization_id:labId,
       p_material_id:Number(id),
-      p_quantity:next
+      p_mode:change>0?"add":"subtract",
+      p_value:Math.abs(change),
+      p_expected_quantity:null,
+      p_request_key:`ui-material-${id}-${Date.now()}`
     });
     materialsLoaded=false;
     await loadMaterialsData(false);
     if(currentView==="materials")renderMaterials();
+  }catch(err){
+    alert(`Cantitatea nu a putut fi actualizată: ${err.message}`);
   }finally{hideLoading();}
 };
 window.adjustMaterialQuantity=adjustMaterialQuantity;
@@ -9780,6 +9866,13 @@ normalizeCalendarEvent=function(r){
 
 function calendarUserAllowed(){return isManagement()||isTechnician();}
 function calendarEventCanEdit(event){
+  if(!calendarUserAllowed())return false;
+  const me=String(auth?.supabaseProfile?.id||"");
+  if(String(event?.ownerUserId||"")===me)return true;
+  return String(event?.scope||"shared")==="shared";
+}
+
+function calendarEventCanDelete(event){
   if(!calendarUserAllowed())return false;
   const me=String(auth?.supabaseProfile?.id||"");
   if(String(event?.ownerUserId||"")===me)return true;
@@ -9840,39 +9933,19 @@ window.openCalendarEditor=openCalendarEditor;
 
 calendarRequest=async function(action,data={}){
   if(!calendarUserAllowed())throw new Error("Nu ai acces la calendar.");
-  const labId=await resolveLabOrganizationId();
-  const now=new Date().toISOString();
-  const me=String(auth?.supabaseProfile?.id||"");
-  const existing=calendarEvents.find(x=>Number(x.id)===Number(data.ID));
-
   showLoading("Calendar","Salvez evenimentul...");
   try{
-    if(action==="create"){
-      const row={
-        lab_organization_id:labId,
-        title:String(data.Title||"").trim(),event_type:String(data.Event_Type||"").trim()||null,
-        description:String(data.Description||"").trim()||null,status:String(data.Status||"Planificat").trim(),
-        created_by_user_id:auth.user.User_ID,updated_by_user_id:auth.user.User_ID,
+    await sbRpc("mutate_calendar_event",{
+      p_action:action,
+      p_event_id:data.ID?Number(data.ID):null,
+      p_fields:{
+        title:String(data.Title||"").trim(),event_type:String(data.Event_Type||"").trim(),
+        description:String(data.Description||"").trim(),status:String(data.Status||"Planificat").trim(),
         start_date:data.Start_Date||null,end_date:data.End_Date||null,start_time:data.Start_Time||null,
-        calendar_scope:String(data.Calendar_Scope||"shared"),owner_user_id:me,
-        created_at:now,updated_at:now
-      };
-      const {error}=await supabaseClient.from("lab_calendar_events").insert(row);
-      if(error)throw new Error(error.message);
-    }else if(action==="update"){
-      const row={
-        title:String(data.Title||"").trim(),event_type:String(data.Event_Type||"").trim()||null,
-        description:String(data.Description||"").trim()||null,status:String(data.Status||"Planificat").trim(),
-        updated_by_user_id:auth.user.User_ID,start_date:data.Start_Date||null,end_date:data.End_Date||null,
-        start_time:data.Start_Time||null,calendar_scope:String(data.Calendar_Scope||existing?.scope||"shared"),
-        owner_user_id:existing?.ownerUserId||me,updated_at:now
-      };
-      const {error}=await supabaseClient.from("lab_calendar_events").update(row).eq("lab_organization_id",labId).eq("id",Number(data.ID));
-      if(error)throw new Error(error.message);
-    }else if(action==="delete"){
-      const {error}=await supabaseClient.from("lab_calendar_events").delete().eq("lab_organization_id",labId).eq("id",Number(data.ID));
-      if(error)throw new Error(error.message);
-    }else throw new Error(`Calendar action not supported: ${action}`);
+        calendar_scope:String(data.Calendar_Scope||"shared")
+      },
+      p_request_key:`ui-calendar-${action}-${data.ID||"new"}-${Date.now()}`
+    });
 
     calendarLoaded=false;calendarEditor=null;
     await loadCalendarData(false);
@@ -9925,12 +9998,13 @@ renderCalendar=function(){
 
   const ro=Boolean(calendarEditor?.readOnly);
   const disabled=ro?"disabled":"";
+  const scopeDisabled=ro||(calendarEditor?.id&&String(calendarEditor?.ownerUserId||"")!==String(auth?.supabaseProfile?.id||""))?"disabled":"";
   const editor=calendarEditor?`<div class="calendar-editor-backdrop" onclick="if(event.target===this)closeCalendarEditor()"><div class="calendar-editor-card">
     <div class="calendar-editor-head"><div><span>${calendarEditor.id?`Eveniment #${calendarEditor.id}`:"Eveniment nou"}</span><h3>${ro?"Vezi eveniment":(calendarEditor.id?"Editează eveniment":"Adaugă în calendar")}</h3></div><button class="icon-btn" type="button" onclick="closeCalendarEditor()">×</button></div>
     <input id="calendarEventId" type="hidden" value="${calendarEditor.id||0}">
     <div class="calendar-editor-grid">
       <label class="wide">Titlu<input id="calendarTitle" value="${escapeHtml(calendarEditor.title||"")}" ${disabled}></label>
-      <label>Calendar<select id="calendarScope" ${disabled}><option value="shared" ${calendarEditor.scope!=="personal"?"selected":""}>Partajat laborator</option><option value="personal" ${calendarEditor.scope==="personal"?"selected":""}>Personal</option></select></label>
+      <label>Calendar<select id="calendarScope" ${scopeDisabled}><option value="shared" ${calendarEditor.scope!=="personal"?"selected":""}>Partajat laborator</option><option value="personal" ${calendarEditor.scope==="personal"?"selected":""}>Personal</option></select></label>
       <label>Tip<select id="calendarType" ${disabled}>${optionHtml(CALENDAR_EVENT_TYPES,calendarEditor.type||"Întâlnire",false)}</select></label>
       <label>Status<select id="calendarStatus" ${disabled}>${optionHtml(CALENDAR_STATUSES,calendarEditor.status||"Planificat",false)}</select></label>
       <label>Data start<div class="date-input-with-picker"><input id="calendarStartDate" type="date" value="${escapeHtml(calendarEditor.startDate||"")}" ${disabled}><button class="date-picker-btn" type="button" data-date-picker="calendarStartDate" ${disabled}>📅</button></div></label>
@@ -9938,7 +10012,7 @@ renderCalendar=function(){
       <label>Ora<input id="calendarStartTime" type="time" value="${escapeHtml(calendarEditor.startTime||"")}" ${disabled}></label>
       <label class="wide">Detalii<textarea id="calendarDescription" rows="4" ${disabled}>${escapeHtml(calendarEditor.description||"")}</textarea></label>
     </div>
-    <div class="calendar-editor-actions">${calendarEditor.id&&!ro?`<button class="danger-btn" type="button" onclick="deleteCalendarEvent(${calendarEditor.id})">Șterge</button>`:"<span></span>"}<span></span><button class="secondary-btn" type="button" onclick="closeCalendarEditor()">${ro?"Închide":"Anulează"}</button>${ro?"":'<button class="primary-btn" type="button" onclick="saveCalendarEditor()">Salvează</button>'}</div>
+    <div class="calendar-editor-actions">${calendarEditor.id&&!ro&&calendarEventCanDelete(calendarEditor)?`<button class="danger-btn" type="button" onclick="deleteCalendarEvent(${calendarEditor.id})">Șterge</button>`:"<span></span>"}<span></span><button class="secondary-btn" type="button" onclick="closeCalendarEditor()">${ro?"Închide":"Anulează"}</button>${ro?"":'<button class="primary-btn" type="button" onclick="saveCalendarEditor()">Salvează</button>'}</div>
   </div></div>`:"";
 
   content.innerHTML=`<div class="calendar-scope-switch card"><button class="${calendarScopeView==="shared"?"active":""}" data-calendar-scope="shared" type="button">👥 Partajat laborator</button><button class="${calendarScopeView==="personal"?"active":""}" data-calendar-scope="personal" type="button">◉ Personal</button></div>

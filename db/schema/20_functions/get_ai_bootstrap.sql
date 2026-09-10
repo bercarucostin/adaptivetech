@@ -13,6 +13,7 @@ declare
     v_role text := public.effective_lab_role(public.get_flowrise_lab_id());
     v_history jsonb := '[]'::jsonb;
     v_catalog jsonb := '[]'::jsonb;
+    v_operations jsonb := '[]'::jsonb;
 begin
     if v_role is null then
         return jsonb_build_object(
@@ -74,6 +75,23 @@ begin
             jsonb_build_object('dataset','legacy_user_directory','description','Non-secret legacy user mapping retained for migration compatibility.')
         );
 
+        if v_role = 'admin' then
+            v_operations := jsonb_build_array(
+                'work_order.create','work_order.update','work_order.delete','work_order_price.set',
+                'contract_price.create','contract_price.update','contract_price.delete','contract_price.duplicate',
+                'technician_cost.create','technician_cost.update','technician_cost.delete','technician_cost.duplicate',
+                'work_type.create','work_type.update','work_type.delete',
+                'material.set','material.add','material.subtract',
+                'calendar_event.create','calendar_event.update','calendar_event.delete'
+            );
+        else
+            v_operations := jsonb_build_array(
+                'work_order.create','work_order.update','work_order.delete',
+                'material.set','material.add','material.subtract',
+                'calendar_event.create','calendar_event.update','calendar_event.delete'
+            );
+        end if;
+
     elsif v_role = 'technician' then
         v_catalog := jsonb_build_array(
             jsonb_build_object(
@@ -87,7 +105,19 @@ begin
             jsonb_build_object(
                 'dataset','work_types',
                 'description','Active work type names only. No client price, contract or partner commercial information.'
+            ),
+            jsonb_build_object(
+                'dataset','materials_inventory',
+                'description','Shared laboratory material stock. Technician may read and adjust quantities.'
+            ),
+            jsonb_build_object(
+                'dataset','calendar_events',
+                'description','Shared calendar plus this user personal calendar. Other users personal events are excluded.'
             )
+        );
+        v_operations := jsonb_build_array(
+            'work_order.create','material.set','material.add','material.subtract',
+            'calendar_event.create','calendar_event.update','calendar_event.delete'
         );
 
     else
@@ -102,7 +132,8 @@ begin
         'allowed', true,
         'role', v_role,
         'history', v_history,
-        'catalog', v_catalog
+        'catalog', v_catalog,
+        'operations', v_operations
     );
 end;
 $function$

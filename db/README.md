@@ -10,7 +10,7 @@ db/
     apply.sql              runs everything, in order (generated)
     00_prerequisites.sql   extensions and enum types
     10_tables/             structure, constraints, indexes, RLS enabled
-    20_functions/          73 functions
+    20_functions/          96 functions
     30_policies/           policies, triggers, function-dependent constraints
     40_grants.sql          privileges, including the profiles fix
     50_storage.sql         storage buckets
@@ -26,6 +26,29 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema/apply.sql
 Run from the repository root — the `\i` paths are relative to it. Every
 statement is idempotent (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`, guarded
 `DO` blocks), so re-running is safe and is the normal way to apply a change.
+
+### Financial snapshots and AI mutations (2026-09-10)
+
+Deploy these changes in this order:
+
+1. Apply `db/schema/apply.sql` to create the snapshot, assignment, payment,
+   AI-operation, material, and calendar functions and policies.
+2. In an authenticated Admin session, call
+   `backfill_work_order_financial_history(<lab uuid>)` once. Review the returned
+   `prices`, `assignments`, `migration_balances`, and `missing_prices` counts.
+   Calling it again is safe and must report no new rows.
+3. Deploy `website/app/app.js`.
+4. Import `workflows/Flowrise Dental - AI Client V17.4.json` into a
+   non-production n8n environment first, verify its Supabase URL/credentials,
+   then publish it.
+
+Do not update contract prices or technician cost rules between applying the
+schema and completing the backfill. Rows marked `migration_missing` require an
+Admin decision; they are deliberately not converted to zero. Legacy `Paid`
+flags become undated migration balances, not invented payment dates.
+
+Rollback the UI/workflow before the database functions. Financial ledger rows
+are append-only; preserve them when rolling back application behavior.
 
 After adding or removing a file under `schema/`, regenerate the runner:
 

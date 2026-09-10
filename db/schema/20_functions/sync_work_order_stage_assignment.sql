@@ -47,6 +47,15 @@ BEGIN
         IF v_current.id IS NOT NULL THEN
             UPDATE public.lab_work_order_stage_assignments SET ended_at = now()
             WHERE id = v_current.id;
+            INSERT INTO public.work_order_financial_audit (
+                lab_organization_id,work_order_id,entity_type,entity_id,action,
+                before_value,after_value,changed_by_user_id
+            ) VALUES (
+                p_lab,p_work_order_id,'stage_assignment',v_current.id::text,'unassign',
+                to_jsonb(v_current),
+                (SELECT to_jsonb(a) FROM public.lab_work_order_stage_assignments a WHERE a.id=v_current.id),
+                auth.uid()
+            );
         END IF;
         RETURN NULL;
     END IF;

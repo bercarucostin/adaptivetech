@@ -16,6 +16,10 @@ begin
     if v_definition not ilike '%work_order_financial_audit%' then
         raise exception 'Explicit price overrides are not audited';
     end if;
+    if v_definition not ilike '%update public.lab_work_order_items%'
+       or v_definition not ilike '%price_source=''admin_override''%' then
+        raise exception 'Explicit price overrides must persist on item snapshots';
+    end if;
 end $$;
 
 select 1 / case when exists (

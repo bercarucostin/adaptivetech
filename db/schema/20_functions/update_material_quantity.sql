@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION public.update_material_quantity(p_lab_organization_id
 AS $function$
 declare
     v_quantity numeric(14,3);
+    v_result jsonb;
 begin
     if not (
         public.is_lab_management(p_lab_organization_id)
@@ -22,20 +23,8 @@ begin
         raise exception 'Quantity must be zero or greater';
     end if;
 
-    update public.lab_materials_inventory
-    set
-        cantitate = round(p_quantity::numeric,3),
-        ultima_actualizare = now(),
-        updated_by_user_id = public.current_legacy_user_id(),
-        updated_at = now()
-    where lab_organization_id = p_lab_organization_id
-      and id = p_material_id
-    returning cantitate into v_quantity;
-
-    if not found then
-        raise exception 'Material not found';
-    end if;
-
+    v_result:=public.adjust_material_quantity(p_lab_organization_id,p_material_id,'set',p_quantity,null,null);
+    v_quantity:=(v_result->>'new_quantity')::numeric;
     return v_quantity;
 end;
 $function$

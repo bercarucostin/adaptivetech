@@ -27,6 +27,13 @@ begin
     ) or exists (
         select 1 from public.work_order_financial_audit a
         where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
+    ) or exists (
+        select 1 from public.lab_work_order_items i
+        where i.lab_organization_id=p_lab_organization_id and i.work_order_id=p_work_order_id
+    ) or exists (
+        select 1 from public.lab_work_orders wo
+        where wo.lab_organization_id=p_lab_organization_id and wo.id=p_work_order_id
+          and wo.price_fixed_at is not null
     ) then
         update public.lab_work_orders
         set archived_at=now(),updated_by_user_id=public.current_legacy_user_id(),updated_at=now()

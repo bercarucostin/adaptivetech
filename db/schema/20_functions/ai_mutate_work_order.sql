@@ -20,8 +20,12 @@ declare
     v_bulk boolean := coalesce((p_payload->>'bulk_explicit')::boolean,false);
     v_created bigint;
     v_order public.lab_work_orders%rowtype;
+    v_saved_order public.lab_work_orders%rowtype;
     v_tech text := lower(trim(coalesce(public.current_technician_name(),'')));
     v_stage_updated boolean;
+    v_model_changed boolean;
+    v_modelare_changed boolean;
+    v_cer_fin_changed boolean;
 begin
     if v_role not in ('admin','manager','technician') then
         return jsonb_build_object('ok',false,'error','AI mutations are not enabled for this role');
@@ -65,14 +69,18 @@ begin
                 updated_at = now()
             where lab_organization_id = v_lab and id = v_created;
 
+            select * into v_saved_order
+            from public.lab_work_orders
+            where lab_organization_id=v_lab and id=v_created;
+
             if v_fields ? 'Tehnician_Model' then
-                perform public.sync_work_order_stage_assignment(v_lab,v_created,'model',v_fields->>'Tehnician_Model');
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'model',v_saved_order.tehnician_model);
             end if;
             if v_fields ? 'Tehnician1_Modelare' then
-                perform public.sync_work_order_stage_assignment(v_lab,v_created,'modelare',v_fields->>'Tehnician1_Modelare');
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'modelare',v_saved_order.tehnician1_modelare);
             end if;
             if v_fields ? 'Tehnician2_Cer_Fin' then
-                perform public.sync_work_order_stage_assignment(v_lab,v_created,'cer_fin',v_fields->>'Tehnician2_Cer_Fin');
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'cer_fin',v_saved_order.tehnician2_cer_fin);
             end if;
             if v_fields ? 'Paid_Model' then
                 perform public.set_stage_payment_status(v_lab,v_created,'model',v_fields->>'Paid_Model');
@@ -175,6 +183,15 @@ begin
                    and coalesce(nullif(v_fields->>'Nr_Elemente','')::integer,0) <= 0 then
                     return jsonb_build_object('ok',false,'error','Nr_Elemente must be > 0');
                 end if;
+                if v_fields ? 'Nr_Elemente' and exists (
+                    select 1 from public.lab_work_order_items i
+                    where i.lab_organization_id=v_lab and i.work_order_id=v_id
+                ) then
+                    return jsonb_build_object(
+                        'ok',false,
+                        'error','Itemized Work Order quantity must be changed through its tooth configuration'
+                    );
+                end if;
 
                 if v_fields ? 'Discount'
                    and (
@@ -195,14 +212,41 @@ begin
                     return jsonb_build_object('ok',false,'error','Tip_Lucrare is not active');
                 end if;
 
+                v_model_changed := v_fields ? 'Tehnician_Model'
+                    and lower(trim(coalesce(v_order.tehnician_model,'')))
+                        is distinct from lower(trim(coalesce(v_fields->>'Tehnician_Model','')));
+                v_modelare_changed := v_fields ? 'Tehnician1_Modelare'
+                    and lower(trim(coalesce(v_order.tehnician1_modelare,'')))
+                        is distinct from lower(trim(coalesce(v_fields->>'Tehnician1_Modelare','')));
+                v_cer_fin_changed := v_fields ? 'Tehnician2_Cer_Fin'
+                    and lower(trim(coalesce(v_order.tehnician2_cer_fin,'')))
+                        is distinct from lower(trim(coalesce(v_fields->>'Tehnician2_Cer_Fin','')));
+
+                if v_model_changed then
+                    perform public.prepare_stage_reassignment(
+                        v_lab,v_id,'model',v_fields->>'Tehnician_Model',v_fields->>'Settlement_Model');
+                end if;
+                if v_modelare_changed then
+                    perform public.prepare_stage_reassignment(
+                        v_lab,v_id,'modelare',v_fields->>'Tehnician1_Modelare',v_fields->>'Settlement_Modelare');
+                end if;
+                if v_cer_fin_changed then
+                    perform public.prepare_stage_reassignment(
+                        v_lab,v_id,'cer_fin',v_fields->>'Tehnician2_Cer_Fin',v_fields->>'Settlement_Cer_Fin');
+                end if;
+
                 update public.lab_work_orders
                 set
                     deadline = case when v_fields ? 'Deadline'
                         then nullif(v_fields->>'Deadline','')::date else deadline end,
                     data_receptie = case when v_fields ? 'Data_Receptie'
                         then nullif(v_fields->>'Data_Receptie','')::timestamptz else data_receptie end,
-                    status = case when v_fields ? 'Status'
-                        then coalesce(nullif(v_fields->>'Status',''),status) else status end,
+                    status = case
+                        when (v_model_changed or v_modelare_changed or v_cer_fin_changed)
+                             and coalesce(nullif(v_fields->>'Status',''),status) not in ('Not Started','Started')
+                            then 'Started'
+                        when v_fields ? 'Status' then coalesce(nullif(v_fields->>'Status',''),status)
+                        else status end,
                     nume_pacient = case when v_fields ? 'Nume_Pacient'
                         then coalesce(nullif(trim(v_fields->>'Nume_Pacient'),''),nume_pacient) else nume_pacient end,
                     nume_partener = case when v_fields ? 'Nume_Partener'
@@ -219,12 +263,21 @@ begin
                         then nullif(v_fields->>'Tehnician1_Modelare','') else tehnician1_modelare end,
                     tehnician2_cer_fin = case when v_fields ? 'Tehnician2_Cer_Fin'
                         then nullif(v_fields->>'Tehnician2_Cer_Fin','') else tehnician2_cer_fin end,
-                    status_model = case when v_fields ? 'Status_Model'
+                    status_model = case when v_model_changed then 'Not Started'
+                        when v_fields ? 'Status_Model'
                         then coalesce(nullif(v_fields->>'Status_Model',''),status_model) else status_model end,
-                    status_modelare = case when v_fields ? 'Status_Modelare'
+                    status_modelare = case when v_modelare_changed then 'Not Started'
+                        when v_fields ? 'Status_Modelare'
                         then coalesce(nullif(v_fields->>'Status_Modelare',''),status_modelare) else status_modelare end,
-                    status_cer_fin = case when v_fields ? 'Status_Cer_Fin'
+                    status_cer_fin = case when v_cer_fin_changed then 'Not Started'
+                        when v_fields ? 'Status_Cer_Fin'
                         then coalesce(nullif(v_fields->>'Status_Cer_Fin',''),status_cer_fin) else status_cer_fin end,
+                    paid_model = case when v_model_changed
+                        then 'Not Paid' else paid_model end,
+                    paid_modelare = case when v_modelare_changed
+                        then 'Not Paid' else paid_modelare end,
+                    paid_cer_fin = case when v_cer_fin_changed
+                        then 'Not Paid' else paid_cer_fin end,
                     discount = case when v_fields ? 'Discount'
                         then (v_fields->>'Discount')::numeric else discount end,
                     locked = case when v_fields ? 'Locked'
@@ -234,6 +287,10 @@ begin
                     updated_at = now()
                 where lab_organization_id = v_lab
                   and id = v_id;
+
+                select * into v_saved_order
+                from public.lab_work_orders
+                where lab_organization_id=v_lab and id=v_id;
 
                 update public.lab_patient_cases pc
                 set
@@ -250,31 +307,66 @@ begin
                   and wo.id = v_id;
 
                 if v_fields ? 'Tehnician_Model' then
-                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'model',v_fields->>'Tehnician_Model');
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'model',v_saved_order.tehnician_model);
                 end if;
                 if v_fields ? 'Tehnician1_Modelare' then
-                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'modelare',v_fields->>'Tehnician1_Modelare');
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'modelare',v_saved_order.tehnician1_modelare);
                 end if;
                 if v_fields ? 'Tehnician2_Cer_Fin' then
-                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'cer_fin',v_fields->>'Tehnician2_Cer_Fin');
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'cer_fin',v_saved_order.tehnician2_cer_fin);
                 end if;
-                if v_fields ? 'Paid_Model' then
+                if v_fields ? 'Paid_Model'
+                   and not v_model_changed then
                     perform public.set_stage_payment_status(v_lab,v_id,'model',v_fields->>'Paid_Model');
                 end if;
-                if v_fields ? 'Paid_Modelare' then
+                if v_fields ? 'Paid_Modelare'
+                   and not v_modelare_changed then
                     perform public.set_stage_payment_status(v_lab,v_id,'modelare',v_fields->>'Paid_Modelare');
                 end if;
-                if v_fields ? 'Paid_Cer_Fin' then
+                if v_fields ? 'Paid_Cer_Fin'
+                   and not v_cer_fin_changed then
                     perform public.set_stage_payment_status(v_lab,v_id,'cer_fin',v_fields->>'Paid_Cer_Fin');
                 end if;
 
                 if v_fields ? 'Nr_Elemente' or v_fields ? 'Discount' then
                     update public.lab_work_orders wo
-                    set snapshot_list_price = case when wo.snapshot_unit_price is null then null
+                    set snapshot_list_price = case
+                            when exists (select 1 from public.lab_work_order_items i where i.lab_organization_id=v_lab and i.work_order_id=v_id)
+                            then (select case when bool_and(i.line_total is not null) then round(sum(i.line_total),2) end
+                                  from public.lab_work_order_items i where i.lab_organization_id=v_lab and i.work_order_id=v_id)
+                            when wo.snapshot_unit_price is null then null
                             else round(wo.snapshot_unit_price * wo.nr_elemente,2) end,
-                        snapshot_final_price = case when wo.snapshot_unit_price is null then null
+                        snapshot_final_price = case
+                            when exists (select 1 from public.lab_work_order_items i where i.lab_organization_id=v_lab and i.work_order_id=v_id)
+                            then round((select case when bool_and(i.line_total is not null) then sum(i.line_total) end
+                                        from public.lab_work_order_items i where i.lab_organization_id=v_lab and i.work_order_id=v_id)
+                                       *(1-wo.discount/100),2)
+                            when wo.snapshot_unit_price is null then null
                             else round(wo.snapshot_unit_price * wo.nr_elemente * (1-wo.discount/100),2) end
                     where wo.lab_organization_id=v_lab and wo.id=v_id;
+
+                    insert into public.work_order_financial_audit (
+                        lab_organization_id,work_order_id,entity_type,entity_id,action,
+                        before_value,after_value,changed_by_user_id
+                    )
+                    select v_lab,v_id,'work_order_price',v_id::text,'recalculate',
+                        jsonb_build_object(
+                            'quantity',v_order.nr_elemente,'discount',v_order.discount,
+                            'unit_price',v_order.snapshot_unit_price,
+                            'list_price',v_order.snapshot_list_price,
+                            'final_price',v_order.snapshot_final_price
+                        ),
+                        jsonb_build_object(
+                            'quantity',wo.nr_elemente,'discount',wo.discount,
+                            'unit_price',wo.snapshot_unit_price,
+                            'list_price',wo.snapshot_list_price,
+                            'final_price',wo.snapshot_final_price
+                        ),auth.uid()
+                    from public.lab_work_orders wo
+                    where wo.lab_organization_id=v_lab and wo.id=v_id
+                      and (wo.nr_elemente,wo.discount,wo.snapshot_list_price,wo.snapshot_final_price)
+                          is distinct from
+                          (v_order.nr_elemente,v_order.discount,v_order.snapshot_list_price,v_order.snapshot_final_price);
                 end if;
 
             else

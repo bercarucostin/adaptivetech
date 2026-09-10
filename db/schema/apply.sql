@@ -48,15 +48,28 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/25_work_order_stage_assignments.sql
 \i db/schema/10_tables/26_technician_payments.sql
 \i db/schema/10_tables/27_work_order_financial_audit.sql
+\i db/schema/10_tables/28_ai_operation_previews.sql
+\i db/schema/10_tables/29_ai_operation_requests.sql
 
 \echo == 20 functions ==
+\i db/schema/20_functions/adjust_material_quantity.sql
 \i db/schema/20_functions/admin_bulk_config_import.sql
 \i db/schema/20_functions/admin_clear_ai_history_older_than_30_days.sql
 \i db/schema/20_functions/admin_clear_chat_messages_older_than_30_days.sql
+\i db/schema/20_functions/ai_admin_config_operation.sql
+\i db/schema/20_functions/ai_admin_price_operation.sql
+\i db/schema/20_functions/ai_admin_technician_cost_operation.sql
+\i db/schema/20_functions/ai_admin_work_order_operation.sql
+\i db/schema/20_functions/ai_execute_operation.sql
 \i db/schema/20_functions/ai_mutate_work_order.sql
 \i db/schema/20_functions/ai_mutate_work_order_role_safe.sql
+\i db/schema/20_functions/ai_mutate_work_order_role_safe_idempotent.sql
+\i db/schema/20_functions/ai_operation_state.sql
+\i db/schema/20_functions/ai_preview_operation.sql
+\i db/schema/20_functions/ai_read_calendar.sql
 \i db/schema/20_functions/ai_read_dataset.sql
 \i db/schema/20_functions/ai_read_datasets.sql
+\i db/schema/20_functions/ai_read_materials.sql
 \i db/schema/20_functions/ai_technician_receivables.sql
 \i db/schema/20_functions/ai_technician_work_orders.sql
 \i db/schema/20_functions/ai_technician_work_types.sql
@@ -88,6 +101,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/delete_management_work_order.sql
 \i db/schema/20_functions/doctor_matches_partner.sql
 \i db/schema/20_functions/effective_lab_role.sql
+\i db/schema/20_functions/enforce_calendar_event_edit_rules.sql
 \i db/schema/20_functions/enforce_work_order_stage_rules.sql
 \i db/schema/20_functions/estimate_doctor_work_order_price.sql
 \i db/schema/20_functions/estimate_work_order_items.sql
@@ -111,8 +125,10 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/is_lab_management.sql
 \i db/schema/20_functions/is_lab_technician.sql
 \i db/schema/20_functions/is_org_member.sql
+\i db/schema/20_functions/mutate_calendar_event.sql
 \i db/schema/20_functions/next_lab_work_order_id.sql
 \i db/schema/20_functions/organization_is_type.sql
+\i db/schema/20_functions/prepare_stage_reassignment.sql
 \i db/schema/20_functions/record_technician_payment.sql
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
@@ -127,6 +143,8 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/sync_work_order_stage_assignment.sql
 \i db/schema/20_functions/update_doctor_work_order.sql
 \i db/schema/20_functions/update_management_work_order.sql
+\i db/schema/20_functions/update_management_work_order_stage_field.sql
+\i db/schema/20_functions/update_management_work_order_v188.sql
 \i db/schema/20_functions/update_material_quantity.sql
 \i db/schema/20_functions/update_my_stage_status.sql
 \i db/schema/20_functions/upsert_patient_case.sql
@@ -159,6 +177,8 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/25_work_order_stage_assignments.sql
 \i db/schema/30_policies/26_technician_payments.sql
 \i db/schema/30_policies/27_work_order_financial_audit.sql
+\i db/schema/30_policies/28_ai_operation_previews.sql
+\i db/schema/30_policies/29_ai_operation_requests.sql
 
 \echo == 40 grants ==
 \i db/schema/40_grants.sql
