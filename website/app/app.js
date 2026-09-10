@@ -14,7 +14,7 @@ const loginScreen=$("loginScreen"),appShell=$("appShell"),loginForm=$("loginForm
 const pageTitle=$("pageTitle"),pageSubtitle=$("pageSubtitle"),content=$("content"),connectionBadge=$("connectionBadge"),loadOlderBtn=$("loadOlderBtn"),toggleOldBtn=$("toggleOldBtn"),refreshBtn=$("refreshBtn"),newOrderBtn=$("newOrderBtn"),exportBtn=$("exportBtn"),lastRefresh=$("lastRefresh"),datasetScope=$("datasetScope"),logoutBtn=$("logoutBtn");
 const userName=$("userName"),userRole=$("userRole"),userAvatar=$("userAvatar"),aiMode=$("aiMode");
 const modalBackdrop=$("modalBackdrop"),modalTitle=$("modalTitle"),modalSubtitle=$("modalSubtitle"),closeModalBtn=$("closeModalBtn"),cancelModalBtn=$("cancelModalBtn"),orderForm=$("orderForm"),orderId=$("orderId"),dueDate=$("dueDate"),receptionDate=$("receptionDate"),status=$("status"),patient=$("patient"),patientSuggestions=$("patientSuggestions"),partner=$("partner"),partnerSuggestions=$("partnerSuggestions"),contract=$("contract"),discount=$("discount"),myStage=$("myStage");
-const modelTech=$("modelTech"),statusModel=$("statusModel"),paidModel=$("paidModel"),modelingTech=$("modelingTech"),statusModeling=$("statusModeling"),paidModeling=$("paidModeling"),ceramicTech=$("ceramicTech"),statusCerFin=$("statusCerFin"),paidCerFin=$("paidCerFin"),unitPrice=$("unitPrice"),listPrice=$("listPrice"),finalPrice=$("finalPrice"),priceHint=$("priceHint"),saveOrderBtn=$("saveOrderBtn");
+const modelTech=$("modelTech"),statusModel=$("statusModel"),paidModel=$("paidModel"),modelingTech=$("modelingTech"),statusModeling=$("statusModeling"),paidModeling=$("paidModeling"),ceramicTech=$("ceramicTech"),statusCerFin=$("statusCerFin"),paidCerFin=$("paidCerFin"),listPrice=$("listPrice"),finalPrice=$("finalPrice"),priceHint=$("priceHint"),saveOrderBtn=$("saveOrderBtn");
 const modelNotApplicable=$("modelNotApplicable"),modelingNotApplicable=$("modelingNotApplicable"),ceramicNotApplicable=$("ceramicNotApplicable");
 const orderToothChart=$("orderToothChart"),orderToothStage=$("orderToothStage"),orderWorkTypeLegend=$("orderWorkTypeLegend"),orderToothPopover=$("orderToothPopover"),orderToothPopoverTitle=$("orderToothPopoverTitle"),orderToothPopoverMeta=$("orderToothPopoverMeta"),orderToothPreview=$("orderToothPreview"),orderToothTypeBadge=$("orderToothTypeBadge"),orderToothEmpty=$("orderToothEmpty"),orderToothForm=$("orderToothForm"),orderToothType=$("orderToothType"),orderToothTypeSuggestions=$("orderToothTypeSuggestions"),orderToothShade=$("orderToothShade"),orderToothMethod=$("orderToothMethod"),orderToothNote=$("orderToothNote"),orderToothPopoverClose=$("orderToothPopoverClose"),orderToothCancelBtn=$("orderToothCancelBtn"),orderToothSaveBtn=$("orderToothSaveBtn"),orderToothRemoveBtn=$("orderToothRemoveBtn"),orderTeethSelected=$("orderTeethSelected"),orderShade=$("orderShade"),orderMethod=$("orderMethod"),orderClinicNote=$("orderClinicNote"),orderProductionNotes=$("orderProductionNotes"),orderToothDetailsBody=$("orderToothDetailsBody"),orderSelectAnteriorBtn=$("orderSelectAnteriorBtn"),orderClearTeethBtn=$("orderClearTeethBtn"),orderCasePdfBtn=$("orderCasePdfBtn");
 const orderApplySameShade=$("orderApplySameShade"),orderSameShadeWrap=$("orderSameShadeWrap");
@@ -731,7 +731,7 @@ function serverOrder(r){
     modelTech:r.Tehnician_Model??"",modelingTech:r.Tehnician1_Modelare??"",ceramicTech:r.Tehnician2_Cer_Fin??"",
     statusModel:r.Status_Model??"Not Started",statusModeling:r.Status_Modelare??"Not Started",statusCerFin:r.Status_Cer_Fin??"Not Started",
     paidModel:r.Paid_Model??"Not Paid",paidModeling:r.Paid_Modelare??"Not Paid",paidCerFin:r.Paid_Cer_Fin??"Not Paid",
-    discount:num(r.Discount),unitPrice:0,listPrice:num(r.Total_Pret_Lista),finalPrice:num(r.Total_dupa_Discount),
+    discount:num(r.Discount),listPrice:num(r.Total_Pret_Lista),finalPrice:num(r.Total_dupa_Discount),
     costModel:num(r.Cost_Model),costModeling:num(r.Cost_Modelare),costCerFin:num(r.Cost_Cer_Fin),totalTechCost:num(r.Cost_Total_Tehnicieni),
     myStages:Array.isArray(r.My_Stages)?r.My_Stages:[],ownCost:num(r.Own_Technician_Cost),
     clinicNote:String(r.Clinic_Note??""),locked:boolish(r.Locked)
@@ -1239,7 +1239,6 @@ function mobileWorkOrderCard(o){
         <div><span>Data recepție</span><strong>${fmtDate(o.receptionDate)}</strong></div>
         <div><span>Contract</span><strong>${escapeHtml(o.contract)||"—"}</strong></div>
         <div><span>List value</span><strong>${money(o.listPrice)}</strong></div>
-        <div><span>Unit price</span><strong>${money(o.unitPrice)}</strong></div>
         <div><span>Model</span><strong>${escapeHtml(o.modelTech)||"—"} · ${escapeHtml(uiText(o.statusModel))||"—"}</strong></div>
         <div><span>Modelare</span><strong>${escapeHtml(o.modelingTech)||"—"} · ${escapeHtml(uiText(o.statusModeling))||"—"}</strong></div>
         <div><span>Cer Fin</span><strong>${escapeHtml(o.ceramicTech)||"—"} · ${escapeHtml(uiText(o.statusCerFin))||"—"}</strong></div>
@@ -1426,7 +1425,6 @@ function renderMobileWorkOrders(baseOrders){
         </div>
         <div class="doctor-mobile-grid">
           <div><span>Termen</span><strong>${fmtDate(o.deadline)}</strong></div>
-          <div><span>Preț element</span><strong>${money(o.unitPrice)}</strong></div>
           <div><span>Total plată</span><strong>${money(o.finalPrice)}</strong></div>
         </div>
         ${o.clinicNote?`<div class="doctor-mobile-note"><span>Notă clinică</span>${escapeHtml(o.clinicNote)}</div>`:""}
@@ -1514,7 +1512,6 @@ function renderWorkOrders(){
       {key:"workType",label:"Tip lucrare",type:"text",r:o=>escapeHtml(o.workType)},
       {key:"elements",label:"Nr. elemente",type:"number",r:o=>o.elements},
       {key:"clinicNote",label:"Notă clinică",type:"text",r:o=>`<span class="doctor-clinic-note">${escapeHtml(o.clinicNote)||"—"}</span>`},
-      {key:"unitPrice",label:"Preț element",type:"number",r:o=>money(o.unitPrice)},
       {key:"finalPrice",label:"Total plată",type:"number",r:o=>`<strong>${money(o.finalPrice)}</strong>`}
     ];
 
@@ -1577,7 +1574,6 @@ function renderWorkOrders(){
       {key:"contract",label:"Contract",type:"text",r:o=>escapeHtml(o.contract)},
       {key:"workType",label:"Tip lucrare",type:"text",r:o=>escapeHtml(o.workType)},
       {key:"elements",label:"Nr. elemente",type:"number",r:o=>o.elements},
-      {key:"unitPrice",label:"Preț element",type:"number",r:o=>money(o.unitPrice)},
       {key:"listPrice",label:"Total preț listă",type:"number",r:o=>money(o.listPrice)},
       {key:"discount",label:"Discount %",type:"number",r:o=>`${o.discount}%`},
       {key:"finalPrice",label:"Total după discount",type:"number",r:o=>money(o.finalPrice)},
@@ -7076,7 +7072,6 @@ function mapSupabaseOrder(r){
     paidModeling:r.paid_modelare??"Not Paid",
     paidCerFin:r.paid_cer_fin??"Not Paid",
     discount:discountValue,
-    unitPrice:0,
     listPrice:list,
     finalPrice:final,
     costModel,
@@ -7285,7 +7280,7 @@ function renderToothPriceBreakdown(result={}){
     workType:String(line?.work_type??line?.workType??"—"),
     quantity:Math.max(0,num(line?.quantity??1)),
     contract:String(line?.contract||"General"),
-    unitPrice:num(line?.unit_price??line?.unitPrice??line?.pret),
+    itemPrice:num(line?.unit_price??line?.pret),
     subtotal:num(line?.subtotal??line?.line_total),
     matched:Boolean(line?.matched)
   }));
@@ -7304,7 +7299,7 @@ function renderToothPriceBreakdown(result={}){
             <tr class="${line.matched?"":"price-breakdown-unmatched"}">
               <td><strong>${escapeHtml(line.workType)}</strong>${isManagement()?`<small>Contract: ${escapeHtml(line.contract)}</small>`:""}</td>
               <td>${line.quantity}</td>
-              <td>${money(line.unitPrice)}</td>
+              <td>${money(line.itemPrice)}</td>
               <td><strong>${money(line.subtotal)}</strong></td>
             </tr>`).join("")}</tbody>
           <tfoot>
@@ -7318,7 +7313,6 @@ function renderToothPriceBreakdown(result={}){
   }
 
   const count=Math.max(0,num(result.element_count));
-  unitPrice.value=count?Number((list/count).toFixed(2)):0;
   listPrice.value=list;
   finalPrice.value=total;
 
@@ -7347,7 +7341,6 @@ async function requestToothPriceEstimate(requestId,items){
     renderToothPriceBreakdown(result||{});
   }catch(err){
     if(requestId!==toothPriceEstimateRequest||isTechnician())return;
-    unitPrice.value=0;
     listPrice.value=0;
     finalPrice.value=0;
     const box=$("priceBreakdown");
@@ -7361,7 +7354,6 @@ recalcFormPrice=function(){
   if(isTechnician())return;
   const saved=currentModalOrder();
   if(saved&&Number(orderId?.value)===Number(saved.id)){
-    unitPrice.value=0;
     listPrice.value=num(saved.listPrice);
     finalPrice.value=num(saved.finalPrice);
     const box=$("priceBreakdown");
@@ -7375,7 +7367,6 @@ recalcFormPrice=function(){
   const items=workOrderToothItems().filter(item=>item.work_type);
   const missing=workOrderToothItems().filter(item=>!item.work_type);
   if(!items.length){
-    unitPrice.value=0;
     listPrice.value=0;
     finalPrice.value=0;
     const box=$("priceBreakdown");
@@ -7385,7 +7376,6 @@ recalcFormPrice=function(){
     return;
   }
   if(missing.length){
-    unitPrice.value=0;
     listPrice.value=0;
     finalPrice.value=0;
     const box=$("priceBreakdown");

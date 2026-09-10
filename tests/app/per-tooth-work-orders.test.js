@@ -24,6 +24,22 @@ function toothScope(selectedTeeth){
   return Function(`return (${namedFunction('deriveWorkOrderScope')})`)()(selectedTeeth);
 }
 
+function mappedOrder(row){
+  const map=Function(
+    'deriveWorkOrderScope','num','isDoctor','isTechnician','normalize','boolish','auth',
+    `return (${namedFunction('mapSupabaseOrder')})`
+  )(
+    toothScope,
+    value=>Number(value)||0,
+    ()=>false,
+    ()=>false,
+    value=>String(value??'').trim().toLowerCase(),
+    value=>Boolean(value),
+    {user:{Technician_Name:''}}
+  );
+  return map(row);
+}
+
 test('configured teeth derive a deterministic mixed work-order scope',()=>{
   const scope=toothScope([
     {tooth:21,workType:'Fațetă'},
@@ -83,4 +99,38 @@ test('read models use server-derived scope fields and frozen aggregate totals',(
   assert.match(mapper,/items/);
   assert.match(mapper,/snapshot_list_price/);
   assert.match(mapper,/snapshot_final_price/);
+});
+
+test('work-order screens have no scalar unit-price field or display',()=>{
+  assert.doesNotMatch(html,/id="unitPrice"/);
+  assert.doesNotMatch(source,/\bunitPrice\b/);
+  assert.doesNotMatch(source,/<span>Preț element<\/span>/);
+  assert.doesNotMatch(source,/{key:"unitPrice",label:"Preț element"/);
+  assert.doesNotMatch(source,/<span>Unit price<\/span>/);
+});
+
+test('read-model technician costs use frozen assignment amounts without catalog fallback',()=>{
+  const mapped=mappedOrder({
+    id:14,
+    items:[{tooth_number:11,work_type:'Coroană'}],
+    work_types:['Coroană'],
+    work_type_summary:'Coroană',
+    element_count:1,
+    snapshot_list_price:250,
+    snapshot_final_price:225,
+    cost_model:11,
+    cost_modelare:13,
+    cost_cer_fin:17
+  });
+
+  assert.equal(mapped.costModel,11);
+  assert.equal(mapped.costModeling,13);
+  assert.equal(mapped.costCerFin,17);
+  assert.equal(mapped.totalTechCost,41);
+
+  const mapper=namedFunction('mapSupabaseOrder');
+  assert.doesNotMatch(mapper,/technicianStageCost|technicianCostRules/);
+  assert.match(mapper,/num\(r\.cost_model\)/);
+  assert.match(mapper,/num\(r\.cost_modelare\)/);
+  assert.match(mapper,/num\(r\.cost_cer_fin\)/);
 });
