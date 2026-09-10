@@ -1,10 +1,13 @@
--- Authorized destructive cutover: no-item orders have no supported clinical scope.
+-- Authorized destructive cutover: empty or invalid-FDI orders have no supported clinical scope.
 -- apply.sql wraps this and the new API definitions in one transaction.
 LOCK TABLE public.lab_work_orders,public.lab_work_order_items IN SHARE ROW EXCLUSIVE MODE;
 CREATE TEMP TABLE per_tooth_removed_orders ON COMMIT DROP AS
 SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
 WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i
-    WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id);
+    WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid
+    WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+      AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8));
 
 -- Storage metadata can be deleted transactionally only on installations that permit it.
 DO $$
@@ -37,8 +40,26 @@ DELETE FROM public.lab_work_order_assignment_cost_lines l USING public.lab_work_
 WHERE l.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 DELETE FROM public.lab_work_order_stage_assignments a USING per_tooth_removed_orders d
 WHERE a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
+DELETE FROM public.lab_work_order_items i USING per_tooth_removed_orders d
+WHERE i.lab_organization_id=d.lab_organization_id AND i.work_order_id=d.id;
 DELETE FROM public.lab_work_orders wo USING per_tooth_removed_orders d
 WHERE wo.lab_organization_id=d.lab_organization_id AND wo.id=d.id;
+
+-- Drain invariant/FK trigger events before altering tables on a repeated apply.
+SET CONSTRAINTS ALL IMMEDIATE;
+
+-- Upgrade the old BETWEEN 11 AND 48 check after invalid orders and their items are gone.
+DO $$
+DECLARE c record;
+BEGIN
+    FOR c IN SELECT conname FROM pg_constraint
+        WHERE conrelid='public.lab_work_order_items'::regclass AND contype='c'
+          AND pg_get_constraintdef(oid) LIKE '%tooth_number%'
+    LOOP EXECUTE format('ALTER TABLE public.lab_work_order_items DROP CONSTRAINT %I',c.conname); END LOOP;
+END $$;
+ALTER TABLE public.lab_work_order_items ADD CONSTRAINT lab_work_order_items_fdi_check
+    CHECK(tooth_number / 10 BETWEEN 1 AND 4 AND tooth_number % 10 BETWEEN 1 AND 8) NOT VALID;
+ALTER TABLE public.lab_work_order_items VALIDATE CONSTRAINT lab_work_order_items_fdi_check;
 
 -- Sanitize retained clinical JSON, including __case.material and tooth material.
 DO $$

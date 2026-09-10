@@ -7,18 +7,22 @@ declare
     v_id bigint; v_assignment uuid; v_scope record; v_amount numeric; v_rows integer;
     v_items jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":21,"work_type":"Bridge"}]';
     v_changed jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"Crown"}]';
-    v_failed boolean;
+    v_failed boolean; v_audits integer; v_result jsonb;
 begin
     if exists(select 1 from information_schema.columns where table_schema='public' and
         ((table_name='lab_work_orders' and column_name in ('tip_lucrare','nr_elemente','snapshot_unit_price'))
         or (table_name='lab_patient_cases' and column_name in ('tip_lucrare','material')))) then
         raise exception 'Obsolete clinical columns remain';
     end if;
+    if has_function_privilege('authenticated','public.replace_work_order_items(uuid,bigint,jsonb,text)','EXECUTE') then
+        raise exception 'Raw item replacement must be private; public writers also save the case'; end if;
     insert into auth.users(id) values(v_tech),(v_admin);
     insert into public.profiles(id,display_name,technician_name,legacy_user_id)
         values(v_tech,'Per tooth technician','Per tooth technician',v_tech::text),(v_admin,'Per tooth admin',null,v_admin::text)
         on conflict(id) do update set technician_name=excluded.technician_name,legacy_user_id=excluded.legacy_user_id;
-    insert into public.organizations(id,organization_type,name) values(v_lab,'lab','Per tooth integration');
+    -- Isolate the AI lab lookup inside this rollback-only disposable fixture.
+    update public.organizations set slug=null where slug='flowrise-dental-lab';
+    insert into public.organizations(id,organization_type,name,slug) values(v_lab,'lab','Per tooth integration','flowrise-dental-lab');
     insert into public.organization_memberships(organization_id,user_id,role) values(v_lab,v_tech,'Technician'),(v_lab,v_admin,'Admin');
     insert into public.lab_work_types(lab_organization_id,id,tip_lucrare) values(v_lab,1,'Crown'),(v_lab,2,'Bridge');
     insert into public.lab_contract_work_prices(lab_organization_id,id,contract,tip_lucrare,pret)
@@ -41,18 +45,34 @@ begin
     if (select snapshot_list_price from public.lab_work_orders where lab_organization_id=v_lab and id=v_id)<>350 then raise exception 'Mixed snapshot incorrect'; end if;
     update public.lab_contract_work_prices set pret=999 where lab_organization_id=v_lab;
     update public.lab_technician_costs set cost=999 where lab_organization_id=v_lab;
+    select count(*) into v_audits from public.work_order_financial_audit where lab_organization_id=v_lab and work_order_id=v_id and entity_type='work_order_price';
     perform public.replace_work_order_items(v_lab,v_id,v_items,'General');
+    if (select count(*) from public.work_order_financial_audit where lab_organization_id=v_lab and work_order_id=v_id and entity_type='work_order_price')<>v_audits then raise exception 'Unchanged save adds a price audit'; end if;
     if (select snapshot_list_price from public.lab_work_orders where lab_organization_id=v_lab and id=v_id)<>350 then raise exception 'Unchanged item price was recalculated'; end if;
     perform set_config('request.jwt.claim.sub',v_admin::text,true);
     perform public.record_technician_payment(v_assignment,70,current_date,'test-settled');
     perform set_config('request.jwt.claim.sub',v_tech::text,true);
-    perform public.replace_work_order_items(v_lab,v_id,v_changed,'General');
+    insert into public.lab_contract_work_prices(lab_organization_id,id,contract,tip_lucrare,pret) values(v_lab,'test-forbidden-contract','Forbidden','Crown',1);
+    perform public.replace_work_order_items(v_lab,v_id,v_changed,'Forbidden');
+    if (select unit_price from public.lab_work_order_items where lab_organization_id=v_lab and work_order_id=v_id and tooth_number=12)<>999 then raise exception 'Technician influenced the commercial contract'; end if;
     if public.assignment_agreed_amount(v_assignment)<>40 then raise exception 'Signed adjustment must use frozen type costs'; end if;
     if (select agreed_amount from public.lab_work_order_stage_assignments where id=v_assignment)<>70 then raise exception 'Original assignment was rewritten'; end if;
     if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>70 then raise exception 'Settled payment was rewritten'; end if;
     select count(*) into v_rows from public.lab_work_order_assignment_adjustments where assignment_id=v_assignment;
     perform public.replace_work_order_items(v_lab,v_id,v_changed,'General');
     if (select count(*) from public.lab_work_order_assignment_adjustments where assignment_id=v_assignment)<>v_rows then raise exception 'Repeated save adds duplicate adjustment'; end if;
+    perform set_config('request.jwt.claim.sub',v_admin::text,true);
+    if (select cost_model from public.get_my_work_orders(v_lab) where id=v_id)<>40 then raise exception 'Management cost omits signed adjustments'; end if;
+    perform set_config('request.jwt.claim.sub',v_tech::text,true);
+    v_result:=public.ai_mutate_work_order_role_safe('update',jsonb_build_object('id',v_id,'fields',jsonb_build_object(
+        'items','[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"Crown"},{"tooth_number":13,"work_type":"Crown"},{"tooth_number":14,"work_type":"Crown"}]'::jsonb)));
+    if not coalesce((v_result->>'ok')::boolean,false) then raise exception 'Technician AI update failed: %',v_result; end if;
+    if (select selected_teeth from public.lab_patient_cases where lab_organization_id=v_lab and work_order_id=v_id)<>'11,12,13,14' then raise exception 'Atomic AI writer did not synchronize clinical scope'; end if;
+    if (select item->'My_Stages'->0->>'Payment_Status' from jsonb_array_elements(public.ai_technician_work_orders()) as rows(item) where (item->>'ID')::bigint=v_id)<>'Not Paid' then raise exception 'AI payment status ignores adjusted outstanding balance'; end if;
+    v_failed:=false;
+    begin insert into public.lab_work_order_items(lab_organization_id,work_order_id,tooth_number,work_type) values(v_lab,v_id,19,'Crown');
+    exception when check_violation then v_failed:=true; end;
+    if not v_failed then raise exception 'Invalid FDI tooth was accepted'; end if;
     v_failed:=false;
     begin perform public.create_technician_work_order(v_lab,current_date,'Empty','Partner','[]'::jsonb);
     exception when others then v_failed:=true; end;

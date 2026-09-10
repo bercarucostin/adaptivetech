@@ -3,7 +3,7 @@
 -- The complete CREATE OR REPLACE FUNCTION definition follows.
 
 CREATE OR REPLACE FUNCTION public.get_my_work_orders(p_lab_organization_id uuid)
- RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, items jsonb, work_types text[], work_type_summary text, element_count numeric, data_receptie timestamp with time zone, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text, contract text, discount numeric, paid_model text, paid_modelare text, paid_cer_fin text, created_by_user_id text, created_at timestamp with time zone, updated_by_user_id text, updated_at timestamp with time zone, list_price numeric, final_price numeric)
+ RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, items jsonb, work_types text[], work_type_summary text, element_count numeric, data_receptie timestamp with time zone, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text, contract text, discount numeric, paid_model text, paid_modelare text, paid_cer_fin text, created_by_user_id text, created_at timestamp with time zone, updated_by_user_id text, updated_at timestamp with time zone, list_price numeric, final_price numeric, cost_model numeric, cost_modelare numeric, cost_cer_fin numeric)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
@@ -57,9 +57,21 @@ begin
              else null end,
         case when v_is_management or v_is_doctor
              then wo.snapshot_final_price
-             else null end
+             else null end,
+        case when v_is_management then costs.cost_model else null end,
+        case when v_is_management then costs.cost_modelare else null end,
+        case when v_is_management then costs.cost_cer_fin else null end
     from public.lab_work_orders wo
     cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,v_is_management or v_is_doctor) scope
+    cross join lateral (
+        select
+            case when bool_and(amount is not null) filter(where stage_key='model') then sum(amount) filter(where stage_key='model') end as cost_model,
+            case when bool_and(amount is not null) filter(where stage_key='modelare') then sum(amount) filter(where stage_key='modelare') end as cost_modelare,
+            case when bool_and(amount is not null) filter(where stage_key='cer_fin') then sum(amount) filter(where stage_key='cer_fin') end as cost_cer_fin
+        from (select a.stage_key,public.assignment_agreed_amount(a.id) amount
+            from public.lab_work_order_stage_assignments a
+            where a.lab_organization_id=wo.lab_organization_id and a.work_order_id=wo.id) assignments
+    ) costs
     where wo.lab_organization_id = p_lab_organization_id
       and wo.archived_at is null
       and (

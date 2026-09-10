@@ -11,6 +11,7 @@ returns table (
   discount numeric, paid_model text, paid_modelare text, paid_cer_fin text,
   created_by_user_id text, created_at timestamptz, updated_by_user_id text,
   updated_at timestamptz, list_price numeric, final_price numeric,
+  cost_model numeric, cost_modelare numeric, cost_cer_fin numeric,
   model_not_applicable boolean, modelare_not_applicable boolean, cer_fin_not_applicable boolean
 )
 language sql
@@ -24,7 +25,7 @@ as $$
          b.status_model,b.status_modelare,b.status_cer_fin,b.contract,
          b.discount,b.paid_model,b.paid_modelare,b.paid_cer_fin,
          b.created_by_user_id,b.created_at,b.updated_by_user_id,b.updated_at,
-         b.list_price,b.final_price,
+         b.list_price,b.final_price,b.cost_model,b.cost_modelare,b.cost_cer_fin,
          wo.model_not_applicable,wo.modelare_not_applicable,wo.cer_fin_not_applicable
   from public.get_my_work_orders(p_lab_organization_id) b
   join public.lab_work_orders wo

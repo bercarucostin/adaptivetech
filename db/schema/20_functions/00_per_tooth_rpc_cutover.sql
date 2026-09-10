@@ -8,6 +8,8 @@ BEGIN
         AND (
             (p.proname IN ('get_my_work_orders','get_my_work_orders_v188','get_my_production','get_patient_case')
              AND pg_get_function_result(p.oid) ~ '\m(tip_lucrare|nr_elemente|material)\M')
+            OR (p.proname IN ('get_my_work_orders','get_my_work_orders_v188')
+                AND pg_get_function_result(p.oid) NOT LIKE '%cost_model numeric%')
             OR (p.proname IN ('create_work_order','create_technician_work_order','update_doctor_work_order',
                 'update_management_work_order','update_management_work_order_v188','save_my_work_order_case','upsert_patient_case')
                 AND p.proargnames && ARRAY['p_tip_lucrare','p_nr_elemente','p_material'])

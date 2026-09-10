@@ -38,11 +38,14 @@ begin
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id
     for update;
     if not found then raise exception 'Work Order not found'; end if;
+    if v_role='technician' then
+        p_requested_contract:=coalesce(nullif(trim(v_order.contract),''),'General');
+    end if;
 
     select coalesce(jsonb_agg(jsonb_build_object(
         'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
         'contract',contract,'unit_price',unit_price,'subtotal',line_total,
-        'price_source',price_source
+        'matched',unit_price is not null,'price_source',price_source
     ) order by tooth_number),'[]'::jsonb)
     into v_before_lines
     from public.lab_work_order_items
@@ -191,6 +194,7 @@ begin
             'item_change',
             jsonb_build_object(
                 'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price,
+                'quantity',(select sum((item->>'quantity')::numeric) from jsonb_array_elements(v_before_lines) item),
                 'items',v_before_lines
             ),
             jsonb_build_object(
@@ -220,5 +224,4 @@ begin
 end;
 $$;
 
-revoke all on function public.replace_work_order_items(uuid,bigint,jsonb,text) from public;
-grant execute on function public.replace_work_order_items(uuid,bigint,jsonb,text) to authenticated;
+revoke all on function public.replace_work_order_items(uuid,bigint,jsonb,text) from public,anon,authenticated;

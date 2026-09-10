@@ -36,7 +36,8 @@ begin
             s.stage_label,
             s.stage_order,
             s.stage_status,
-            s.payment_status,
+            case when cost_rule.agreed_amount is not null
+                      and cost_rule.paid_amount>=cost_rule.agreed_amount then 'Paid' else 'Not Paid' end as payment_status,
             s.not_applicable,
             cost_rule.unit_cost,
             cost_rule.agreed_amount,
@@ -51,7 +52,6 @@ begin
                     1,
                     wo.tehnician_model,
                     coalesce(wo.status_model,'Not Started'),
-                    coalesce(wo.paid_model,'Not Paid'),
                     coalesce((to_jsonb(wo)->>'model_not_applicable')::boolean,false)
                 ),
                 (
@@ -60,7 +60,6 @@ begin
                     2,
                     wo.tehnician1_modelare,
                     coalesce(wo.status_modelare,'Not Started'),
-                    coalesce(wo.paid_modelare,'Not Paid'),
                     coalesce((to_jsonb(wo)->>'modelare_not_applicable')::boolean,false)
                 ),
                 (
@@ -69,12 +68,12 @@ begin
                     3,
                     wo.tehnician2_cer_fin,
                     coalesce(wo.status_cer_fin,'Not Started'),
-                    coalesce(wo.paid_cer_fin,'Not Paid'),
                     coalesce((to_jsonb(wo)->>'cer_fin_not_applicable')::boolean,false)
                 )
-        ) as s(stage_key,stage_label,stage_order,technician_name,stage_status,payment_status,not_applicable)
+        ) as s(stage_key,stage_label,stage_order,technician_name,stage_status,not_applicable)
         left join lateral (
-            select a.unit_cost,public.assignment_agreed_amount(a.id) as agreed_amount
+            select a.unit_cost,public.assignment_agreed_amount(a.id) as agreed_amount,
+                (select coalesce(sum(p.amount),0) from public.technician_payments p where p.assignment_id=a.id) as paid_amount
             from public.lab_work_order_stage_assignments a
             where a.lab_organization_id=wo.lab_organization_id
               and a.work_order_id=wo.id
