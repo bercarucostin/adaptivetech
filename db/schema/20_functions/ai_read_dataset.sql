@@ -181,35 +181,45 @@ begin
         from (
             select
                 wo.*,
-                price.contract as matched_price_contract,
-                price.pret as unit_price,
-                round(coalesce(price.pret,0) * coalesce(wo.nr_elemente,0),2) as list_price,
-                round(
-                    coalesce(price.pret,0) * coalesce(wo.nr_elemente,0)
-                    * (1 - greatest(0,least(100,coalesce(wo.discount,0))) / 100.0),
-                    2
-                ) as final_price,
-                (price.pret is not null) as price_matched
+                wo.contract as matched_price_contract,
+                wo.snapshot_unit_price as unit_price,
+                wo.snapshot_list_price as list_price,
+                wo.snapshot_final_price as final_price,
+                (wo.snapshot_unit_price is not null) as price_matched,
+                wo.price_source,
+                wo.price_migrated
             from public.lab_work_orders wo
-            left join lateral (
-                select cp.contract,cp.pret
-                from public.lab_contract_work_prices cp
-                where cp.lab_organization_id=wo.lab_organization_id
-                  and lower(trim(cp.tip_lucrare))=lower(trim(coalesce(wo.tip_lucrare,'')))
-                  and lower(trim(cp.contract)) in (
-                      lower(trim(coalesce(wo.contract,''))),
-                      lower(trim(coalesce(wo.nume_partener,''))),
-                      'general'
-                  )
-                order by case
-                    when lower(trim(cp.contract))=lower(trim(coalesce(wo.contract,''))) then 0
-                    when lower(trim(cp.contract))=lower(trim(coalesce(wo.nume_partener,''))) then 1
-                    else 2
-                end,cp.id
-                limit 1
-            ) price on true
             where wo.lab_organization_id=v_lab
+              and wo.archived_at is null
             order by wo.id desc
+            limit v_limit offset v_offset
+        ) q;
+
+    elsif v_dataset = 'financial_history' then
+        select count(*) into v_total
+        from public.lab_work_order_stage_assignments a
+        where a.lab_organization_id=v_lab;
+        select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) into v_rows
+        from (
+            select a.id as assignment_id,a.work_order_id,a.stage_key,a.technician_name,
+                   a.unit_cost,a.quantity,a.agreed_amount,a.cost_source,a.fixed_at,
+                   a.started_at,a.ended_at,a.migrated,
+                   coalesce(pay.paid_amount,0)::numeric as paid_amount,
+                   case when a.agreed_amount is null then null
+                        else a.agreed_amount-coalesce(pay.paid_amount,0) end as outstanding_amount,
+                   coalesce(pay.payments,'[]'::jsonb) as payments
+            from public.lab_work_order_stage_assignments a
+            left join lateral (
+                select sum(p.amount)::numeric as paid_amount,
+                       jsonb_agg(jsonb_build_object(
+                           'id',p.id,'amount',p.amount,'paid_on',p.paid_on,
+                           'recorded_at',p.recorded_at,'reversal_of',p.reversal_of,
+                           'migration_balance',p.migration_balance,'note',p.note
+                       ) order by p.recorded_at) as payments
+                from public.technician_payments p where p.assignment_id=a.id
+            ) pay on true
+            where a.lab_organization_id=v_lab
+            order by a.work_order_id desc,a.started_at desc
             limit v_limit offset v_offset
         ) q;
 

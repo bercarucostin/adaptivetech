@@ -38,6 +38,7 @@ begin
         wo.status_cer_fin
     from public.lab_work_orders wo
     where wo.lab_organization_id = p_lab_organization_id
+      and wo.archived_at is null
       and lower(wo.status) in ('not started','started','finished','shipped')
       and (
           v_is_management

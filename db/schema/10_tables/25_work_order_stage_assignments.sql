@@ -33,3 +33,21 @@ CREATE INDEX IF NOT EXISTS lab_work_order_stage_assignments_technician_idx
     ON public.lab_work_order_stage_assignments(lab_organization_id, technician_user_id, started_at);
 CREATE INDEX IF NOT EXISTS lab_work_order_stage_assignments_name_idx
     ON public.lab_work_order_stage_assignments(lab_organization_id, lower(technician_name), started_at);
+
+CREATE TABLE IF NOT EXISTS public.lab_work_order_assignment_cost_lines (
+    assignment_id uuid NOT NULL REFERENCES public.lab_work_order_stage_assignments(id),
+    work_type text NOT NULL,
+    quantity numeric(14,3) NOT NULL,
+    unit_cost numeric(14,2),
+    amount numeric(14,2),
+    cost_source text NOT NULL,
+    PRIMARY KEY (assignment_id, work_type),
+    CHECK (quantity > 0),
+    CHECK (unit_cost IS NULL OR unit_cost >= 0),
+    CHECK (amount IS NULL OR amount >= 0)
+);
+
+ALTER TABLE public.lab_work_order_assignment_cost_lines ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS assignment_cost_lines_assignment_idx
+    ON public.lab_work_order_assignment_cost_lines(assignment_id);

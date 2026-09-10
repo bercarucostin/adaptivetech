@@ -24,14 +24,7 @@ as $$
          b.status_model,b.status_modelare,b.status_cer_fin,b.contract,
          b.discount,b.paid_model,b.paid_modelare,b.paid_cer_fin,
          b.created_by_user_id,b.created_at,b.updated_by_user_id,b.updated_at,
-         case when public.effective_lab_role(p_lab_organization_id)='technician' then null
-              when items.item_count>0 then round(items.list_price/items.item_count,2)
-              else b.unit_price end,
-         case when public.effective_lab_role(p_lab_organization_id)='technician' then null
-              when items.item_count>0 then items.list_price else b.list_price end,
-         case when public.effective_lab_role(p_lab_organization_id)='technician' then null
-              when items.item_count>0 then round(items.list_price*(1-coalesce(b.discount,0)/100),2)
-              else b.final_price end,
+         b.unit_price,b.list_price,b.final_price,
          wo.model_not_applicable,wo.modelare_not_applicable,wo.cer_fin_not_applicable
   from public.get_my_work_orders(p_lab_organization_id) b
   join public.lab_work_orders wo

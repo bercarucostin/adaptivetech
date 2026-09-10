@@ -1,7 +1,5 @@
--- Flowrise Supabase function: public.replace_work_order_items
--- Sourced from SUPABASE V18.16 Per-Tooth Multi-Price.sql.
--- Includes the complete function definition and available ACL statements.
-
+-- Saves per-tooth price snapshots. Unchanged tooth/type pairs retain their
+-- original price even when the contract catalog changes.
 create or replace function public.replace_work_order_items(
     p_lab_organization_id uuid,
     p_work_order_id bigint,
@@ -19,7 +17,10 @@ declare
     v_first_type text;
     v_first_contract text;
     v_count integer;
-    v_result jsonb;
+    v_list numeric;
+    v_final numeric;
+    v_lines jsonb;
+    v_matched_all boolean;
 begin
     if v_role not in ('admin','manager','doctor') then
         raise exception 'Work Order item update denied';
@@ -31,7 +32,7 @@ begin
     select * into v_order
     from public.lab_work_orders
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id
-    limit 1;
+    for update;
     if not found then raise exception 'Work Order not found'; end if;
 
     if v_role='doctor' then
@@ -44,16 +45,13 @@ begin
         raise exception 'Management access denied';
     end if;
 
-    select count(*),min(trim(item->>'work_type'))
-      into v_count,v_first_type
-    from jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
-    where trim(coalesce(item->>'work_type','')) <> '';
+    select count(*) into v_count from jsonb_array_elements(coalesce(p_items,'[]'::jsonb));
     if coalesce(v_count,0)=0 then raise exception 'At least one configured tooth is required'; end if;
-    if v_count <> jsonb_array_length(p_items) then raise exception 'Every selected tooth requires a Work Type'; end if;
     if exists (
         select 1
         from jsonb_array_elements(p_items) item
-        where coalesce((item->>'tooth_number')::integer,0) not between 11 and 48
+        where trim(coalesce(item->>'work_type','')) = ''
+           or coalesce((item->>'tooth_number')::integer,0) not between 11 and 48
            or not exists (
                select 1 from public.lab_work_types wt
                where wt.lab_organization_id=p_lab_organization_id and wt.active=true
@@ -65,45 +63,96 @@ begin
         group by (item->>'tooth_number')::integer having count(*)>1
     ) then raise exception 'Duplicate tooth number'; end if;
 
-    delete from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
-
+    with incoming as (
+        select (item->>'tooth_number')::integer as tooth_number,
+               trim(item->>'work_type') as work_type
+        from jsonb_array_elements(p_items) item
+    ), resolved as (
+        select i.tooth_number,i.work_type,
+               case when old.tooth_number is not null then old.contract
+                    else coalesce(price.contract,'General') end as contract,
+               case when old.tooth_number is not null then old.unit_price
+                    else price.pret end as unit_price,
+               case when old.tooth_number is not null then old.price_source
+                    when price.pret is null then 'missing' else 'catalog' end as price_source,
+               case when old.tooth_number is not null then old.price_fixed_at else now() end as price_fixed_at,
+               case when old.tooth_number is not null then old.price_migrated else false end as price_migrated
+        from incoming i
+        left join public.lab_work_order_items old
+          on old.lab_organization_id=p_lab_organization_id
+         and old.work_order_id=p_work_order_id
+         and old.tooth_number=i.tooth_number
+         and lower(trim(old.work_type))=lower(i.work_type)
+        left join lateral (
+            select cp.contract,cp.pret
+            from public.lab_contract_work_prices cp
+            where cp.lab_organization_id=p_lab_organization_id
+              and lower(trim(cp.tip_lucrare))=lower(i.work_type)
+              and lower(trim(cp.contract)) in (
+                  lower(trim(v_order.nume_partener)),
+                  lower(coalesce(nullif(trim(p_requested_contract),''),'General')),
+                  'general'
+              )
+            order by case
+                when lower(trim(cp.contract))=lower(trim(v_order.nume_partener)) then 0
+                when lower(trim(cp.contract))=lower(coalesce(nullif(trim(p_requested_contract),''),'General')) then 1
+                else 2
+            end, cp.id
+            limit 1
+        ) price on true
+    )
     insert into public.lab_work_order_items (
         lab_organization_id,work_order_id,tooth_number,work_type,contract,
-        unit_price,quantity,line_total,created_by_user_id,updated_by_user_id
+        unit_price,quantity,line_total,price_source,price_fixed_at,price_migrated,
+        created_by_user_id,updated_by_user_id,updated_at
     )
-    select p_lab_organization_id,p_work_order_id,(item->>'tooth_number')::integer,
-           trim(item->>'work_type'),coalesce(price.contract,'General'),
-           coalesce(price.pret,0),1,round(coalesce(price.pret,0),2),
-           public.current_legacy_user_id(),public.current_legacy_user_id()
-    from jsonb_array_elements(p_items) item
-    left join lateral (
-        select cp.contract,cp.pret
-        from public.lab_contract_work_prices cp
-        where cp.lab_organization_id=p_lab_organization_id
-          and lower(trim(cp.tip_lucrare))=lower(trim(item->>'work_type'))
-          and lower(trim(cp.contract)) in (
-              lower(trim(v_order.nume_partener)),
-              lower(coalesce(nullif(trim(p_requested_contract),''),'General')),
-              'general'
-          )
-        order by case
-            when lower(trim(cp.contract))=lower(trim(v_order.nume_partener)) then 0
-            when lower(trim(cp.contract))=lower(coalesce(nullif(trim(p_requested_contract),''),'General')) then 1
-            else 2
-        end, cp.id
-        limit 1
-    ) price on true;
+    select p_lab_organization_id,p_work_order_id,tooth_number,work_type,contract,
+           unit_price,1,case when unit_price is null then null else round(unit_price,2) end,
+           price_source,price_fixed_at,price_migrated,
+           public.current_legacy_user_id(),public.current_legacy_user_id(),now()
+    from resolved
+    on conflict (lab_organization_id,work_order_id,tooth_number)
+    do update set
+        work_type=excluded.work_type,contract=excluded.contract,
+        unit_price=excluded.unit_price,quantity=excluded.quantity,
+        line_total=excluded.line_total,price_source=excluded.price_source,
+        price_fixed_at=excluded.price_fixed_at,price_migrated=excluded.price_migrated,
+        updated_by_user_id=excluded.updated_by_user_id,updated_at=now();
+
+    delete from public.lab_work_order_items existing
+    where existing.lab_organization_id=p_lab_organization_id
+      and existing.work_order_id=p_work_order_id
+      and not exists (
+          select 1 from jsonb_array_elements(p_items) item
+          where (item->>'tooth_number')::integer=existing.tooth_number
+      );
 
     select work_type,contract into v_first_type,v_first_contract
     from public.lab_work_order_items
     where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id
-    order by tooth_number
-    limit 1;
+    order by tooth_number limit 1;
+
+    select count(*)::integer,
+           case when bool_and(line_total is not null) then round(sum(line_total),2) else null end,
+           coalesce(bool_and(unit_price is not null),false),
+           coalesce(jsonb_agg(jsonb_build_object(
+               'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
+               'contract',contract,'unit_price',unit_price,'subtotal',line_total,
+               'matched',unit_price is not null,'price_source',price_source
+           ) order by tooth_number),'[]'::jsonb)
+      into v_count,v_list,v_matched_all,v_lines
+    from public.lab_work_order_items
+    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
+
+    v_final := case when v_list is null then null
+        else round(v_list*(1-(case when v_role='doctor' then 0 else v_order.discount end)/100),2) end;
 
     update public.lab_work_orders
     set tip_lucrare=v_first_type,nr_elemente=v_count,contract=coalesce(v_first_contract,'General'),
         discount=case when v_role='doctor' then 0 else discount end,
+        snapshot_unit_price=case when v_list is null or v_count=0 then null else round(v_list/v_count,2) end,
+        snapshot_list_price=v_list,snapshot_final_price=v_final,
+        price_source='item_snapshots',price_fixed_at=now(),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
 
@@ -111,11 +160,12 @@ begin
     set tip_lucrare=v_first_type,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
 
-    v_result := public.estimate_work_order_items(
-        p_lab_organization_id,v_order.nume_partener,p_requested_contract,p_items,
-        case when v_role='doctor' then 0 else v_order.discount end
+    return jsonb_build_object(
+        'lines',v_lines,'element_count',v_count,'list_price',v_list,
+        'discount',case when v_role='doctor' then 0 else v_order.discount end,
+        'final_price',v_final,'matched_all',v_matched_all,
+        'partner_name',v_order.nume_partener
     );
-    return v_result;
 end;
 $$;
 

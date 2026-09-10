@@ -52,6 +52,10 @@ begin
         nume_pacient = trim(p_nume_pacient),
         tip_lucrare = trim(p_tip_lucrare),
         nr_elemente = p_nr_elemente,
+        snapshot_list_price = case when snapshot_unit_price is null then null
+            else round(snapshot_unit_price * p_nr_elemente, 2) end,
+        snapshot_final_price = case when snapshot_unit_price is null then null
+            else round(snapshot_unit_price * p_nr_elemente * (1 - coalesce(discount,0) / 100), 2) end,
         updated_by_user_id = public.current_legacy_user_id(),
         updated_at = now()
     where lab_organization_id = p_lab_organization_id

@@ -21,6 +21,20 @@ begin
         raise exception 'Delete Work Order files first';
     end if;
 
+    if exists (
+        select 1 from public.lab_work_order_stage_assignments a
+        where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
+    ) or exists (
+        select 1 from public.work_order_financial_audit a
+        where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
+    ) then
+        update public.lab_work_orders
+        set archived_at=now(),updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
+        where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
+        if not found then raise exception 'Work Order not found'; end if;
+        return true;
+    end if;
+
     delete from public.lab_patient_cases
     where lab_organization_id = p_lab_organization_id
       and work_order_id = p_work_order_id;

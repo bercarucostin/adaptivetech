@@ -15,6 +15,7 @@ declare
     v_model text := null;
     v_modelare text := null;
     v_cer_fin text := null;
+    v_price jsonb;
 begin
     if not public.is_lab_technician(p_lab_organization_id) then
         raise exception 'Technician access denied';
@@ -62,6 +63,10 @@ begin
     end if;
 
     v_id := public.next_lab_work_order_id(p_lab_organization_id);
+    v_price := public.resolve_work_order_price_snapshot(
+        p_lab_organization_id, trim(p_nume_partener), 'General', trim(p_tip_lucrare),
+        p_nr_elemente, 0
+    );
 
     insert into public.lab_work_orders (
         lab_organization_id,
@@ -88,7 +93,13 @@ begin
         nr_elemente,
         discount,
         data_receptie,
-        locked
+        locked,
+        snapshot_unit_price,
+        snapshot_list_price,
+        snapshot_final_price,
+        price_source,
+        price_fixed_at,
+        price_migrated
     )
     values (
         p_lab_organization_id,
@@ -121,7 +132,20 @@ begin
         0,
 
         p_data_receptie,
+        false,
+        (v_price->>'unit_price')::numeric,
+        (v_price->>'list_price')::numeric,
+        (v_price->>'final_price')::numeric,
+        v_price->>'price_source',
+        now(),
         false
+    );
+
+    perform public.sync_work_order_stage_assignment(
+        p_lab_organization_id, v_id,
+        case when v_model is not null then 'model'
+             when v_modelare is not null then 'modelare' else 'cer_fin' end,
+        v_tech
     );
 
     return v_id;

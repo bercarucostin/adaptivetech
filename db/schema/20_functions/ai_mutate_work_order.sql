@@ -61,15 +61,28 @@ begin
                     then coalesce(nullif(v_fields->>'Status_Modelare',''),'Not Started') else status_modelare end,
                 status_cer_fin = case when v_fields ? 'Status_Cer_Fin'
                     then coalesce(nullif(v_fields->>'Status_Cer_Fin',''),'Not Started') else status_cer_fin end,
-                paid_model = case when v_fields ? 'Paid_Model'
-                    then coalesce(nullif(v_fields->>'Paid_Model',''),'Not Paid') else paid_model end,
-                paid_modelare = case when v_fields ? 'Paid_Modelare'
-                    then coalesce(nullif(v_fields->>'Paid_Modelare',''),'Not Paid') else paid_modelare end,
-                paid_cer_fin = case when v_fields ? 'Paid_Cer_Fin'
-                    then coalesce(nullif(v_fields->>'Paid_Cer_Fin',''),'Not Paid') else paid_cer_fin end,
                 updated_by_user_id = public.current_legacy_user_id(),
                 updated_at = now()
             where lab_organization_id = v_lab and id = v_created;
+
+            if v_fields ? 'Tehnician_Model' then
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'model',v_fields->>'Tehnician_Model');
+            end if;
+            if v_fields ? 'Tehnician1_Modelare' then
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'modelare',v_fields->>'Tehnician1_Modelare');
+            end if;
+            if v_fields ? 'Tehnician2_Cer_Fin' then
+                perform public.sync_work_order_stage_assignment(v_lab,v_created,'cer_fin',v_fields->>'Tehnician2_Cer_Fin');
+            end if;
+            if v_fields ? 'Paid_Model' then
+                perform public.set_stage_payment_status(v_lab,v_created,'model',v_fields->>'Paid_Model');
+            end if;
+            if v_fields ? 'Paid_Modelare' then
+                perform public.set_stage_payment_status(v_lab,v_created,'modelare',v_fields->>'Paid_Modelare');
+            end if;
+            if v_fields ? 'Paid_Cer_Fin' then
+                perform public.set_stage_payment_status(v_lab,v_created,'cer_fin',v_fields->>'Paid_Cer_Fin');
+            end if;
 
         else
             v_created := public.create_technician_work_order(
@@ -212,12 +225,6 @@ begin
                         then coalesce(nullif(v_fields->>'Status_Modelare',''),status_modelare) else status_modelare end,
                     status_cer_fin = case when v_fields ? 'Status_Cer_Fin'
                         then coalesce(nullif(v_fields->>'Status_Cer_Fin',''),status_cer_fin) else status_cer_fin end,
-                    paid_model = case when v_fields ? 'Paid_Model'
-                        then coalesce(nullif(v_fields->>'Paid_Model',''),paid_model) else paid_model end,
-                    paid_modelare = case when v_fields ? 'Paid_Modelare'
-                        then coalesce(nullif(v_fields->>'Paid_Modelare',''),paid_modelare) else paid_modelare end,
-                    paid_cer_fin = case when v_fields ? 'Paid_Cer_Fin'
-                        then coalesce(nullif(v_fields->>'Paid_Cer_Fin',''),paid_cer_fin) else paid_cer_fin end,
                     discount = case when v_fields ? 'Discount'
                         then (v_fields->>'Discount')::numeric else discount end,
                     locked = case when v_fields ? 'Locked'
@@ -241,6 +248,34 @@ begin
                   and pc.work_order_id = v_id
                   and wo.lab_organization_id = v_lab
                   and wo.id = v_id;
+
+                if v_fields ? 'Tehnician_Model' then
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'model',v_fields->>'Tehnician_Model');
+                end if;
+                if v_fields ? 'Tehnician1_Modelare' then
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'modelare',v_fields->>'Tehnician1_Modelare');
+                end if;
+                if v_fields ? 'Tehnician2_Cer_Fin' then
+                    perform public.sync_work_order_stage_assignment(v_lab,v_id,'cer_fin',v_fields->>'Tehnician2_Cer_Fin');
+                end if;
+                if v_fields ? 'Paid_Model' then
+                    perform public.set_stage_payment_status(v_lab,v_id,'model',v_fields->>'Paid_Model');
+                end if;
+                if v_fields ? 'Paid_Modelare' then
+                    perform public.set_stage_payment_status(v_lab,v_id,'modelare',v_fields->>'Paid_Modelare');
+                end if;
+                if v_fields ? 'Paid_Cer_Fin' then
+                    perform public.set_stage_payment_status(v_lab,v_id,'cer_fin',v_fields->>'Paid_Cer_Fin');
+                end if;
+
+                if v_fields ? 'Nr_Elemente' or v_fields ? 'Discount' then
+                    update public.lab_work_orders wo
+                    set snapshot_list_price = case when wo.snapshot_unit_price is null then null
+                            else round(wo.snapshot_unit_price * wo.nr_elemente,2) end,
+                        snapshot_final_price = case when wo.snapshot_unit_price is null then null
+                            else round(wo.snapshot_unit_price * wo.nr_elemente * (1-wo.discount/100),2) end
+                    where wo.lab_organization_id=v_lab and wo.id=v_id;
+                end if;
 
             else
                 v_stage_updated := false;

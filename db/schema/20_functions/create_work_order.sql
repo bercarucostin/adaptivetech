@@ -15,6 +15,7 @@ declare
     v_contract text;
     v_discount numeric;
     v_id bigint;
+    v_price jsonb;
 begin
     if v_role not in ('admin','manager','doctor') then
         raise exception 'Create Work Order denied';
@@ -72,6 +73,10 @@ begin
     end if;
 
     v_id := public.next_lab_work_order_id(p_lab_organization_id);
+    v_price := public.resolve_work_order_price_snapshot(
+        p_lab_organization_id, v_partner, v_contract, trim(p_tip_lucrare),
+        p_nr_elemente, v_discount
+    );
 
     insert into public.lab_work_orders (
         lab_organization_id,
@@ -95,7 +100,13 @@ begin
         nr_elemente,
         discount,
         data_receptie,
-        locked
+        locked,
+        snapshot_unit_price,
+        snapshot_list_price,
+        snapshot_final_price,
+        price_source,
+        price_fixed_at,
+        price_migrated
     )
     values (
         p_lab_organization_id,
@@ -119,6 +130,12 @@ begin
         p_nr_elemente,
         v_discount,
         p_data_receptie,
+        false,
+        (v_price->>'unit_price')::numeric,
+        (v_price->>'list_price')::numeric,
+        (v_price->>'final_price')::numeric,
+        v_price->>'price_source',
+        now(),
         false
     );
 

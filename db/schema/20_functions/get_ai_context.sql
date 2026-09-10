@@ -96,24 +96,15 @@ begin
                     'Paid_Cer_Fin', wo.paid_cer_fin,
                     'Discount', wo.discount,
                     'Locked', wo.locked,
-                    'Pret_Element', pr.pret,
-                    'Total_Pret_Lista',
-                        coalesce(pr.pret,0) * coalesce(wo.nr_elemente,0),
-                    'Total_dupa_Discount',
-                        coalesce(pr.pret,0) * coalesce(wo.nr_elemente,0)
-                        * (1 - coalesce(wo.discount,0)/100.0)
+                    'Pret_Element', wo.snapshot_unit_price,
+                    'Total_Pret_Lista', wo.snapshot_list_price,
+                    'Total_dupa_Discount', wo.snapshot_final_price,
+                    'Price_Source', wo.price_source,
+                    'Price_Migrated', wo.price_migrated
                 ) as obj
             from public.lab_work_orders wo
-            left join lateral (
-                select cp.pret
-                from public.lab_contract_work_prices cp
-                where cp.lab_organization_id = wo.lab_organization_id
-                  and cp.contract = wo.contract
-                  and cp.tip_lucrare = wo.tip_lucrare
-                order by cp.id
-                limit 1
-            ) pr on true
             where wo.lab_organization_id = v_lab
+              and wo.archived_at is null
             order by wo.id desc
             limit 500
         ) x;

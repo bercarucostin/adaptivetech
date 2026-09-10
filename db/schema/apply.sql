@@ -61,6 +61,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/ai_technician_work_orders.sql
 \i db/schema/20_functions/ai_technician_work_types.sql
 \i db/schema/20_functions/append_my_chat_message.sql
+\i db/schema/20_functions/backfill_work_order_financial_history.sql
 \i db/schema/20_functions/can_access_work_order.sql
 \i db/schema/20_functions/chat_can_message.sql
 \i db/schema/20_functions/chat_can_message_as.sql
@@ -100,6 +101,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/get_my_work_orders.sql
 \i db/schema/20_functions/get_my_work_orders_v188.sql
 \i db/schema/20_functions/get_patient_case.sql
+\i db/schema/20_functions/get_work_order_financial_history.sql
 \i db/schema/20_functions/get_work_order_reference_data.sql
 \i db/schema/20_functions/has_org_role.sql
 \i db/schema/20_functions/has_role_permission.sql
@@ -111,13 +113,18 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/is_org_member.sql
 \i db/schema/20_functions/next_lab_work_order_id.sql
 \i db/schema/20_functions/organization_is_type.sql
+\i db/schema/20_functions/record_technician_payment.sql
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
+\i db/schema/20_functions/resolve_work_order_price_snapshot.sql
+\i db/schema/20_functions/reverse_technician_payment.sql
 \i db/schema/20_functions/save_my_work_order_case.sql
 \i db/schema/20_functions/set_stage_payment_status.sql
 \i db/schema/20_functions/set_updated_at.sql
 \i db/schema/20_functions/set_work_order_lock.sql
+\i db/schema/20_functions/set_work_order_price_snapshot.sql
 \i db/schema/20_functions/set_work_order_status.sql
+\i db/schema/20_functions/sync_work_order_stage_assignment.sql
 \i db/schema/20_functions/update_doctor_work_order.sql
 \i db/schema/20_functions/update_management_work_order.sql
 \i db/schema/20_functions/update_material_quantity.sql

@@ -103,5 +103,6 @@ revoke update on public.profiles from authenticated;
 -- Financial history is append-only from the browser. SECURITY DEFINER RPCs
 -- own every write so callers cannot rewrite payments or their audit trail.
 revoke insert, update, delete on table public.lab_work_order_stage_assignments from authenticated;
+revoke insert, update, delete on table public.lab_work_order_assignment_cost_lines from authenticated;
 revoke insert, update, delete on table public.technician_payments from authenticated;
 revoke insert, update, delete on table public.work_order_financial_audit from authenticated;

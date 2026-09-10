@@ -53,25 +53,16 @@ begin
         case when v_is_management then wo.updated_by_user_id else null end,
         wo.updated_at,
 
-        case when v_is_management or v_is_doctor then pr.pret else null end,
+        case when v_is_management or v_is_doctor then wo.snapshot_unit_price else null end,
         case when v_is_management or v_is_doctor
-             then coalesce(pr.pret,0) * coalesce(wo.nr_elemente,0)
+             then wo.snapshot_list_price
              else null end,
         case when v_is_management or v_is_doctor
-             then coalesce(pr.pret,0) * coalesce(wo.nr_elemente,0)
-                  * (1 - coalesce(wo.discount,0) / 100.0)
+             then wo.snapshot_final_price
              else null end
     from public.lab_work_orders wo
-    left join lateral (
-        select cp.pret
-        from public.lab_contract_work_prices cp
-        where cp.lab_organization_id = wo.lab_organization_id
-          and cp.contract = wo.contract
-          and cp.tip_lucrare = wo.tip_lucrare
-        order by cp.id
-        limit 1
-    ) pr on true
     where wo.lab_organization_id = p_lab_organization_id
+      and wo.archived_at is null
       and (
           v_is_management
           or v_is_dashboard
