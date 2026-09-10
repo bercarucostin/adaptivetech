@@ -13,10 +13,10 @@ const $=id=>document.getElementById(id);
 const loginScreen=$("loginScreen"),appShell=$("appShell"),loginForm=$("loginForm"),loginUser=$("loginUser"),loginPassword=$("loginPassword"),loginBtn=$("loginBtn"),loginError=$("loginError");
 const pageTitle=$("pageTitle"),pageSubtitle=$("pageSubtitle"),content=$("content"),connectionBadge=$("connectionBadge"),loadOlderBtn=$("loadOlderBtn"),toggleOldBtn=$("toggleOldBtn"),refreshBtn=$("refreshBtn"),newOrderBtn=$("newOrderBtn"),exportBtn=$("exportBtn"),lastRefresh=$("lastRefresh"),datasetScope=$("datasetScope"),logoutBtn=$("logoutBtn");
 const userName=$("userName"),userRole=$("userRole"),userAvatar=$("userAvatar"),aiMode=$("aiMode");
-const modalBackdrop=$("modalBackdrop"),modalTitle=$("modalTitle"),modalSubtitle=$("modalSubtitle"),closeModalBtn=$("closeModalBtn"),cancelModalBtn=$("cancelModalBtn"),orderForm=$("orderForm"),orderId=$("orderId"),dueDate=$("dueDate"),receptionDate=$("receptionDate"),status=$("status"),patient=$("patient"),patientSuggestions=$("patientSuggestions"),partner=$("partner"),partnerSuggestions=$("partnerSuggestions"),contract=$("contract"),workType=$("workType"),elements=$("elements"),discount=$("discount"),myStage=$("myStage");
+const modalBackdrop=$("modalBackdrop"),modalTitle=$("modalTitle"),modalSubtitle=$("modalSubtitle"),closeModalBtn=$("closeModalBtn"),cancelModalBtn=$("cancelModalBtn"),orderForm=$("orderForm"),orderId=$("orderId"),dueDate=$("dueDate"),receptionDate=$("receptionDate"),status=$("status"),patient=$("patient"),patientSuggestions=$("patientSuggestions"),partner=$("partner"),partnerSuggestions=$("partnerSuggestions"),contract=$("contract"),discount=$("discount"),myStage=$("myStage");
 const modelTech=$("modelTech"),statusModel=$("statusModel"),paidModel=$("paidModel"),modelingTech=$("modelingTech"),statusModeling=$("statusModeling"),paidModeling=$("paidModeling"),ceramicTech=$("ceramicTech"),statusCerFin=$("statusCerFin"),paidCerFin=$("paidCerFin"),unitPrice=$("unitPrice"),listPrice=$("listPrice"),finalPrice=$("finalPrice"),priceHint=$("priceHint"),saveOrderBtn=$("saveOrderBtn");
 const modelNotApplicable=$("modelNotApplicable"),modelingNotApplicable=$("modelingNotApplicable"),ceramicNotApplicable=$("ceramicNotApplicable");
-const orderToothChart=$("orderToothChart"),orderToothStage=$("orderToothStage"),orderWorkTypeLegend=$("orderWorkTypeLegend"),orderToothPopover=$("orderToothPopover"),orderToothPopoverTitle=$("orderToothPopoverTitle"),orderToothPopoverMeta=$("orderToothPopoverMeta"),orderToothPreview=$("orderToothPreview"),orderToothTypeBadge=$("orderToothTypeBadge"),orderToothEmpty=$("orderToothEmpty"),orderToothForm=$("orderToothForm"),orderToothType=$("orderToothType"),orderToothTypeSuggestions=$("orderToothTypeSuggestions"),orderToothMaterial=$("orderToothMaterial"),orderToothMaterialSuggestions=$("orderToothMaterialSuggestions"),orderToothShade=$("orderToothShade"),orderToothMethod=$("orderToothMethod"),orderToothNote=$("orderToothNote"),orderToothPopoverClose=$("orderToothPopoverClose"),orderToothCancelBtn=$("orderToothCancelBtn"),orderToothSaveBtn=$("orderToothSaveBtn"),orderToothRemoveBtn=$("orderToothRemoveBtn"),orderTeethSelected=$("orderTeethSelected"),orderSyncElements=$("orderSyncElements"),orderMaterial=$("orderMaterial"),orderShade=$("orderShade"),orderMethod=$("orderMethod"),orderClinicNote=$("orderClinicNote"),orderProductionNotes=$("orderProductionNotes"),orderToothDetailsBody=$("orderToothDetailsBody"),orderToothMismatch=$("orderToothMismatch"),orderSelectAnteriorBtn=$("orderSelectAnteriorBtn"),orderClearTeethBtn=$("orderClearTeethBtn"),orderCasePdfBtn=$("orderCasePdfBtn");
+const orderToothChart=$("orderToothChart"),orderToothStage=$("orderToothStage"),orderWorkTypeLegend=$("orderWorkTypeLegend"),orderToothPopover=$("orderToothPopover"),orderToothPopoverTitle=$("orderToothPopoverTitle"),orderToothPopoverMeta=$("orderToothPopoverMeta"),orderToothPreview=$("orderToothPreview"),orderToothTypeBadge=$("orderToothTypeBadge"),orderToothEmpty=$("orderToothEmpty"),orderToothForm=$("orderToothForm"),orderToothType=$("orderToothType"),orderToothTypeSuggestions=$("orderToothTypeSuggestions"),orderToothShade=$("orderToothShade"),orderToothMethod=$("orderToothMethod"),orderToothNote=$("orderToothNote"),orderToothPopoverClose=$("orderToothPopoverClose"),orderToothCancelBtn=$("orderToothCancelBtn"),orderToothSaveBtn=$("orderToothSaveBtn"),orderToothRemoveBtn=$("orderToothRemoveBtn"),orderTeethSelected=$("orderTeethSelected"),orderShade=$("orderShade"),orderMethod=$("orderMethod"),orderClinicNote=$("orderClinicNote"),orderProductionNotes=$("orderProductionNotes"),orderToothDetailsBody=$("orderToothDetailsBody"),orderSelectAnteriorBtn=$("orderSelectAnteriorBtn"),orderClearTeethBtn=$("orderClearTeethBtn"),orderCasePdfBtn=$("orderCasePdfBtn");
 const orderApplySameShade=$("orderApplySameShade"),orderSameShadeWrap=$("orderSameShadeWrap");
 const chatMessages=$("chatMessages"),chatForm=$("chatForm"),chatInput=$("chatInput"),sendBtn=$("sendBtn"),photoInput=$("photoInput"),voiceBtn=$("voiceBtn"),voiceState=$("voiceState"),newChatBtn=$("newChatBtn");
 const mobileMenuBtn=$("mobileMenuBtn"),mobileSidebarCloseBtn=$("mobileSidebarCloseBtn"),mobileAiBtn=$("mobileAiBtn"),mobileAiCloseBtn=$("mobileAiCloseBtn"),mobileBackdrop=$("mobileBackdrop");
@@ -660,7 +660,7 @@ function applyRoleUI(){
     partnershipNavLabel.textContent=isDoctor()?"Laboratoare":"Clinici & colaborări";
   }
 
-  newOrderBtn.classList.toggle("hidden",!can("Can_Create_Work_Orders"));
+  newOrderBtn.classList.toggle("hidden",!(can("Can_Create_Work_Orders")||isTechnician()));
 
   // Doctor uses the clinic-facing subset: Work Orders, Production and Clinic↔Lab partnerships.
   appShell.classList.toggle("doctor-role-mode",isDoctor());
@@ -727,11 +727,11 @@ logoutBtn.addEventListener("click",async()=>{
 function serverOrder(r){
   return {
     id:num(r.ID),deadline:r.Deadline??"",receptionDate:r.Data_Receptie??"",status:r.Status??"Not Started",patient:r.Nume_Pacient??"",partner:r.Nume_Partener??"",
-    contract:r.Contract??"",workType:r.Tip_Lucrare??"",elements:num(r.Nr_Elemente),
+    contract:r.Contract??"",items:Array.isArray(r.Items)?r.Items:[],workTypes:Array.isArray(r.Work_Types)?r.Work_Types:[],workType:r.Work_Type_Summary??"",elements:num(r.Element_Count),
     modelTech:r.Tehnician_Model??"",modelingTech:r.Tehnician1_Modelare??"",ceramicTech:r.Tehnician2_Cer_Fin??"",
     statusModel:r.Status_Model??"Not Started",statusModeling:r.Status_Modelare??"Not Started",statusCerFin:r.Status_Cer_Fin??"Not Started",
     paidModel:r.Paid_Model??"Not Paid",paidModeling:r.Paid_Modelare??"Not Paid",paidCerFin:r.Paid_Cer_Fin??"Not Paid",
-    discount:num(r.Discount),unitPrice:num(r.Pret_Element),listPrice:num(r.Total_Pret_Lista),finalPrice:num(r.Total_dupa_Discount),
+    discount:num(r.Discount),unitPrice:0,listPrice:num(r.Total_Pret_Lista),finalPrice:num(r.Total_dupa_Discount),
     costModel:num(r.Cost_Model),costModeling:num(r.Cost_Modelare),costCerFin:num(r.Cost_Cer_Fin),totalTechCost:num(r.Cost_Total_Tehnicieni),
     myStages:Array.isArray(r.My_Stages)?r.My_Stages:[],ownCost:num(r.Own_Technician_Cost),
     clinicNote:String(r.Clinic_Note??""),locked:boolish(r.Locked)
@@ -873,7 +873,6 @@ function renderTechnicianAssignmentSummary(o=null){
 function populateFormOptions(o={}){
   status.innerHTML=orderStatusOptions(o);
   contract.innerHTML=optionHtml(contracts,o.contract||"",false);
-  workType.innerHTML=optionHtml(workTypes,o.workType||"",false);
   modelTech.innerHTML=optionHtml(technicians,o.modelTech||"",true);
   modelingTech.innerHTML=optionHtml(technicians,o.modelingTech||"",true);
   ceramicTech.innerHTML=optionHtml(technicians,o.ceramicTech||"",true);
@@ -927,15 +926,6 @@ function syncStageApplicabilityControls(){
   });
   syncOrderStatusChoices();
 }
-function liveUnitPrice(c,w){const r=priceRules.find(x=>normalize(x.Contract)===normalize(c)&&normalize(x.Tip_Lucrare)===normalize(w));return r?num(r.Pret):0;}
-function doctorEffectivePriceRule(partnerName,workTypeName){
-  const workKey=normalize(workTypeName);
-  if(!workKey)return null;
-  const candidates=priceRules.filter(rule=>normalize(rule.Tip_Lucrare)===workKey);
-  return candidates.find(rule=>normalize(rule.Contract)===normalize(partnerName))
-    || candidates.find(rule=>normalize(rule.Contract)==="general")
-    || null;
-}
 function setFormContractValue(value){
   const next=String(value||"General").trim()||"General";
   const existingOption=contract
@@ -948,14 +938,6 @@ function setFormContractValue(value){
     contract.appendChild(option);
   }
   if(contract)contract.value=existingOption?.value||next;
-}
-function recalcFormPrice(){
-  if(isTechnician())return;
-  const unit=liveUnitPrice(contract.value,workType.value),list=unit*num(elements.value),final=list*(1-Math.max(0,Math.min(100,num(discount.value)))/100);
-  unitPrice.value=unit;listPrice.value=list;finalPrice.value=final;
-  if(contract.value&&workType.value&&!unit){priceHint.textContent="Nu există mapare exactă Contract + Tip lucrare. Preț = 0.";priceHint.classList.add("error-text");}
-  else if(unit){priceHint.textContent=`Preț identificat: ${money(unit)} / element`;priceHint.classList.remove("error-text");}
-  else{priceHint.textContent="";priceHint.classList.remove("error-text");}
 }
 
 function sortComparable(value,type="text"){
@@ -1151,7 +1133,7 @@ function rangeFilterCell(key){
 
 function updateTopActionsForView(){
   const orderView=["workorders","production","patients"].includes(currentView);
-  newOrderBtn?.classList.toggle("hidden",!orderView||!can("Can_Create_Work_Orders"));
+  newOrderBtn?.classList.toggle("hidden",!orderView||!(can("Can_Create_Work_Orders")||isTechnician()));
   const usesOrders=["workorders","production","partners","patients","technicians"].includes(currentView);
   loadOlderBtn?.classList.toggle("hidden",!usesOrders);
   toggleOldBtn?.classList.toggle("hidden",!usesOrders);
@@ -2735,11 +2717,6 @@ const RESTORATION_SUGGESTIONS=[
   "Provizoriu","Full arch unit","Structură","Altul"
 ];
 
-const MATERIAL_SUGGESTIONS=[
-  "Zirconia","Metalo-ceramică","Lithium Disilicate / e.max","PMMA",
-  "Compozit","CoCr","Titanium","PEEK","Altul"
-];
-
 const METHOD_SUGGESTIONS=[
   "Full contour","Layered","Cutback","Monolithic","Framework only",
   "Diagnostic / Wax-up","Altul"
@@ -2756,26 +2733,34 @@ async function fetchPatientCase(workOrderId){
 }
 
 function draftFromServerCase(order,serverCase){
-  if(!serverCase)return defaultCaseDraft(order);
-
-  const snapshot=serverCase.case_snapshot&&typeof serverCase.case_snapshot==="object"
+  const snapshot=serverCase?.case_snapshot&&typeof serverCase.case_snapshot==="object"
     ? serverCase.case_snapshot
     : {};
-
-  return {
-    selected:Array.isArray(serverCase.selected_teeth)
+  const canonicalItems=Array.isArray(order?.items)?order.items:[];
+  const canonicalTeeth=canonicalItems.map(item=>Number(item?.tooth_number)).filter(Number.isFinite);
+  const selected=canonicalTeeth.length
+    ? orderedSelectedTeeth(canonicalTeeth)
+    : Array.isArray(serverCase?.selected_teeth)
       ? serverCase.selected_teeth.map(Number).filter(Number.isFinite)
       : Array.isArray(snapshot.selected_teeth)
         ? snapshot.selected_teeth.map(Number).filter(Number.isFinite)
-        : [],
-    material:String(serverCase.material??snapshot.material??""),
-    shade:String(serverCase.shade??snapshot.shade??""),
-    method:String(serverCase.method??snapshot.method??""),
-    notes:String(serverCase.production_notes??snapshot.production_notes??""),
-    doctorNotes:String(serverCase.clinic_note??snapshot.clinic_note??""),
-    perTooth:serverCase.tooth_details&&typeof serverCase.tooth_details==="object"
-      ? serverCase.tooth_details
-      : {},
+        : [];
+  const perTooth=serverCase?.tooth_details&&typeof serverCase.tooth_details==="object"
+    ? {...serverCase.tooth_details}
+    : {};
+  canonicalItems.forEach(item=>{
+    const tooth=Number(item?.tooth_number);
+    if(!Number.isFinite(tooth))return;
+    perTooth[tooth]={...perTooth[tooth],type:String(item?.work_type??perTooth[tooth]?.type??"").trim()};
+  });
+
+  return {
+    selected,
+    shade:String(serverCase?.shade??snapshot.shade??""),
+    method:String(serverCase?.method??snapshot.method??""),
+    notes:String(serverCase?.production_notes??snapshot.production_notes??""),
+    doctorNotes:String(serverCase?.clinic_note??snapshot.clinic_note??""),
+    perTooth,
     createdForUser:String(auth?.user?.User_ID||""),
     orderId:order.id
   };
@@ -2785,7 +2770,6 @@ function caseDraftPayload(draft){
   return {
     selected_teeth:orderedSelectedTeeth(draft?.selected??[]),
     tooth_details:draft?.perTooth??{},
-    material:String(draft?.material??""),
     shade:String(draft?.shade??""),
     method:String(draft?.method??""),
     clinic_note:String(draft?.doctorNotes??""),
@@ -2797,7 +2781,6 @@ function hasMeaningfulCaseData(draft){
   if(!draft)return false;
   return Boolean(
     (draft.selected?.length) ||
-    String(draft.material??"").trim() ||
     String(draft.shade??"").trim() ||
     String(draft.notes??"").trim() ||
     String(draft.doctorNotes??"").trim() ||
@@ -2818,7 +2801,6 @@ async function persistPatientCase(workOrderId,draft){
 function defaultCaseDraft(order){
   return {
     selected:[],
-    material:"",
     shade:"",
     method:"",
     notes:"",
@@ -3342,14 +3324,12 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
 function selectedToothRowHtml(tooth,draft,order){
   const td=draft.perTooth[tooth]||{};
   const typeValue=td.type ?? order.workType ?? "";
-  const materialValue=td.material ?? draft.material ?? "";
   const shadeValue=td.shade ?? draft.shade ?? "";
 
   return `<tr data-tooth-row="${tooth}">
     <td><strong>${tooth}</strong></td>
     <td>${FDI_TO_US[tooth]??"—"}</td>
     <td><input class="case-tooth-input" data-tooth-field="type" data-tooth="${tooth}" list="caseRestorationList" value="${escapeHtml(typeValue)}" placeholder="Crown / Pontic..."></td>
-    <td><input class="case-tooth-input" data-tooth-field="material" data-tooth="${tooth}" list="caseMaterialList" value="${escapeHtml(materialValue)}" placeholder="Material"></td>
     <td><input class="case-tooth-input" data-tooth-field="shade" data-tooth="${tooth}" value="${escapeHtml(shadeValue)}" placeholder="A1 / A2..."></td>
   </tr>`;
 }
@@ -3359,13 +3339,11 @@ function syncCaseSheetDraftFromInputs(){
   const draft=caseSheetDrafts[activeCaseSheetOrderId];
   if(!draft)return;
 
-  const material=$("caseMaterial");
   const shade=$("caseShade");
   const method=$("caseMethod");
   const notes=$("caseNotes");
   const doctorNotes=$("caseDoctorNotes");
 
-  if(material)draft.material=material.value;
   if(shade)draft.shade=shade.value;
   if(method)draft.method=method.value;
   if(notes)draft.notes=notes.value;
@@ -3392,8 +3370,7 @@ function bindCaseSheetEditor(order,draft){
       }else{
         set.add(tooth);
         draft.perTooth[tooth]??={
-          type:order.workType||"",
-          material:draft.material||"",
+          type:"",
           shade:draft.shade||""
         };
       }
@@ -3410,7 +3387,7 @@ function bindCaseSheetEditor(order,draft){
     });
   });
 
-  ["caseMaterial","caseShade","caseMethod","caseNotes","caseDoctorNotes"].forEach(id=>{
+  ["caseShade","caseMethod","caseNotes","caseDoctorNotes"].forEach(id=>{
     $(id)?.addEventListener("input",syncCaseSheetDraftFromInputs);
   });
 
@@ -3431,8 +3408,7 @@ function bindCaseSheetEditor(order,draft){
     draft.selected=orderedSelectedTeeth(anterior);
     for(const t of draft.selected){
       draft.perTooth[t]??={
-        type:order.workType||"",
-        material:draft.material||"",
+        type:"",
         shade:draft.shade||""
       };
     }
@@ -3442,8 +3418,6 @@ function bindCaseSheetEditor(order,draft){
 
 function renderCaseSheetEditor(order,draft){
   const selected=orderedSelectedTeeth(draft.selected);
-  const mismatch=order.elements>0 && selected.length!==order.elements;
-
   caseSheetTitle.textContent=`Case sheet · #${order.id}`;
   caseSheetSubtitle.textContent=`${order.patient||"Pacient"} · ${order.partner||"Partener"}`;
 
@@ -3474,11 +3448,10 @@ function renderCaseSheetEditor(order,draft){
           ${dentalChartSvg(selected,true)}
         </div>
 
-        <div class="case-selected-line ${mismatch?"warning":""}">
+        <div class="case-selected-line">
           <strong>${selected.length}</strong> selected
           <span>·</span>
-          <span>Work order elements: ${order.elements||0}</span>
-          ${mismatch?`<span class="case-warning-text">Selected teeth ≠ Nr Elemente</span>`:""}
+          <span>Elemente derivate: ${order.elements||0}</span>
         </div>
       </section>
 
@@ -3491,9 +3464,6 @@ function renderCaseSheetEditor(order,draft){
         </div>
 
         <div class="case-prescription-grid">
-          <label>Material
-            <input id="caseMaterial" list="caseMaterialList" value="${escapeHtml(draft.material)}" placeholder="Zirconia, Metal-Ceramic...">
-          </label>
           <label>Shade
             <input id="caseShade" value="${escapeHtml(draft.shade)}" placeholder="A1, A2, BL2...">
           </label>
@@ -3511,7 +3481,6 @@ function renderCaseSheetEditor(order,draft){
         </div>
 
         <datalist id="caseRestorationList">${RESTORATION_SUGGESTIONS.map(x=>`<option value="${escapeHtml(x)}"></option>`).join("")}</datalist>
-        <datalist id="caseMaterialList">${MATERIAL_SUGGESTIONS.map(x=>`<option value="${escapeHtml(x)}"></option>`).join("")}</datalist>
       </section>
     </div>
 
@@ -3519,28 +3488,26 @@ function renderCaseSheetEditor(order,draft){
       <div class="case-card-head">
         <div>
           <h3>Selected tooth details</h3>
-          <p>Each tooth can have its own restoration type, material and shade.</p>
+            <p>Each tooth has its own restoration type and shade.</p>
         </div>
       </div>
 
       <div class="table-wrap case-selected-table">
         <table>
           <thead>
-            <tr><th>FDI</th><th>US</th><th>Type</th><th>Material</th><th>Shade</th></tr>
+            <tr><th>FDI</th><th>US</th><th>Type</th><th>Shade</th></tr>
           </thead>
           <tbody>
             ${selected.length
               ? selected.map(t=>selectedToothRowHtml(t,draft,order)).join("")
-              : '<tr><td colspan="5" class="empty-case-row">Select at least one tooth from the chart above.</td></tr>'}
+              : '<tr><td colspan="4" class="empty-case-row">Select at least one tooth from the chart above.</td></tr>'}
           </tbody>
         </table>
       </div>
     </section>
   `;
 
-  caseSheetFooterHint.textContent=mismatch
-    ? `Check tooth count: ${selected.length} selected vs ${order.elements} elements in the work order.`
-    : "Datele cazului sunt păstrate în baza de date. Modificările se salvează înainte de Print/PDF.";
+  caseSheetFooterHint.textContent="Datele cazului sunt păstrate în baza de date. Modificările se salvează înainte de Print/PDF.";
 
   bindCaseSheetEditor(order,draft);
 }
@@ -3601,16 +3568,17 @@ async function saveActiveCaseSheet(showFeedback=true){
 
 function buildCaseReportFromOrderForm(){
   syncOrderCaseDraftFromInputs();
+  const scope=currentOrderScope();
 
   return {
     id:Number(orderId.value)>0?Number(orderId.value):"DRAFT",
     patient:String(patient.value||"").trim(),
     partner:String(partner.value||"").trim(),
-    workType:String(workType.value||"").trim(),
+    workType:scope.work_type_summary,
     deadline:String(dueDate.value||"").trim(),
     receptionDate:String(receptionDate.value||"").trim(),
     status:String(status.value||"Not Started"),
-    elements:Number(elements.value)||0,
+    elements:scope.element_count,
     modelTech:String(modelTech.value||""),
     modelingTech:String(modelingTech.value||""),
     ceramicTech:String(ceramicTech.value||"")
@@ -3689,7 +3657,6 @@ function renderPhysicalCaseSheet(order,draft){
 
   const generated=new Date().toLocaleString("ro-RO");
   const logoUrl=new URL("assets/flowrise-brand.jpg",window.location.href).href;
-  const mismatch=order.elements>0 && selected.length!==order.elements;
 
   const rows=selected.map(tooth=>{
     const td=draft.perTooth[tooth]||{};
@@ -3797,8 +3764,6 @@ function renderPhysicalCaseSheet(order,draft){
     <div><span>Dinți selectați</span><strong>${selected.join(", ")}</strong></div>
     <div><span>Nr. elemente</span><strong>${order.elements||0}</strong></div>
   </div>
-
-  ${mismatch?`<div class="warning"><strong>Atenție:</strong> ${selected.length} dinți selectați, dar lucrarea are ${order.elements} elemente.</div>`:""}
 
   <div class="section-title">Detalii elemente</div>
   <table>
@@ -5196,7 +5161,6 @@ function closeModal(){
 function newOrderCaseDraft(){
   return {
     selected:[],
-    material:"",
     shade:"",
     method:"",
     notes:"",
@@ -5210,7 +5174,6 @@ function newOrderCaseDraft(){
 function syncOrderCaseDraftFromInputs(){
   if(!orderCaseDraft)return;
 
-  orderCaseDraft.material=orderMaterial?.value??"";
   orderCaseDraft.shade=orderShade?.value??"";
   if(orderMethod)orderCaseDraft.method=orderMethod.value||"";
   orderCaseDraft.doctorNotes=orderClinicNote?.value??"";
@@ -5224,33 +5187,35 @@ function syncOrderCaseDraftFromInputs(){
   });
 }
 
+function deriveWorkOrderScope(selectedTeeth=[],{validate=true}={}){
+  const seen=new Set();
+  const items=(Array.isArray(selectedTeeth)?selectedTeeth:[]).map(entry=>({
+    tooth_number:Number(entry?.tooth_number??entry?.tooth),
+    work_type:String(entry?.work_type??entry?.workType??entry?.type??"").trim()
+  })).filter(item=>{
+    if(!Number.isInteger(item.tooth_number)||item.tooth_number<=0)return false;
+    if(seen.has(item.tooth_number))return false;
+    seen.add(item.tooth_number);
+    return true;
+  }).sort((a,b)=>a.tooth_number-b.tooth_number);
+  const missing=items.filter(item=>!item.work_type).map(item=>item.tooth_number);
+  if(validate&&!items.length)throw new Error("Selectează și configurează cel puțin un dinte.");
+  if(validate&&missing.length)throw new Error(`Selectează un tip de lucrare pentru dinții: ${missing.join(", ")}.`);
+  const work_types=[];
+  items.forEach(item=>{if(item.work_type&&!work_types.includes(item.work_type))work_types.push(item.work_type);});
+  return {items,work_types,work_type_summary:work_types.join(", "),element_count:items.length};
+}
+
 function workOrderToothItems(draft=orderCaseDraft){
-  return orderedSelectedTeeth(draft?.selected??[]).map(tooth=>({
+  const selected=orderedSelectedTeeth(draft?.selected??[]).map(tooth=>({
     tooth_number:Number(tooth),
     work_type:String(draft?.perTooth?.[tooth]?.type??"").trim()
   }));
+  return deriveWorkOrderScope(selected,{validate:false}).items;
 }
 
-function syncLegacyFieldsFromTeeth({validate=false}={}){
-  const items=workOrderToothItems();
-  const missing=items.filter(item=>!item.work_type).map(item=>item.tooth_number);
-  if(validate&&items.length===0)throw new Error("Selectează și configurează cel puțin un dinte.");
-  if(validate&&missing.length)throw new Error(`Selectează tipul lucrării pentru dinții: ${missing.join(", ")}.`);
-
-  if(elements)elements.value=String(items.length||1);
-  const primary=items.find(item=>item.work_type)?.work_type||"";
-  if(primary&&workType){
-    const option=[...workType.options].find(item=>normalize(item.value)===normalize(primary));
-    if(!option){
-      const created=document.createElement("option");
-      created.value=primary;
-      created.textContent=primary;
-      workType.appendChild(created);
-    }
-    workType.value=option?.value||primary;
-  }
-  if(orderMaterial)orderMaterial.value="";
-  return items;
+function currentOrderScope({validate=false}={}){
+  return deriveWorkOrderScope(workOrderToothItems(),{validate});
 }
 
 function renderOrderToothDetails(){
@@ -5268,12 +5233,11 @@ function renderOrderToothDetails(){
           <td><strong>${tooth}</strong></td>
           <td>${FDI_TO_US[tooth]??"—"}</td>
           <td><span class="work-type-swatch" style="--swatch:${color}"></span>${escapeHtml(typeValue)||"—"}</td>
-          <td>—</td>
-          <td>${escapeHtml(shadeValue)||"—"}</td>
+        <td>${escapeHtml(shadeValue)||"—"}</td>
           <td><button class="mini-btn tooth-row-edit-btn" type="button" data-edit-order-tooth="${tooth}">Edit</button></td>
         </tr>`;
       }).join("")
-    : '<tr><td colspan="6" class="empty-case-row">Click pe un dinte gri pentru a-l configura.</td></tr>';
+    : '<tr><td colspan="5" class="empty-case-row">Click pe un dinte gri pentru a-l configura.</td></tr>';
 
   document.querySelectorAll("[data-edit-order-tooth]").forEach(el=>{
     el.addEventListener("click",e=>{
@@ -5294,13 +5258,10 @@ function renderOrderToothDetails(){
   });
 }
 
-function updateOrderToothMismatch(){
-  if(!orderCaseDraft||!orderToothMismatch)return;
+function updateOrderToothDerivedScope(){
+  if(!orderCaseDraft)return;
   const count=orderedSelectedTeeth(orderCaseDraft.selected).length;
   orderTeethSelected.textContent=String(count);
-  syncLegacyFieldsFromTeeth();
-  orderToothMismatch.classList.add("hidden");
-  orderToothMismatch.textContent="";
   recalcFormPrice();
 }
 
@@ -5444,7 +5405,6 @@ function toothLabel(tooth){
 
 function toothTypeOptions(){
   return [...new Set([
-    String(workType?.value??"").trim(),
     ...workTypes,
     "Coping",
     "Coroană anatomică",
@@ -5463,18 +5423,6 @@ function toothTypeOptions(){
     "Altul"
   ].map(v=>String(v??"").trim()).filter(Boolean))];
 }
-
-const TOOTH_MATERIAL_OPTIONS=[
-  "Zirconia",
-  "Metalo-ceramică",
-  "Lithium Disilicate / e.max",
-  "PMMA",
-  "Compozit",
-  "CoCr",
-  "Titanium",
-  "PEEK",
-  "Altul"
-];
 
 function partialMatches(options,query,limit=8){
   const q=normalize(query);
@@ -5592,7 +5540,7 @@ function batchPreviewHtml(teeth){
   if(teeth.length===1){
     const tooth=teeth[0];
     const td=orderCaseDraft?.perTooth?.[tooth]??{};
-    const type=String(td.type??workType?.value??"").trim();
+    const type=String(td.type??"").trim();
     const color=orderCaseDraft?.selected?.map(Number).includes(tooth)?workTypeColor(type):"#777774";
     return toothPreviewSvg(tooth,color);
   }
@@ -5741,7 +5689,7 @@ function saveOrderToothPopover(){
   closeOrderToothPopover();
   renderOrderToothPicker();
   renderOrderToothDetails();
-  updateOrderToothMismatch();
+  updateOrderToothDerivedScope();
 }
 
 function removeActiveOrderTooth(){
@@ -5758,7 +5706,7 @@ function removeActiveOrderTooth(){
   closeOrderToothPopover();
   renderOrderToothPicker();
   renderOrderToothDetails();
-  updateOrderToothMismatch();
+  updateOrderToothDerivedScope();
 }
 
 function renderOrderToothPicker(){
@@ -5790,14 +5738,13 @@ function renderOrderToothPicker(){
     });
   });
 
-  if(orderMaterial)orderMaterial.value=orderCaseDraft.material??"";
   if(orderShade)orderShade.value=orderCaseDraft.shade??"";
   if(orderMethod)orderMethod.value=orderCaseDraft.method||"";
   orderClinicNote.value=orderCaseDraft.doctorNotes??"";
   orderProductionNotes.value=orderCaseDraft.notes??"";
 
   renderOrderWorkTypeLegend();
-  updateOrderToothMismatch();
+  updateOrderToothDerivedScope();
   syncBatchToothHighlight();
 
   document.querySelectorAll("[data-tooth-view]").forEach(btn=>{
@@ -6156,7 +6103,7 @@ function setModalRoleMode(){
   if(partner)partner.readOnly=doctor;
 
   // Reset the Doctor-editable controls before applying a possible read-only state.
-  [dueDate,patient,workType,elements,orderMaterial,orderClinicNote,orderToothType,orderToothMaterial,orderToothShade,orderToothMethod,orderToothNote].forEach(el=>{if(el)el.disabled=false;});
+  [dueDate,patient,orderClinicNote,orderToothType,orderToothShade,orderToothMethod,orderToothNote].forEach(el=>{if(el)el.disabled=false;});
   [orderSelectAnteriorBtn,orderClearTeethBtn,orderToothSaveBtn,orderToothRemoveBtn].forEach(el=>{if(el)el.disabled=false;});
   if(saveOrderBtn){saveOrderBtn.disabled=false;saveOrderBtn.classList.remove("hidden");saveOrderBtn.textContent="Salvează lucrarea";}
 
@@ -6170,7 +6117,7 @@ function setModalRoleMode(){
 
     if(doctorModalReadOnly()){
       orderForm?.classList.add("doctor-readonly");
-      [dueDate,patient,workType,elements,orderMaterial,orderClinicNote,orderToothType,orderToothMaterial,orderToothShade,orderToothMethod,orderToothNote].forEach(el=>{if(el)el.disabled=true;});
+      [dueDate,patient,orderClinicNote,orderToothType,orderToothShade,orderToothMethod,orderToothNote].forEach(el=>{if(el)el.disabled=true;});
       [orderSelectAnteriorBtn,orderClearTeethBtn,orderToothSaveBtn,orderToothRemoveBtn].forEach(el=>{if(el)el.disabled=true;});
       if(saveOrderBtn){saveOrderBtn.disabled=true;saveOrderBtn.classList.add("hidden");}
     }else{
@@ -6230,7 +6177,6 @@ function resetForm(){
     modelingNotApplicable:false,
     ceramicNotApplicable:false
   });
-  elements.value=1;
   discount.value=0;
   myStage.value="Model";
   recalcFormPrice();
@@ -6247,7 +6193,7 @@ async function editOrder(id){
     orderForm.classList.add("edit-mode");
     modalTitle.textContent=`Editează lucrarea #${id}`;
     modalSubtitle.textContent=isDoctor()
-      ? "Poți modifica datele clinice permise, materialul general al cazului și configurația dinților, inclusiv materialul și notele explicative pentru fiecare dinte. Contractul, partenerul și producția sunt gestionate automat de laborator."
+      ? "Poți modifica datele clinice permise și configurația dinților, inclusiv nuanța și notele explicative pentru fiecare dinte. Contractul, partenerul și producția sunt gestionate automat de laborator."
       : "Datele operaționale și fișa clinică sunt gata de editare.";
     orderId.value=o.id;
     dueDate.value=toDateInputValue(o.deadline);
@@ -6256,7 +6202,6 @@ async function editOrder(id){
     partner.value=o.partner||"";
     patientSuggestions?.classList.add("hidden");
     partnerSuggestions?.classList.add("hidden");
-    elements.value=o.elements||1;
     discount.value=o.discount||0;
     populateFormOptions(o);
     renderTechnicianAssignmentSummary(o);
@@ -6273,7 +6218,7 @@ async function editOrder(id){
               ? "Fișa clinică și selecția dentară au fost încărcate."
               : "Lucrarea nu are încă o definiție dentară salvată."))
       : (hadSavedCase
-          ? "Dinții, materialul, nuanța și prescripția au fost încărcate."
+          ? "Dinții, nuanța și prescripția au fost încărcate."
           : "Lucrarea nu are încă o definiție dentară salvată.");
 
     openModal();
@@ -6291,7 +6236,7 @@ window.editOrder=editOrder;
 
 function managementFields(){
   return {
-    Deadline:dueDate.value,Data_Receptie:receptionDate.value||null,Status:status.value,Nume_Pacient:patient.value.trim(),Nume_Partener:partner.value.trim(),Contract:contract.value,Tip_Lucrare:workType.value,Nr_Elemente:num(elements.value),
+    Deadline:dueDate.value,Data_Receptie:receptionDate.value||null,Status:status.value,Nume_Pacient:patient.value.trim(),Nume_Partener:partner.value.trim(),Contract:contract.value,
     Tehnician_Model:modelTech.value,Tehnician1_Modelare:modelingTech.value,Tehnician2_Cer_Fin:ceramicTech.value,
     Status_Model:statusModel.value,Status_Modelare:statusModeling.value,Status_Cer_Fin:statusCerFin.value,
     Paid_Model:paidModel.value,Paid_Modelare:paidModeling.value,Paid_Cer_Fin:paidCerFin.value,Discount:num(discount.value),
@@ -6299,14 +6244,12 @@ function managementFields(){
   };
 }
 function technicianCreateFields(){
-  return {Deadline:dueDate.value,Data_Receptie:receptionDate.value||null,Nume_Pacient:patient.value.trim(),Nume_Partener:partner.value.trim(),Tip_Lucrare:workType.value,Nr_Elemente:num(elements.value),My_Stage:myStage.value};
+  return {Deadline:dueDate.value,Data_Receptie:receptionDate.value||null,Nume_Pacient:patient.value.trim(),Nume_Partener:partner.value.trim(),My_Stage:myStage.value};
 }
 function doctorWorkOrderFields(){
   return {
     Deadline:dueDate.value,
-    Nume_Pacient:patient.value.trim(),
-    Tip_Lucrare:workType.value,
-    Nr_Elemente:num(elements.value)
+    Nume_Pacient:patient.value.trim()
   };
 }
 
@@ -6385,24 +6328,16 @@ orderForm.addEventListener("submit",async e=>{
   }
 });
 
-[contract,partner,workType,elements,discount].forEach(el=>el.addEventListener("input",()=>recalcFormPrice()));
+[contract,partner,discount].forEach(el=>el.addEventListener("input",()=>recalcFormPrice()));
 
 [modelNotApplicable,modelingNotApplicable,ceramicNotApplicable].forEach(el=>el?.addEventListener("change",syncStageApplicabilityControls));
 [statusModel,statusModeling,statusCerFin].forEach(el=>el?.addEventListener("change",syncOrderStatusChoices));
 
 
-orderMaterial?.addEventListener("input",()=>{
-  syncOrderCaseDraftFromInputs();
-});
 orderShade?.addEventListener("input",syncOrderCaseDraftFromInputs);
 orderMethod?.addEventListener("input",syncOrderCaseDraftFromInputs);
 orderClinicNote?.addEventListener("input",syncOrderCaseDraftFromInputs);
 orderProductionNotes?.addEventListener("input",syncOrderCaseDraftFromInputs);
-elements?.addEventListener("input",updateOrderToothMismatch);
-workType?.addEventListener("change",()=>{
-  syncOrderCaseDraftFromInputs();
-  renderOrderToothDetails();
-});
 orderSelectAnteriorBtn?.addEventListener("click",()=>{
   if(doctorModalReadOnly())return;
   closeOrderToothPopover();
@@ -6427,7 +6362,6 @@ orderClearTeethBtn?.addEventListener("click",()=>{
   renderOrderToothPicker();
   renderOrderToothDetails();
 });
-orderSyncElements?.addEventListener("change",updateOrderToothMismatch);
 
 function setPdfButtonLoading(button,loading,label="Pregătesc PDF..."){
   if(!button)return;
@@ -6586,7 +6520,7 @@ function openNewOrder(){
     if(!auth){
       throw new Error("You are not logged in.");
     }
-    if(!can("Can_Create_Work_Orders")){
+    if(!can("Can_Create_Work_Orders")&&!isTechnician()){
       throw new Error("Your role is not allowed to create work orders.");
     }
 
@@ -7088,22 +7022,14 @@ function costStageKey(value){
   return n;
 }
 
-function technicianStageCost(tech,workTypeName,stage){
-  const t=normalize(tech),w=normalize(workTypeName),s=costStageKey(stage);
-  if(!t||!w||!s)return 0;
-  const row=technicianCostRules.find(r=>
-    normalize(r.Tehnician)===t && normalize(r.Tip_Lucrare)===w && costStageKey(r.Etapa)===s
-  );
-  return row?num(row.Cost):0;
-}
-
 function mapSupabaseOrder(r){
-  const elementsCount=num(r.nr_elemente);
-  const fallbackUnit=(r.contract&&r.tip_lucrare)?liveUnitPrice(r.contract,r.tip_lucrare):0;
-  const unit=r.unit_price===null||r.unit_price===undefined?fallbackUnit:num(r.unit_price);
+  const items=Array.isArray(r.items)?r.items:[];
+  const itemScope=deriveWorkOrderScope(items,{validate:false});
+  const types=Array.isArray(r.work_types)&&r.work_types.length?r.work_types:itemScope.work_types;
+  const elementsCount=num(r.element_count??itemScope.element_count);
   const discountValue=r.discount===null||r.discount===undefined?0:num(r.discount);
-  const list=r.list_price===null||r.list_price===undefined?unit*elementsCount:num(r.list_price);
-  const final=r.final_price===null||r.final_price===undefined?list*(1-Math.max(0,Math.min(100,discountValue))/100):num(r.final_price);
+  const list=num(r.snapshot_list_price??r.list_price);
+  const final=num(r.snapshot_final_price??r.final_price);
 
   const modelTechName=r.tehnician_model??"";
   const modelingTechName=r.tehnician1_modelare??"";
@@ -7112,9 +7038,9 @@ function mapSupabaseOrder(r){
   const modelingNA=Boolean(r.modelare_not_applicable);
   const ceramicNA=Boolean(r.cer_fin_not_applicable);
 
-  const costModel=modelNA?0:elementsCount*technicianStageCost(modelTechName,r.tip_lucrare,"Model");
-  const costModeling=modelingNA?0:elementsCount*technicianStageCost(modelingTechName,r.tip_lucrare,"Modelare");
-  const costCerFin=ceramicNA?0:elementsCount*technicianStageCost(ceramicTechName,r.tip_lucrare,"Ceramica/Finisare");
+  const costModel=modelNA?0:num(r.cost_model);
+  const costModeling=modelingNA?0:num(r.cost_modelare);
+  const costCerFin=ceramicNA?0:num(r.cost_cer_fin);
 
   const ownTech=normalize(auth?.user?.Technician_Name||"");
   const myStages=[];
@@ -7133,7 +7059,9 @@ function mapSupabaseOrder(r){
     patient:r.nume_pacient??"",
     partner:r.nume_partener??"",
     contract:r.contract??(isDoctor()||isTechnician()?"General":""),
-    workType:r.tip_lucrare??"",
+    items,
+    workTypes:types,
+    workType:r.work_type_summary??itemScope.work_type_summary,
     elements:elementsCount,
     modelTech:modelTechName,
     modelingTech:modelingTechName,
@@ -7148,13 +7076,13 @@ function mapSupabaseOrder(r){
     paidModeling:r.paid_modelare??"Not Paid",
     paidCerFin:r.paid_cer_fin??"Not Paid",
     discount:discountValue,
-    unitPrice:unit,
+    unitPrice:0,
     listPrice:list,
     finalPrice:final,
     costModel,
     costModeling,
     costCerFin,
-    totalTechCost:costModel+costModeling+costCerFin,
+    totalTechCost:num(r.total_technician_cost??(costModel+costModeling+costCerFin)),
     myStages,
     ownCost,
     clinicNote:"",
@@ -7354,8 +7282,8 @@ let toothPriceEstimateRequest=0;
 function renderToothPriceBreakdown(result={}){
   const box=$("priceBreakdown");
   const lines=(Array.isArray(result.lines)?result.lines:[]).map(line=>({
-    workType:String(line?.work_type??line?.workType??line?.tip_lucrare??"—"),
-    quantity:Math.max(0,num(line?.quantity??line?.nr_elemente)),
+    workType:String(line?.work_type??line?.workType??"—"),
+    quantity:Math.max(0,num(line?.quantity??1)),
     contract:String(line?.contract||"General"),
     unitPrice:num(line?.unit_price??line?.unitPrice??line?.pret),
     subtotal:num(line?.subtotal??line?.line_total),
@@ -7431,6 +7359,17 @@ async function requestToothPriceEstimate(requestId,items){
 
 recalcFormPrice=function(){
   if(isTechnician())return;
+  const saved=currentModalOrder();
+  if(saved&&Number(orderId?.value)===Number(saved.id)){
+    unitPrice.value=0;
+    listPrice.value=num(saved.listPrice);
+    finalPrice.value=num(saved.finalPrice);
+    const box=$("priceBreakdown");
+    if(box)box.innerHTML="";
+    priceHint.textContent="Totalurile sunt instantanee financiare salvate pentru această lucrare.";
+    priceHint.classList.remove("error-text");
+    return;
+  }
   clearTimeout(toothPriceEstimateTimer);
   const requestId=++toothPriceEstimateRequest;
   const items=workOrderToothItems().filter(item=>item.work_type);
@@ -7480,7 +7419,6 @@ fetchPatientCase=async function(workOrderId){
     selected_teeth:String(row.selected_teeth||"").split(",").map(x=>Number(x.trim())).filter(Number.isFinite),
     tooth_details:perTooth,
     case_snapshot:snapshot,
-    material:row.material||"",
     shade:row.shade||"",
     method:row.method||"",
     clinic_note:row.clinic_note||"",
@@ -7491,19 +7429,6 @@ fetchPatientCase=async function(workOrderId){
 persistPatientCase=async function(workOrderId,draft,{replaceItems=true}={}){
   const labId=await resolveLabOrganizationId();
   const data=caseDraftPayload(draft);
-  const snapshot={
-    work_order_id:Number(workOrderId),
-    selected_teeth:data.selected_teeth,
-    material:data.material,
-    shade:data.shade,
-    method:data.method,
-    clinic_note:data.clinic_note,
-    production_notes:data.production_notes,
-    saved_by:auth?.user?.User_ID||"",
-    schema_version:"V16"
-  };
-  const toothJson=JSON.stringify({...data.tooth_details,__case:snapshot});
-  const selectedText=(data.selected_teeth||[]).join(",");
   if(isTechnician()){
     const ownStatuses={Status_Model:null,Status_Modelare:null,Status_Cer_Fin:null};
     orderForm?.querySelectorAll("[data-technician-stage-field]").forEach(select=>{
@@ -7517,34 +7442,17 @@ persistPatientCase=async function(workOrderId,draft,{replaceItems=true}={}){
       p_status_model:ownStatuses.Status_Model,
       p_status_modelare:ownStatuses.Status_Modelare,
       p_status_cer_fin:ownStatuses.Status_Cer_Fin,
-      p_selected_teeth:selectedText,
-      p_tooth_details_json:toothJson,
-      p_material:data.material||null,
-      p_shade:data.shade||null,
-      p_method:data.method||null,
-      p_clinic_note:data.clinic_note||null
+      p_items:workOrderToothItems(draft),
+      p_case:data
     });
     return {ok:true,ID:result};
   }
   const result=await sbRpc("upsert_patient_case",{
     p_lab_organization_id:labId,
     p_work_order_id:Number(workOrderId),
-    p_selected_teeth:selectedText,
-    p_tooth_details_json:toothJson,
-    p_material:data.material||null,
-    p_shade:data.shade||null,
-    p_method:data.method||null,
-    p_clinic_note:data.clinic_note||null,
-    p_production_notes:data.production_notes||null
+    p_items:workOrderToothItems(draft),
+    p_case:data
   });
-  if(replaceItems){
-    await sbRpc("replace_work_order_items",{
-      p_lab_organization_id:labId,
-      p_work_order_id:Number(workOrderId),
-      p_items:workOrderToothItems(draft),
-      p_requested_contract:String(contract?.value||"General")
-    });
-  }
   return {ok:true,ID:result};
 };
 
@@ -7578,8 +7486,6 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
         p_nume_pacient:fields.Nume_Pacient||"",
         p_nume_partener:fields.Nume_Partener||"",
         p_contract:fields.Contract||"General",
-        p_tip_lucrare:fields.Tip_Lucrare||"",
-        p_nr_elemente:Number(fields.Nr_Elemente)||1,
         p_discount:Number(fields.Discount)||0,
         p_data_receptie:fields.Data_Receptie||null,
         p_tehnician_model:fields.Tehnician_Model||null,
@@ -7598,7 +7504,8 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
         p_model_settlement:choices.model||null,
         p_modelare_settlement:choices.modelare||null,
         p_cer_fin_settlement:choices.cer_fin||null,
-        p_items:workOrderToothItems(orderCaseDraft),
+        p_items:currentOrderScope({validate:true}).items,
+        p_case:caseDraftPayload(orderCaseDraft),
         p_requested_contract:String(fields.Contract||"General")
       });
     }catch(error){
@@ -7619,7 +7526,8 @@ async function handleSupabaseOrderSubmit(e){
   showLoading(id?"Actualizare lucrare":"Creare lucrare","Salvez lucrarea...");
 
   try{
-    if(!isTechnician())syncLegacyFieldsFromTeeth({validate:true});
+    const scope=currentOrderScope({validate:true});
+    const casePayload=caseDraftPayload(orderCaseDraft);
     const labId=await resolveLabOrganizationId();
     let savedId=id;
 
@@ -7636,10 +7544,10 @@ async function handleSupabaseOrderSubmit(e){
           p_deadline:fields.Deadline||null,
           p_nume_pacient:fields.Nume_Pacient||"",
           p_nume_partener:fields.Nume_Partener||"",
-          p_tip_lucrare:fields.Tip_Lucrare||"",
-          p_nr_elemente:Number(fields.Nr_Elemente)||1,
           p_data_receptie:fields.Data_Receptie||null,
-          p_my_stage:fields.My_Stage||"Model"
+          p_my_stage:fields.My_Stage||"Model",
+          p_items:scope.items,
+          p_case:casePayload
         }));
       }
     }else if(isDoctor()){
@@ -7651,21 +7559,21 @@ async function handleSupabaseOrderSubmit(e){
           p_work_order_id:id,
           p_deadline:fields.Deadline||null,
           p_nume_pacient:fields.Nume_Pacient||"",
-          p_tip_lucrare:fields.Tip_Lucrare||"",
-          p_nr_elemente:Number(fields.Nr_Elemente)||1
+          p_items:scope.items,
+          p_case:casePayload
         });
       }else{
         savedId=Number(await sbRpc("create_work_order",{
           p_lab_organization_id:labId,
           p_deadline:fields.Deadline||null,
           p_nume_pacient:fields.Nume_Pacient||"",
-          p_tip_lucrare:fields.Tip_Lucrare||"",
-          p_nr_elemente:Number(fields.Nr_Elemente)||1,
           p_nume_partener:null,
           p_contract:contract.value||"General",
           p_status:"Not Started",
           p_discount:0,
-          p_data_receptie:null
+          p_data_receptie:null,
+          p_items:scope.items,
+          p_case:casePayload
         }));
       }
     }else{
@@ -7679,13 +7587,13 @@ async function handleSupabaseOrderSubmit(e){
           p_lab_organization_id:labId,
           p_deadline:fields.Deadline||null,
           p_nume_pacient:fields.Nume_Pacient||"",
-          p_tip_lucrare:fields.Tip_Lucrare||"",
-          p_nr_elemente:Number(fields.Nr_Elemente)||1,
           p_nume_partener:fields.Nume_Partener||"",
           p_contract:fields.Contract||"General",
           p_status:fields.Status||"Not Started",
           p_discount:Number(fields.Discount)||0,
-          p_data_receptie:fields.Data_Receptie||null
+          p_data_receptie:fields.Data_Receptie||null,
+          p_items:scope.items,
+          p_case:casePayload
         }));
         // Persist the returned ID before the compatibility update. If that
         // second RPC fails, retry edits this row instead of creating a duplicate.
@@ -7698,17 +7606,6 @@ async function handleSupabaseOrderSubmit(e){
     if(savedId>0&&!id){
       orderId.value=String(savedId);
       if(orderCaseDraft)orderCaseDraft.orderId=savedId;
-    }
-
-    if(savedId>0&&(id>0||hasMeaningfulCaseData(orderCaseDraft))&&!isTechnician()){
-      try{
-        await persistPatientCase(savedId,orderCaseDraft,{replaceItems:!isManagement()});
-      }catch(caseErr){
-        setConnection(false,`Lucrarea #${savedId} salvată · fișa clinică necesită retry`);
-        alert(`Lucrarea #${savedId} a fost salvată în baza de date, dar fișa clinică nu a putut fi salvată. Formularul rămâne deschis.\n\n${caseErr.message}`);
-        await loadAll(false);
-        return;
-      }
     }
 
     // V18.7: files selected while creating the Work Order stay queued locally.
@@ -9634,7 +9531,7 @@ function applyTechnicianOrderViewMode(order=null){
   orderForm?.querySelectorAll(".date-picker-btn").forEach(el=>{el.disabled=true;});
   [orderSelectAnteriorBtn,orderClearTeethBtn,orderToothSaveBtn,orderToothRemoveBtn].forEach(el=>{if(el)el.disabled=true;});
   if(!locked){
-    [orderMaterial,orderShade,orderMethod,orderClinicNote,orderToothType,orderToothMaterial,orderToothShade,orderToothMethod,orderToothNote]
+    [orderShade,orderMethod,orderClinicNote,orderToothType,orderToothShade,orderToothMethod,orderToothNote]
       .forEach(el=>{if(el)el.disabled=false;});
     [orderSelectAnteriorBtn,orderClearTeethBtn,orderToothSaveBtn,orderToothRemoveBtn]
       .forEach(el=>{if(el)el.disabled=false;});
@@ -9671,7 +9568,6 @@ editOrder=async function(id){
     receptionDate.value=toDateInputValue(o.receptionDate);
     patient.value=o.patient||"";
     partner.value=o.partner||"";
-    elements.value=o.elements||1;
     discount.value=0;
     populateFormOptions(o);
     renderTechnicianAssignmentSummary(o);

@@ -3815,16 +3815,6 @@ body.case-sheet-open{overflow:hidden}
 
 /* ===== V10.15 — ROMANIAN CASE SHEET DETAILS ===== */
 
-/* Global Material now lives visibly in Case Information. */
-.job-project-panel #orderMaterial{
-  width:100%;
-}
-
-/* Keep the compact defaults section balanced after moving Material out. */
-.case-defaults-grid{
-  grid-template-columns:1fr 1fr!important;
-}
-
 /* Better visible loading state on Case Sheet buttons. */
 .case-export-btn.pdf-loading,
 #printCaseSheetBtn.pdf-loading{
@@ -5380,24 +5370,21 @@ body.kanban-drag-active .kanban-col.drag-over .kanban-drop-zone{
 }
 
 
-/* ===== V11.6 — DOCTOR PER-TOOTH MATERIAL + NOTES ===== */
+/* ===== V11.6 — DOCTOR PER-TOOTH NOTES ===== */
 
 .job-definition-form.doctor-mode #orderToothForm label{
   color:#a99b88;
 }
 
-.job-definition-form.doctor-mode #orderToothForm label:has(#orderToothMaterial),
 .job-definition-form.doctor-mode #orderToothForm label:has(#orderToothNote){
   color:#e0c28c;
 }
 
-.job-definition-form.doctor-mode #orderToothMaterial,
 .job-definition-form.doctor-mode #orderToothNote{
   border-color:#6b5433;
   background:#12100d;
 }
 
-.job-definition-form.doctor-mode #orderToothMaterial:focus,
 .job-definition-form.doctor-mode #orderToothNote:focus{
   border-color:#c8a468;
   box-shadow:0 0 0 2px rgba(200,164,104,.08);
@@ -6604,7 +6591,6 @@ table{color:var(--text)!important;background:#fff!important}th{color:#80652f!imp
 .doctor-partner-context,
 .doctor-status-readonly,
 .doctor-mobile-grid>div,
-.job-definition-form.doctor-mode #orderToothMaterial,
 .job-definition-form.doctor-mode #orderToothNote,
 .admin-user-create-grid input,
 .admin-user-create-grid select,
@@ -7184,7 +7170,7 @@ body.kanban-drag-active .kanban-col.drag-over,
 .doctor-partner-context,
 .doctor-status-readonly,
 .doctor-mobile-grid>div,
-.job-definition-form.doctor-mode #orderToothMaterial, .job-definition-form.doctor-mode #orderToothNote,
+.job-definition-form.doctor-mode #orderToothNote,
 .doctor-action-export:hover,
 .doctor-action-delete:hover,
 .admin-user-create-grid input, .admin-user-create-grid select, .admin-user-editor-grid input, .admin-user-editor-grid select,

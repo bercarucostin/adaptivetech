@@ -220,18 +220,6 @@
                 <select id="contract"></select>
               </label>
 
-              <label class="job-wide tooth-derived-field">Tip lucrare
-                <select id="workType" required></select>
-              </label>
-
-              <label class="job-wide tooth-derived-field">Material
-                <input id="orderMaterial" list="caseMaterialList" placeholder="Zirconiu, metalo-ceramică, PMMA..." />
-              </label>
-
-              <label class="tooth-derived-field">Nr. elemente
-                <input id="elements" type="number" min="1" value="1" required />
-              </label>
-
               <label class="management-field">Discount %
                 <input id="discount" type="number" min="0" max="100" step="0.01" value="0" />
               </label>
@@ -310,16 +298,11 @@
 
                 <div class="tooth-hidden-controls">
                   <button id="orderSelectAnteriorBtn" type="button">Anterior</button>
-                  <label>
-                    <input id="orderSyncElements" type="checkbox" checked />
-                    Sincronizează nr. elemente
-                  </label>
                 </div>
               </div>
 
               <main class="tooth-studio-center">
                 <div id="orderToothChart" class="order-tooth-chart"></div>
-                <div id="orderToothMismatch" class="order-tooth-mismatch hidden"></div>
                 <div class="tooth-editor-hint">
                   <span class="tooth-editor-hint-desktop">☝&nbsp;&nbsp; Click pentru editare · Ctrl (Windows) / Command (Mac) + click pentru selecție multiplă</span>
                   <span class="tooth-editor-hint-mobile">☝&nbsp;&nbsp; Atinge unul sau mai mulți dinți, apoi configurează și salvează selecția.</span>
@@ -374,9 +357,9 @@
             <div class="order-selected-teeth-details tooth-configured-data-hidden">
               <div class="table-wrap order-selected-table">
                 <table>
-                  <thead><tr><th>FDI</th><th>US</th><th>Tip</th><th>Material</th><th>Nuanță</th><th></th></tr></thead>
+                  <thead><tr><th>FDI</th><th>US</th><th>Tip</th><th>Nuanță</th><th></th></tr></thead>
                   <tbody id="orderToothDetailsBody">
-                    <tr><td colspan="6">Niciun dinte configurat.</td></tr>
+                    <tr><td colspan="5">Niciun dinte configurat.</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -467,18 +450,6 @@
           <option value="Provizoriu"></option>
           <option value="Element arcadă completă"></option>
           <option value="Structură"></option>
-          <option value="Altul"></option>
-        </datalist>
-
-        <datalist id="caseMaterialList">
-          <option value="Zirconia"></option>
-          <option value="Metalo-ceramică"></option>
-          <option value="Lithium Disilicate / e.max"></option>
-          <option value="PMMA"></option>
-          <option value="Compozit"></option>
-          <option value="CoCr"></option>
-          <option value="Titanium"></option>
-          <option value="PEEK"></option>
           <option value="Altul"></option>
         </datalist>
 
