@@ -43,9 +43,9 @@ begin
         case when v_is_management then wo.contract else null end,
         case when v_is_management then wo.discount else null end,
 
-        case when v_is_management then wo.paid_model else null end,
-        case when v_is_management then wo.paid_modelare else null end,
-        case when v_is_management then wo.paid_cer_fin else null end,
+        case when v_is_management then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'model') else null end,
+        case when v_is_management then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'modelare') else null end,
+        case when v_is_management then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'cer_fin') else null end,
 
         case when v_is_management then wo.created_by_user_id else null end,
         wo.created_at,

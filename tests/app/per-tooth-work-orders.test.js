@@ -11,7 +11,7 @@ const html=fs.readFileSync(htmlPath,'utf8');
 function namedFunction(name){
   const start=source.indexOf(`function ${name}(`);
   assert.notEqual(start,-1,`Missing ${name} helper.`);
-  const bodyStart=source.indexOf('{',start);
+  const bodyStart=source.indexOf('){',start)+1;
   let depth=0;
   for(let index=bodyStart;index<source.length;index++){
     if(source[index]==='{')depth++;
@@ -79,7 +79,6 @@ test('technicians may open a new work order and every writer sends item-aware sc
     'create_work_order',
     'create_technician_work_order',
     'update_doctor_work_order',
-    'update_management_work_order_v188',
     'save_my_work_order_case'
   ]){
     const callStart=source.indexOf(`sbRpc("${rpc}"`);
@@ -88,6 +87,13 @@ test('technicians may open a new work order and every writer sends item-aware sc
     assert.match(call,/p_items:/,`${rpc} must send p_items.`);
     assert.match(call,/p_case:/,`${rpc} must send p_case.`);
   }
+});
+
+test('management create and update share the complete item-aware payload',()=>{
+  const helper=source.slice(source.indexOf('async function saveManagementWorkOrderSupabase'),source.indexOf('async function handleSupabaseOrderSubmit'));
+  for(const key of ['p_items','p_case','p_status_model','p_paid_model','p_model_not_applicable','p_locked'])assert.match(helper,new RegExp(key+':'));
+  assert.match(helper,/sbRpc\("create_management_work_order",payload\)/);
+  assert.match(helper,/sbRpc\("update_management_work_order_v188",\{\.\.\.payload,p_work_order_id:/);
 });
 
 test('read models use server-derived scope fields and frozen aggregate totals',()=>{
@@ -133,4 +139,31 @@ test('read-model technician costs use frozen assignment amounts without catalog 
   assert.match(mapper,/num\(r\.cost_model\)/);
   assert.match(mapper,/num\(r\.cost_modelare\)/);
   assert.match(mapper,/num\(r\.cost_cer_fin\)/);
+});
+
+test('not-applicable stages retain historical frozen technician costs',()=>{
+  const mapped=mappedOrder({id:15,items:[{tooth_number:11,work_type:'Crown'}],
+    model_not_applicable:true,modelare_not_applicable:true,cer_fin_not_applicable:true,
+    cost_model:11,cost_modelare:13,cost_cer_fin:17});
+  assert.equal(mapped.costModel,11);
+  assert.equal(mapped.costModeling,13);
+  assert.equal(mapped.costCerFin,17);
+  assert.equal(mapped.totalTechCost,41);
+});
+
+test('saved prices render per-tooth snapshots and frozen aggregate totals',()=>{
+  const box={innerHTML:''},list={value:null},final={value:null};
+  const hint={textContent:'',classList:{add(){},remove(){}}};
+  const renderer=Function('$','num','money','escapeHtml','isManagement','listPrice','finalPrice','priceHint','setFormContractValue',
+    `return (${namedFunction('renderToothPriceBreakdown')})`)(()=>box,Number,v=>String(v),String,()=>true,list,final,hint,()=>{});
+  renderer({saved:true,lines:[{tooth_number:11,work_type:'Crown',quantity:1,unit_price:100,line_total:100,contract:'Frozen',matched:true},
+    {tooth_number:21,work_type:'Bridge',quantity:1,unit_price:250,line_total:250,contract:'Frozen',matched:true}],
+    list_price:350,final_price:315,discount:10,element_count:2,matched_all:true});
+  for(const value of ['11','21','Crown','Bridge','100','250','350','315'])assert.ok(box.innerHTML.includes(value),`Missing ${value}`);
+  assert.equal(final.value,315);
+  renderer({saved:true,lines:[{tooth_number:11,work_type:'Crown',unit_price:100,line_total:100,matched:true}],list_price:100,final_price:85,discount:0});
+  assert.ok(box.innerHTML.includes('Total înainte de discount'),'Saved list total must be visible even without a discount');
+  const recalc=source.slice(source.indexOf('recalcFormPrice=function(){'),source.indexOf('fetchPatientCase=async function'));
+  assert.match(recalc,/renderToothPriceBreakdown\(\{[\s\S]*saved\.items/);
+  assert.doesNotMatch(recalc.slice(0,recalc.indexOf('const items=')),/box\.innerHTML=""/);
 });

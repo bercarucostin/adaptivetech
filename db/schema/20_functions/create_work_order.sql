@@ -112,3 +112,53 @@ begin
 end;
 $function$
 ;
+
+-- Management creation is one transaction, including initial stage state and payments.
+-- The base writer saves validated items, frozen prices and the case before any costs.
+CREATE OR REPLACE FUNCTION public.create_management_work_order(
+    p_lab_organization_id uuid,p_deadline date,p_nume_pacient text,p_nume_partener text,p_items jsonb,
+    p_contract text DEFAULT 'General',p_status text DEFAULT 'Not Started',p_discount numeric DEFAULT 0,
+    p_data_receptie timestamptz DEFAULT NULL,p_tehnician_model text DEFAULT NULL,
+    p_tehnician1_modelare text DEFAULT NULL,p_tehnician2_cer_fin text DEFAULT NULL,
+    p_status_model text DEFAULT 'Not Started',p_status_modelare text DEFAULT 'Not Started',
+    p_status_cer_fin text DEFAULT 'Not Started',p_paid_model text DEFAULT 'Not Paid',
+    p_paid_modelare text DEFAULT 'Not Paid',p_paid_cer_fin text DEFAULT 'Not Paid',
+    p_model_not_applicable boolean DEFAULT false,p_modelare_not_applicable boolean DEFAULT false,
+    p_cer_fin_not_applicable boolean DEFAULT false,p_locked boolean DEFAULT false,p_case jsonb DEFAULT '{}'::jsonb
+)
+RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_id bigint; v_order public.lab_work_orders%rowtype;
+BEGIN
+    IF NOT public.is_lab_management(p_lab_organization_id) THEN RAISE EXCEPTION 'Management access denied'; END IF;
+    v_id:=public.create_work_order(p_lab_organization_id,p_deadline,p_nume_pacient,p_items,p_nume_partener,
+        p_contract,'Not Started',p_discount,p_data_receptie,p_case);
+    UPDATE public.lab_work_orders SET
+        tehnician_model=nullif(trim(p_tehnician_model),''),
+        tehnician1_modelare=nullif(trim(p_tehnician1_modelare),''),
+        tehnician2_cer_fin=nullif(trim(p_tehnician2_cer_fin),''),
+        status_model=coalesce(nullif(trim(p_status_model),''),'Not Started'),
+        status_modelare=coalesce(nullif(trim(p_status_modelare),''),'Not Started'),
+        status_cer_fin=coalesce(nullif(trim(p_status_cer_fin),''),'Not Started'),
+        model_not_applicable=coalesce(p_model_not_applicable,false),
+        modelare_not_applicable=coalesce(p_modelare_not_applicable,false),
+        cer_fin_not_applicable=coalesce(p_cer_fin_not_applicable,false),
+        status=coalesce(nullif(trim(p_status),''),'Not Started'),locked=coalesce(p_locked,false)
+    WHERE lab_organization_id=p_lab_organization_id AND id=v_id RETURNING * INTO v_order;
+    PERFORM public.sync_work_order_stage_assignment(p_lab_organization_id,v_id,'model',v_order.tehnician_model);
+    PERFORM public.sync_work_order_stage_assignment(p_lab_organization_id,v_id,'modelare',v_order.tehnician1_modelare);
+    PERFORM public.sync_work_order_stage_assignment(p_lab_organization_id,v_id,'cer_fin',v_order.tehnician2_cer_fin);
+    IF v_order.tehnician_model IS NOT NULL THEN
+        PERFORM public.set_stage_payment_status(p_lab_organization_id,v_id,'model',coalesce(p_paid_model,'Not Paid'));
+    END IF;
+    IF v_order.tehnician1_modelare IS NOT NULL THEN
+        PERFORM public.set_stage_payment_status(p_lab_organization_id,v_id,'modelare',coalesce(p_paid_modelare,'Not Paid'));
+    END IF;
+    IF v_order.tehnician2_cer_fin IS NOT NULL THEN
+        PERFORM public.set_stage_payment_status(p_lab_organization_id,v_id,'cer_fin',coalesce(p_paid_cer_fin,'Not Paid'));
+    END IF;
+    RETURN v_id;
+END; $$;
+REVOKE ALL ON FUNCTION public.create_management_work_order(uuid,date,text,text,jsonb,text,text,numeric,timestamptz,
+    text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,jsonb) FROM public,anon;
+GRANT EXECUTE ON FUNCTION public.create_management_work_order(uuid,date,text,text,jsonb,text,text,numeric,timestamptz,
+    text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,jsonb) TO authenticated;

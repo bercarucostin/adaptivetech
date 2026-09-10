@@ -29,7 +29,7 @@ test('parser keeps a configured tooth-item scope for Work Order create and updat
   const created=parse({
     intent:'create',
     reply:'Creez lucrarea.',
-    payload:{fields:{Nume_Pacient:'Ana Pop',Nume_Partener:'Dr. Ionescu',items,case:{notes:'Control inițial'},My_Stage:'Model'}}
+    payload:{fields:{Nume_Pacient:'Ana Pop',Nume_Partener:'Dr. Ionescu',items,case:{clinic_note:'Control inițial'},My_Stage:'Model'}}
   });
   const updated=parse({
     intent:'update',
@@ -39,7 +39,7 @@ test('parser keeps a configured tooth-item scope for Work Order create and updat
 
   assert.equal(created.intent,'create');
   assert.deepEqual(created.payload.fields.items,items);
-  assert.deepEqual(created.payload.fields.case,{notes:'Control inițial'});
+  assert.deepEqual(created.payload.fields.case,{clinic_note:'Control inițial'});
   assert.equal(updated.intent,'update');
   assert.deepEqual(updated.payload.fields.items,items);
 });
@@ -77,41 +77,33 @@ test('parser rejects clinical material and scalar type/count fields in Work Orde
   assert.equal(parsed.intent,'clarify');
 });
 
-test('parser canonicalizes tooth items and recursively removes clinical material',()=>{
-  const fields={
-    Nume_Pacient:'Ana Pop',
-    Nume_Partener:'Dr. Ionescu',
-    items:[{
-      tooth_number:11,
-      work_type:'Coroană ceramică',
-      material:'Zirconiu',
-      shade:'A2',
-      note:'Nu păstra aceste detalii aici'
-    }],
-    case:{
-      notes:'Control inițial',
-      material:'Zirconiu',
-      tooth_details:[{tooth_number:11,material:'Metal',details:{Material:'Compozit',shade:'A2'}}],
-      __case:{material:'Ceramică',nested:{MATERIAL:'Rășină',shade:'A1'}}
-    }
-  };
+test('parser canonicalizes the accepted clinical case contract and scrubs nested material',()=>{
+  const fields={Nume_Pacient:'Ana Pop',Nume_Partener:'Dr. Ionescu',
+    items:[{tooth_number:11,work_type:'Coroană ceramică',material:'Zirconiu',shade:'A2'}],
+    case:{clinic_note:'Control inițial',shade:'A2',method:'Scan',production_notes:'Lab',
+      tooth_details_json:JSON.stringify({'11':{material:'Metal',details:{Material:'Compozit',shade:'A2'}},
+        __case:{material:'Ceramică',nested:{MATERIAL:'Rășină',shade:'A1'}}})}};
   const direct=parse({intent:'create',reply:'Creez lucrarea.',payload:{fields}});
-  const typed=parse({
-    intent:'preview',
-    reply:'Previzualizez lucrarea.',
-    operation:{entity:'work_order',operation:'create',target:{},fields}
-  },{role:'admin'});
+  const typed=parse({intent:'preview',reply:'Previzualizez lucrarea.',
+    operation:{entity:'work_order',operation:'create',target:{},fields}},{role:'admin'});
   const expectedItems=[{tooth_number:11,work_type:'Coroană ceramică'}];
-  const expectedCase={
-    notes:'Control inițial',
-    tooth_details:[{tooth_number:11,details:{shade:'A2'}}],
-    __case:{nested:{shade:'A1'}}
-  };
-
+  const expectedCase={clinic_note:'Control inițial',shade:'A2',method:'Scan',production_notes:'Lab',
+    tooth_details:{'11':{details:{shade:'A2'}},__case:{nested:{shade:'A1'}}}};
   assert.deepEqual(direct.payload.fields.items,expectedItems);
   assert.deepEqual(direct.payload.fields.case,expectedCase);
   assert.deepEqual(typed.operation.fields.items,expectedItems);
   assert.deepEqual(typed.operation.fields.case,expectedCase);
+});
+
+test('parser rejects unsupported clinical fields and malformed tooth-detail maps',()=>{
+  for(const caseData of [{notes:'lost'},{tooth_data:{}},{material:'lost'},{selected_teeth:[11]},
+    {tooth_details:[]},{tooth_details_json:'not JSON'},{tooth_details:{'11':[]}},
+    {tooth_details:{},tooth_details_json:{}},{shade:{value:'A2'}}]){
+    const fields={items:[{tooth_number:11,work_type:'Crown'}],case:caseData};
+    assert.equal(parse({intent:'create',payload:{fields}}).intent,'clarify',JSON.stringify(caseData));
+    assert.equal(parse({intent:'preview',operation:{entity:'work_order',operation:'create',fields}},
+      {role:'admin'}).intent,'clarify',JSON.stringify(caseData));
+  }
 });
 
 test('technician may submit an item-only Work Order scope update',()=>{
@@ -151,6 +143,9 @@ test('typed Work Order previews require tooth items for a create',()=>{
 
 test('prompt documents tooth items and preserves stock-material commands',()=>{
   const prompt=node('AI - Build Final Prompt').parameters.jsCode;
+  assert.doesNotMatch(prompt,/notes\?,tooth_data\?|"case":\{"notes"/);
+  assert.match(prompt,/clinic_note/);
+  assert.match(prompt,/tooth_details_json/);
   assert.match(prompt,/items:\[\{tooth_number,work_type\}\]/);
   assert.doesNotMatch(prompt,/Tip_Lucrare/);
   assert.doesNotMatch(prompt,/Nr_Elemente/);

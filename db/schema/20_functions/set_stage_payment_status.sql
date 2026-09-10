@@ -31,12 +31,8 @@ BEGIN
     FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
 
-    v_current := case v_stage when 'model' then v_order.paid_model
-        when 'modelare' then v_order.paid_modelare else v_order.paid_cer_fin end;
     v_technician := case v_stage when 'model' then v_order.tehnician_model
         when 'modelare' then v_order.tehnician1_modelare else v_order.tehnician2_cer_fin end;
-    IF lower(v_paid)='not paid'
-       AND lower(coalesce(v_current,'not paid'))='not paid' THEN RETURN true; END IF;
 
     SELECT * INTO v_assignment FROM public.lab_work_order_stage_assignments
     WHERE lab_organization_id=p_lab_organization_id AND work_order_id=p_work_order_id
@@ -52,6 +48,7 @@ BEGIN
     SELECT coalesce(sum(amount),0) INTO v_net_paid
     FROM public.technician_payments WHERE assignment_id=v_assignment.id;
     v_outstanding := public.assignment_agreed_amount(v_assignment.id) - v_net_paid;
+    v_current := public.work_order_stage_payment_status(p_lab_organization_id,p_work_order_id,v_stage);
 
     IF lower(v_paid)='paid' THEN
         IF public.assignment_agreed_amount(v_assignment.id) IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
@@ -61,7 +58,7 @@ BEGIN
                 'legacy-paid:'||v_assignment.id::text||':'||txid_current()::text
             );
         END IF;
-    ELSE
+    ELSIF v_current='Paid' THEN
         SELECT p.id INTO v_payment_id
         FROM public.technician_payments p
         WHERE p.assignment_id=v_assignment.id AND p.amount>0
@@ -76,6 +73,8 @@ BEGIN
         END IF;
     END IF;
 
+    -- Keep compatibility flags consistent even when no payment action was needed.
+    v_paid := public.work_order_stage_payment_status(p_lab_organization_id,p_work_order_id,v_stage);
     IF v_stage='model' THEN
         UPDATE public.lab_work_orders SET paid_model=v_paid,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
         WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;

@@ -7,8 +7,10 @@ const code=name=>workflow.nodes.find(n=>n.name===name).parameters.jsCode||'';
 
 test('technician prompt exposes only approved material and calendar operations',()=>{
   const prompt=code('AI - Build Final Prompt');
-  assert.match(prompt,/material set\|add\|subtract/);
-  assert.match(prompt,/calendar_event create\|update\|delete/);
+  assert.match(prompt,/material add\|subtract/);
+  assert.match(prompt,/material set/);
+  assert.match(prompt,/calendar_event create:/);
+  assert.match(prompt,/update\|delete: target/);
   assert.match(prompt,/never their personal event/);
 });
 

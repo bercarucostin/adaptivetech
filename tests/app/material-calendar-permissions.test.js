@@ -28,8 +28,9 @@ test('management Work Order writes use snapshot-aware RPCs',()=>{
   assert.match(source,/sbRpc\("update_management_work_order_v188"/);
   assert.match(source,/sbRpc\("update_management_work_order_stage_field"/);
   assert.doesNotMatch(source,/\.from\("lab_work_orders"\)\.update/);
-  assert.match(source,/orderId\.value=String\(savedId\);[\s\S]*await saveManagementWorkOrderSupabase\(savedId/);
-  assert.match(source,/p_items:workOrderToothItems\(orderCaseDraft\)/);
+  assert.match(source,/create_management_work_order/);
+  assert.doesNotMatch(source,/await saveManagementWorkOrderSupabase\(savedId/);
+  assert.match(source,/p_items:currentOrderScope\(\{validate:true\}\)\.items/);
   assert.match(source,/OUTSTANDING_ASSIGNMENT/);
   assert.match(source,/p_model_settlement/);
 });

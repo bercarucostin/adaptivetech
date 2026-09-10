@@ -8,7 +8,21 @@ DECLARE
     v_details jsonb;
     v_teeth text;
     v_case_metadata jsonb;
+    v_key text;
 BEGIN
+    p_case:=coalesce(p_case,'{}'::jsonb);
+    IF jsonb_typeof(p_case)<>'object' THEN RAISE EXCEPTION 'Clinical case must be an object'; END IF;
+    FOR v_key IN SELECT jsonb_object_keys(p_case) LOOP
+        IF v_key NOT IN ('tooth_details','tooth_details_json','clinic_note','shade','method','production_notes') THEN
+            RAISE EXCEPTION 'Unsupported clinical case field: %',v_key;
+        END IF;
+        IF v_key IN ('clinic_note','shade','method','production_notes') AND jsonb_typeof(p_case->v_key) NOT IN ('string','null') THEN
+            RAISE EXCEPTION 'Clinical case field % must be text',v_key;
+        END IF;
+    END LOOP;
+    IF p_case ? 'tooth_details' AND p_case ? 'tooth_details_json' THEN
+        RAISE EXCEPTION 'Supply tooth_details or tooth_details_json, not both';
+    END IF;
     SELECT * INTO v_order FROM public.lab_work_orders
     WHERE lab_organization_id=p_lab AND id=p_order_id FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
@@ -27,6 +41,10 @@ BEGIN
              ELSE p_case->'tooth_details_json' END,
         nullif(v_case.tooth_details_json,'')::jsonb,'{}'::jsonb));
     IF jsonb_typeof(v_details)<>'object' THEN RAISE EXCEPTION 'Tooth details must be an object'; END IF;
+    IF EXISTS(SELECT 1 FROM jsonb_each(v_details) d
+        WHERE (d.key<>'__case' AND d.key !~ '^[1-4][1-8]$') OR jsonb_typeof(d.value)<>'object') THEN
+        RAISE EXCEPTION 'Tooth details must map FDI numbers or __case to objects';
+    END IF;
     v_case_metadata:=coalesce(v_details->'__case','{}'::jsonb);
     -- Discard stale tooth entries and overwrite clinical work types with canonical scope.
     SELECT coalesce(jsonb_object_agg(i.tooth_number::text,

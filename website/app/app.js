@@ -2764,7 +2764,6 @@ function draftFromServerCase(order,serverCase){
 
 function caseDraftPayload(draft){
   return {
-    selected_teeth:orderedSelectedTeeth(draft?.selected??[]),
     tooth_details:draft?.perTooth??{},
     shade:String(draft?.shade??""),
     method:String(draft?.method??""),
@@ -7034,9 +7033,9 @@ function mapSupabaseOrder(r){
   const modelingNA=Boolean(r.modelare_not_applicable);
   const ceramicNA=Boolean(r.cer_fin_not_applicable);
 
-  const costModel=modelNA?0:num(r.cost_model);
-  const costModeling=modelingNA?0:num(r.cost_modelare);
-  const costCerFin=ceramicNA?0:num(r.cost_cer_fin);
+  const costModel=num(r.cost_model);
+  const costModeling=num(r.cost_modelare);
+  const costCerFin=num(r.cost_cer_fin);
 
   const ownTech=normalize(auth?.user?.Technician_Name||"");
   const myStages=[];
@@ -7277,6 +7276,7 @@ let toothPriceEstimateRequest=0;
 function renderToothPriceBreakdown(result={}){
   const box=$("priceBreakdown");
   const lines=(Array.isArray(result.lines)?result.lines:[]).map(line=>({
+    toothNumber:line?.tooth_number??null,
     workType:String(line?.work_type??line?.workType??"—"),
     quantity:Math.max(0,num(line?.quantity??1)),
     contract:String(line?.contract||"General"),
@@ -7297,14 +7297,14 @@ function renderToothPriceBreakdown(result={}){
           <thead><tr><th>Tip</th><th>Nr. Elem.</th><th>Preț / Elem</th><th>Subtotal</th></tr></thead>
           <tbody>${lines.map(line=>`
             <tr class="${line.matched?"":"price-breakdown-unmatched"}">
-              <td><strong>${escapeHtml(line.workType)}</strong>${isManagement()?`<small>Contract: ${escapeHtml(line.contract)}</small>`:""}</td>
+              <td><strong>${line.toothNumber?`${escapeHtml(line.toothNumber)} · `:""}${escapeHtml(line.workType)}</strong>${isManagement()?`<small>Contract: ${escapeHtml(line.contract)}</small>`:""}</td>
               <td>${line.quantity}</td>
               <td>${money(line.itemPrice)}</td>
               <td><strong>${money(line.subtotal)}</strong></td>
             </tr>`).join("")}</tbody>
           <tfoot>
-            ${appliedDiscount?`<tr><td colspan="3">Total înainte de discount</td><td>${money(list)}</td></tr>
-            <tr><td colspan="3">Discount</td><td>${appliedDiscount}%</td></tr>`:""}
+            ${result.saved||appliedDiscount?`<tr><td colspan="3">Total înainte de discount</td><td>${money(list)}</td></tr>`:""}
+            ${appliedDiscount?`<tr><td colspan="3">Discount</td><td>${appliedDiscount}%</td></tr>`:""}
             <tr class="price-breakdown-total"><td colspan="3">Total</td><td>${money(total)}</td></tr>
           </tfoot>
         </table>
@@ -7317,8 +7317,11 @@ function renderToothPriceBreakdown(result={}){
   finalPrice.value=total;
 
   const firstContract=lines[0]?.contract;
-  if(firstContract)setFormContractValue(firstContract);
-  if(lines.length&&!result.matched_all){
+  if(firstContract&&!result.saved)setFormContractValue(firstContract);
+  if(result.saved){
+    priceHint.textContent="Prețuri salvate pe dinte și totaluri salvate pentru această lucrare.";
+    priceHint.classList.remove("error-text");
+  }else if(lines.length&&!result.matched_all){
     const missing=lines.filter(line=>!line.matched).map(line=>line.workType).join(", ");
     priceHint.textContent=`Lipsesc prețuri pentru: ${missing}. Liniile respective au valoarea 0.`;
     priceHint.classList.add("error-text");
@@ -7352,18 +7355,18 @@ async function requestToothPriceEstimate(requestId,items){
 
 recalcFormPrice=function(){
   if(isTechnician())return;
-  const saved=currentModalOrder();
-  if(saved&&Number(orderId?.value)===Number(saved.id)){
-    listPrice.value=num(saved.listPrice);
-    finalPrice.value=num(saved.finalPrice);
-    const box=$("priceBreakdown");
-    if(box)box.innerHTML="";
-    priceHint.textContent="Totalurile sunt instantanee financiare salvate pentru această lucrare.";
-    priceHint.classList.remove("error-text");
-    return;
-  }
   clearTimeout(toothPriceEstimateTimer);
   const requestId=++toothPriceEstimateRequest;
+  const saved=currentModalOrder();
+  if(saved&&Number(orderId?.value)===Number(saved.id)){
+    renderToothPriceBreakdown({
+      saved:true,
+      lines:(saved.items||[]).map(item=>({...item,matched:true})),
+      list_price:saved.listPrice,final_price:saved.finalPrice,
+      discount:saved.discount,element_count:saved.elements,matched_all:true
+    });
+    return;
+  }
   const items=workOrderToothItems().filter(item=>item.work_type);
   const missing=workOrderToothItems().filter(item=>!item.work_type);
   if(!items.length){
@@ -7468,9 +7471,8 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
   const choices={...settlements};
   for(let attempt=0;attempt<4;attempt+=1){
     try{
-      return await sbRpc("update_management_work_order_v188",{
+      const payload={
         p_lab_organization_id:labId,
-        p_work_order_id:Number(id),
         p_deadline:fields.Deadline||null,
         p_status:fields.Status||"Not Started",
         p_nume_pacient:fields.Nume_Pacient||"",
@@ -7497,7 +7499,13 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
         p_items:currentOrderScope({validate:true}).items,
         p_case:caseDraftPayload(orderCaseDraft),
         p_requested_contract:String(fields.Contract||"General")
-      });
+      };
+      if(id)return await sbRpc("update_management_work_order_v188",{...payload,p_work_order_id:Number(id)});
+      delete payload.p_model_settlement;
+      delete payload.p_modelare_settlement;
+      delete payload.p_cer_fin_settlement;
+      delete payload.p_requested_contract;
+      return await sbRpc("create_management_work_order",payload);
     }catch(error){
       const outstanding=outstandingAssignmentError(error);
       if(!outstanding||choices[outstanding.stage])throw error;
@@ -7573,23 +7581,7 @@ async function handleSupabaseOrderSubmit(e){
       if(id){
         await saveManagementWorkOrderSupabase(id,fields);
       }else{
-        savedId=Number(await sbRpc("create_work_order",{
-          p_lab_organization_id:labId,
-          p_deadline:fields.Deadline||null,
-          p_nume_pacient:fields.Nume_Pacient||"",
-          p_nume_partener:fields.Nume_Partener||"",
-          p_contract:fields.Contract||"General",
-          p_status:fields.Status||"Not Started",
-          p_discount:Number(fields.Discount)||0,
-          p_data_receptie:fields.Data_Receptie||null,
-          p_items:scope.items,
-          p_case:casePayload
-        }));
-        // Persist the returned ID before the compatibility update. If that
-        // second RPC fails, retry edits this row instead of creating a duplicate.
-        orderId.value=String(savedId);
-        if(orderCaseDraft)orderCaseDraft.orderId=savedId;
-        await saveManagementWorkOrderSupabase(savedId,{...fields,Locked:false});
+        savedId=Number(await saveManagementWorkOrderSupabase(null,fields));
       }
     }
 

@@ -18,11 +18,25 @@ BEGIN
                 nullif(v_fields->>'Data_Receptie','')::timestamptz,coalesce(v_fields->>'My_Stage','Model'),coalesce(v_fields->'case','{}'::jsonb));
             RETURN jsonb_build_object('ok',true,'type','create_work_order','ids',jsonb_build_array(v_created));
         END IF;
-        v_created:=public.create_work_order(v_lab,nullif(v_fields->>'Deadline','')::date,v_fields->>'Nume_Pacient',
-            v_fields->'items',v_fields->>'Nume_Partener',coalesce(v_fields->>'Contract','General'),
-            coalesce(v_fields->>'Status','Not Started'),coalesce((v_fields->>'Discount')::numeric,0),
-            nullif(v_fields->>'Data_Receptie','')::timestamptz,coalesce(v_fields->'case','{}'::jsonb));
-        v_ids:=jsonb_build_array(v_created);
+        v_created:=public.create_management_work_order(
+            p_lab_organization_id=>v_lab,p_deadline=>nullif(v_fields->>'Deadline','')::date,
+            p_nume_pacient=>v_fields->>'Nume_Pacient',p_nume_partener=>v_fields->>'Nume_Partener',
+            p_items=>v_fields->'items',p_contract=>coalesce(v_fields->>'Contract','General'),
+            p_status=>coalesce(v_fields->>'Status','Not Started'),p_discount=>coalesce((v_fields->>'Discount')::numeric,0),
+            p_data_receptie=>nullif(v_fields->>'Data_Receptie','')::timestamptz,
+            p_tehnician_model=>v_fields->>'Tehnician_Model',p_tehnician1_modelare=>v_fields->>'Tehnician1_Modelare',
+            p_tehnician2_cer_fin=>v_fields->>'Tehnician2_Cer_Fin',
+            p_status_model=>coalesce(v_fields->>'Status_Model','Not Started'),
+            p_status_modelare=>coalesce(v_fields->>'Status_Modelare','Not Started'),
+            p_status_cer_fin=>coalesce(v_fields->>'Status_Cer_Fin','Not Started'),
+            p_paid_model=>coalesce(v_fields->>'Paid_Model','Not Paid'),
+            p_paid_modelare=>coalesce(v_fields->>'Paid_Modelare','Not Paid'),
+            p_paid_cer_fin=>coalesce(v_fields->>'Paid_Cer_Fin','Not Paid'),
+            p_model_not_applicable=>coalesce((v_fields->>'Model_Not_Applicable')::boolean,false),
+            p_modelare_not_applicable=>coalesce((v_fields->>'Modelare_Not_Applicable')::boolean,false),
+            p_cer_fin_not_applicable=>coalesce((v_fields->>'Cer_Fin_Not_Applicable')::boolean,false),
+            p_locked=>coalesce((v_fields->>'Locked')::boolean,false),p_case=>coalesce(v_fields->'case','{}'::jsonb));
+        RETURN jsonb_build_object('ok',true,'type','create_work_order','ids',jsonb_build_array(v_created),'count',1);
     ELSE
         v_ids:=coalesce(p_payload->'ids',jsonb_build_array(coalesce(p_payload->'id',p_payload->'target_id',v_fields->'ID')));
     END IF;
@@ -55,11 +69,11 @@ BEGIN
                 p_status_model=>coalesce(v_fields->>'Status_Model',v_order.status_model),
                 p_status_modelare=>coalesce(v_fields->>'Status_Modelare',v_order.status_modelare),
                 p_status_cer_fin=>coalesce(v_fields->>'Status_Cer_Fin',v_order.status_cer_fin),
-                p_paid_model=>coalesce(v_fields->>'Paid_Model',v_order.paid_model),
-                p_paid_modelare=>coalesce(v_fields->>'Paid_Modelare',v_order.paid_modelare),
-                p_paid_cer_fin=>coalesce(v_fields->>'Paid_Cer_Fin',v_order.paid_cer_fin),
-                p_model_not_applicable=>v_order.model_not_applicable,p_modelare_not_applicable=>v_order.modelare_not_applicable,
-                p_cer_fin_not_applicable=>v_order.cer_fin_not_applicable,p_locked=>coalesce((v_fields->>'Locked')::boolean,v_order.locked),
+                p_paid_model=>v_fields->>'Paid_Model',
+                p_paid_modelare=>v_fields->>'Paid_Modelare',
+                p_paid_cer_fin=>v_fields->>'Paid_Cer_Fin',
+                p_model_not_applicable=>coalesce((v_fields->>'Model_Not_Applicable')::boolean,v_order.model_not_applicable),p_modelare_not_applicable=>coalesce((v_fields->>'Modelare_Not_Applicable')::boolean,v_order.modelare_not_applicable),
+                p_cer_fin_not_applicable=>coalesce((v_fields->>'Cer_Fin_Not_Applicable')::boolean,v_order.cer_fin_not_applicable),p_locked=>coalesce((v_fields->>'Locked')::boolean,v_order.locked),
                 p_model_settlement=>v_fields->>'Settlement_Model',p_modelare_settlement=>v_fields->>'Settlement_Modelare',
                 p_cer_fin_settlement=>v_fields->>'Settlement_Cer_Fin',p_items=>v_items,
                 p_requested_contract=>coalesce(v_fields->>'Contract',v_order.contract,'General'),p_case=>coalesce(v_fields->'case','{}'::jsonb));

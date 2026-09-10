@@ -7,7 +7,7 @@ declare
     v_id bigint; v_assignment uuid; v_scope record; v_amount numeric; v_rows integer;
     v_items jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":21,"work_type":"Bridge"}]';
     v_changed jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"Crown"}]';
-    v_failed boolean; v_audits integer; v_result jsonb;
+    v_failed boolean; v_audits integer; v_result jsonb; v_management_id bigint; v_case_input jsonb;
 begin
     if exists(select 1 from information_schema.columns where table_schema='public' and
         ((table_name='lab_work_orders' and column_name in ('tip_lucrare','nr_elemente','snapshot_unit_price'))
@@ -40,6 +40,14 @@ begin
     if v_scope.element_count<>2 or v_scope.work_types<>array['Crown','Bridge'] or v_scope.work_type_summary<>'Crown / Bridge' then
         raise exception 'Mixed scope read model is incorrect'; end if;
     if v_scope.items->0 ? 'unit_price' then raise exception 'Technician received sale price'; end if;
+    -- Exercise the actual authenticated table boundary, not an owner-bypassed SELECT.
+    execute 'SET LOCAL ROLE authenticated';
+    select count(*) into v_rows from public.lab_work_order_items where lab_organization_id=v_lab and work_order_id=v_id;
+    if v_rows<>0 then raise exception 'Technician raw SELECT exposed commercial items'; end if;
+    select * into v_scope from public.get_my_work_orders(v_lab) where id=v_id;
+    if v_scope.element_count<>2 or v_scope.items->0 ? 'contract' or v_scope.items->0 ? 'line_total' then
+        raise exception 'Technician scrubbed RPC is missing scope or exposes commercial fields'; end if;
+    execute 'RESET ROLE';
     select id into v_assignment from public.lab_work_order_stage_assignments where lab_organization_id=v_lab and work_order_id=v_id;
     if public.assignment_agreed_amount(v_assignment)<>70 then raise exception 'Mixed item costs incorrect'; end if;
     if (select snapshot_list_price from public.lab_work_orders where lab_organization_id=v_lab and id=v_id)<>350 then raise exception 'Mixed snapshot incorrect'; end if;
@@ -69,6 +77,54 @@ begin
     if not coalesce((v_result->>'ok')::boolean,false) then raise exception 'Technician AI update failed: %',v_result; end if;
     if (select selected_teeth from public.lab_patient_cases where lab_organization_id=v_lab and work_order_id=v_id)<>'11,12,13,14' then raise exception 'Atomic AI writer did not synchronize clinical scope'; end if;
     if (select item->'My_Stages'->0->>'Payment_Status' from jsonb_array_elements(public.ai_technician_work_orders()) as rows(item) where (item->>'ID')::bigint=v_id)<>'Not Paid' then raise exception 'AI payment status ignores adjusted outstanding balance'; end if;
+    perform set_config('request.jwt.claim.sub',v_admin::text,true);
+    -- Legacy cache says Paid, but the adjusted amount is 80 and only 70 was paid.
+    update public.lab_work_orders set paid_model='Paid' where lab_organization_id=v_lab and id=v_id;
+    if (select paid_model from public.get_my_work_orders(v_lab) where id=v_id)<>'Not Paid' then
+        raise exception 'Management payment status ignores adjusted outstanding balance'; end if;
+    v_result:=public.ai_mutate_work_order('update',jsonb_build_object('id',v_id,'fields',jsonb_build_object('Paid_Model','Paid')));
+    if not coalesce((v_result->>'ok')::boolean,false) then raise exception 'Settlement update failed: %',v_result; end if;
+    if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>80 then
+        raise exception 'Stale Paid cache prevented payment of added scope'; end if;
+    update public.lab_work_orders set paid_model='Not Paid' where lab_organization_id=v_lab and id=v_id;
+    perform public.set_stage_payment_status(v_lab,v_id,'model','Not Paid');
+    if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>70 then
+        raise exception 'Stale Not Paid cache prevented reversal of the actual legacy payment'; end if;
+
+    v_management_id:=public.create_management_work_order(
+        p_lab_organization_id=>v_lab,p_deadline=>current_date,p_nume_pacient=>'Management patient',
+        p_nume_partener=>'Partner',p_items=>v_items,p_tehnician_model=>'Per tooth technician',
+        p_status=>'Finished',p_status_model=>'Finished',p_modelare_not_applicable=>true,p_cer_fin_not_applicable=>true,
+        p_paid_model=>'Paid',p_locked=>true,p_case=>' {"clinic_note":"Saved note","shade":"A2","method":"Scan","production_notes":"Lab note","tooth_details_json":"{\"11\":{\"note\":\"Tooth note\"}}"}');
+    if not exists(select 1 from public.lab_work_orders where lab_organization_id=v_lab and id=v_management_id
+        and status='Finished' and status_model='Finished' and locked and modelare_not_applicable and cer_fin_not_applicable) then
+        raise exception 'Management creation did not preserve complete initial state'; end if;
+    if not exists(select 1 from public.lab_patient_cases where lab_organization_id=v_lab and work_order_id=v_management_id
+        and clinic_note='Saved note' and production_notes='Lab note' and tooth_details_json::jsonb->'11'->>'note'='Tooth note') then
+        raise exception 'Management creation lost clinical fields'; end if;
+    if public.work_order_stage_payment_status(v_lab,v_management_id,'model')<>'Paid' then
+        raise exception 'Management creation did not save initial payment'; end if;
+    execute 'SET LOCAL ROLE authenticated';
+    select count(*) into v_rows from public.lab_work_order_items where lab_organization_id=v_lab and work_order_id=v_management_id;
+    execute 'RESET ROLE';
+    if v_rows<>2 then raise exception 'Management commercial item access was lost'; end if;
+
+    -- Failure after items/case/costs must roll back the entire creation.
+    v_failed:=false;
+    begin perform public.create_management_work_order(
+        p_lab_organization_id=>v_lab,p_deadline=>current_date,p_nume_pacient=>'Rollback management',
+        p_nume_partener=>'Partner',p_items=>v_items,p_tehnician_model=>'Per tooth technician',p_paid_model=>'Invalid');
+    exception when others then v_failed:=true; end;
+    if not v_failed or exists(select 1 from public.lab_work_orders where lab_organization_id=v_lab and nume_pacient='Rollback management')
+        or exists(select 1 from public.lab_patient_cases where lab_organization_id=v_lab and nume_pacient='Rollback management') then
+        raise exception 'Failed management creation left an order or case'; end if;
+    for v_case_input in select value from jsonb_array_elements('[{"notes":"unsupported"},{"tooth_data":{}},{"material":"unsupported"},{"tooth_details":[]},{"tooth_details":{"11":[]}}, {"tooth_details":{},"tooth_details_json":{}}]') loop
+        v_failed:=false;
+        begin perform public.save_work_order_clinical_case(v_lab,v_id,v_case_input);
+        exception when others then v_failed:=true; end;
+        if not v_failed then raise exception 'Unsupported case contract accepted: %',v_case_input; end if;
+    end loop;
+    perform set_config('request.jwt.claim.sub',v_tech::text,true);
     v_failed:=false;
     begin insert into public.lab_work_order_items(lab_organization_id,work_order_id,tooth_number,work_type) values(v_lab,v_id,19,'Crown');
     exception when check_violation then v_failed:=true; end;

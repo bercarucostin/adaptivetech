@@ -146,7 +146,7 @@ DO $$
 DECLARE f record;
 BEGIN
     FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-        WHERE n.nspname='public' AND p.proname IN ('create_work_order','create_technician_work_order',
+        WHERE n.nspname='public' AND p.proname IN ('create_work_order','create_management_work_order','create_technician_work_order',
         'update_doctor_work_order','update_management_work_order_v188','upsert_patient_case',
         'save_my_work_order_case','get_patient_case','get_my_work_orders','get_my_work_orders_v188','get_my_production')
     LOOP
@@ -156,3 +156,7 @@ BEGIN
 END $$;
 REVOKE INSERT,UPDATE,DELETE ON public.lab_patient_cases FROM anon,authenticated;
 REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM anon,authenticated;
+
+-- Authenticated commercial reads are bounded by restrictive role/row policies.
+REVOKE SELECT ON public.lab_work_order_items FROM public, anon;
+GRANT SELECT ON public.lab_work_order_items TO authenticated;

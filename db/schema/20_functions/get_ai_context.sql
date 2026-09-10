@@ -91,9 +91,9 @@ begin
                     'Status_Model', wo.status_model,
                     'Status_Modelare', wo.status_modelare,
                     'Status_Cer_Fin', wo.status_cer_fin,
-                    'Paid_Model', wo.paid_model,
-                    'Paid_Modelare', wo.paid_modelare,
-                    'Paid_Cer_Fin', wo.paid_cer_fin,
+                    'Paid_Model', public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'model'),
+                    'Paid_Modelare', public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'modelare'),
+                    'Paid_Cer_Fin', public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'cer_fin'),
                     'Discount', wo.discount,
                     'Locked', wo.locked,
                     'Total_Pret_Lista', wo.snapshot_list_price,
@@ -178,13 +178,13 @@ begin
                     'Status_Cer_Fin', wo.status_cer_fin,
                     'Paid_Model',
                         case when lower(trim(coalesce(wo.tehnician_model,''))) = v_tech
-                             then wo.paid_model else null end,
+                             then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'model') else null end,
                     'Paid_Modelare',
                         case when lower(trim(coalesce(wo.tehnician1_modelare,''))) = v_tech
-                             then wo.paid_modelare else null end,
+                             then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'modelare') else null end,
                     'Paid_Cer_Fin',
                         case when lower(trim(coalesce(wo.tehnician2_cer_fin,''))) = v_tech
-                             then wo.paid_cer_fin else null end
+                             then public.work_order_stage_payment_status(wo.lab_organization_id,wo.id,'cer_fin') else null end
                 ) as obj
             from public.lab_work_orders wo
         cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope

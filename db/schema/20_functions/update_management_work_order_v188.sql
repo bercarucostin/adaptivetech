@@ -81,11 +81,11 @@ BEGIN
     v_status_cer_fin := CASE WHEN coalesce(p_cer_fin_not_applicable,false) THEN 'Not Started'
         ELSE coalesce(nullif(trim(p_status_cer_fin),''),'Not Started') END;
     v_paid_model := CASE WHEN v_model IS NULL THEN 'Not Paid'
-        ELSE coalesce(nullif(trim(p_paid_model),''),'Not Paid') END;
+        ELSE nullif(trim(p_paid_model),'') END;
     v_paid_modelare := CASE WHEN v_modelare IS NULL THEN 'Not Paid'
-        ELSE coalesce(nullif(trim(p_paid_modelare),''),'Not Paid') END;
+        ELSE nullif(trim(p_paid_modelare),'') END;
     v_paid_cer_fin := CASE WHEN v_cer_fin IS NULL THEN 'Not Paid'
-        ELSE coalesce(nullif(trim(p_paid_cer_fin),''),'Not Paid') END;
+        ELSE nullif(trim(p_paid_cer_fin),'') END;
 
     v_model_changed := lower(trim(coalesce(v_old.tehnician_model,'')))
         IS DISTINCT FROM lower(trim(coalesce(v_model,'')));
@@ -196,15 +196,18 @@ BEGIN
     PERFORM public.sync_work_order_stage_assignment(p_lab_organization_id,p_work_order_id,'cer_fin',v_saved.tehnician2_cer_fin);
 
     IF v_saved.tehnician_model IS NOT NULL
-       AND v_paid_model IS DISTINCT FROM coalesce(v_saved.paid_model,'Not Paid') THEN
+       AND v_paid_model IS NOT NULL
+       AND v_paid_model IS DISTINCT FROM public.work_order_stage_payment_status(p_lab_organization_id,p_work_order_id,'model') THEN
         PERFORM public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'model',v_paid_model);
     END IF;
     IF v_saved.tehnician1_modelare IS NOT NULL
-       AND v_paid_modelare IS DISTINCT FROM coalesce(v_saved.paid_modelare,'Not Paid') THEN
+       AND v_paid_modelare IS NOT NULL
+       AND v_paid_modelare IS DISTINCT FROM public.work_order_stage_payment_status(p_lab_organization_id,p_work_order_id,'modelare') THEN
         PERFORM public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'modelare',v_paid_modelare);
     END IF;
     IF v_saved.tehnician2_cer_fin IS NOT NULL
-       AND v_paid_cer_fin IS DISTINCT FROM coalesce(v_saved.paid_cer_fin,'Not Paid') THEN
+       AND v_paid_cer_fin IS NOT NULL
+       AND v_paid_cer_fin IS DISTINCT FROM public.work_order_stage_payment_status(p_lab_organization_id,p_work_order_id,'cer_fin') THEN
         PERFORM public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'cer_fin',v_paid_cer_fin);
     END IF;
 
