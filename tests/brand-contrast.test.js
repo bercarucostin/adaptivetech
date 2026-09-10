@@ -13,6 +13,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 // The single shared stylesheet. Every page links this one file; none of them
 // defines a token of its own any more, which is what the last test here
@@ -129,7 +130,8 @@ test('no page defines its own tokens or shared components', () => {
     const html = fs.readFileSync(path.join(SITE, page), 'utf8');
     const inline = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
 
-    assert.ok(html.includes('href="/assets/site.css"'), page + ' does not link the shared stylesheet');
+    assert.match(html, /href="\/assets\/site\.css\?v=[a-f0-9]{8}"/,
+      page + ' does not link the shared stylesheet with a version');
     assert.ok(!/:root\s*\{/.test(inline), page + ' defines its own :root tokens');
 
     // The shared components, by the selectors that own them.
@@ -143,5 +145,33 @@ test('no page defines its own tokens or shared components', () => {
   const demo = fs.readFileSync(path.join(SITE, 'demo', 'demo.css'), 'utf8');
   assert.ok(!/:root\s*\{/.test(demo), 'demo.css defines its own tokens');
   const demoHtml = fs.readFileSync(path.join(SITE, 'demo', 'index.html'), 'utf8');
-  assert.ok(demoHtml.includes('href="/assets/site.css"'), 'the demo does not link the shared stylesheet');
+  assert.match(demoHtml, /href="\/assets\/site\.css\?v=[a-f0-9]{8}"/,
+    'the demo does not link the shared stylesheet with a version');
+});
+
+test('every cacheable asset is referenced at its current content hash', () => {
+  // These files are cached hard at the edge and their URLs used to stay the
+  // same when their contents changed, so a deploy did not reach anyone who
+  // had visited before until someone purged Cloudflare by hand. The version
+  // is a hash of the bytes, so a stale reference here means the deployed HTML
+  // would point browsers at a file that no longer exists in that form.
+  const hash = (p) =>
+    crypto.createHash('sha256').update(fs.readFileSync(p, 'utf8')).digest('hex').slice(0, 8);
+
+  const demoHtml = fs.readFileSync(path.join(SITE, 'demo', 'index.html'), 'utf8');
+  const cases = [
+    ['/assets/site.css', path.join(SITE, 'assets', 'site.css'), demoHtml],
+    ['demo.css', path.join(SITE, 'demo', 'demo.css'), demoHtml],
+    ['demo.js', path.join(SITE, 'demo', 'demo.js'), demoHtml],
+    ['/assets/site.css', path.join(SITE, 'assets', 'site.css'),
+      fs.readFileSync(path.join(SITE, 'index.html'), 'utf8')],
+  ];
+
+  for (const [ref, file, html] of cases) {
+    const escaped = ref.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const found = html.match(new RegExp(escaped + '\\?v=([a-f0-9]{8})'));
+    assert.ok(found, ref + ' is referenced without a version');
+    assert.strictEqual(found[1], hash(file),
+      ref + ' is referenced at a stale hash — run: node tools/build-site.js');
+  }
 });
