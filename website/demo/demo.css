@@ -173,7 +173,7 @@ form label[for] {
 
 .cf-turnstile { margin-bottom: 1.4rem; }
 
-/* Primary action — same amber/navy swap as the main site's .btn-cta-amber,
+/* Primary action — same gold/navy swap as the main site's .btn-gold,
    so the button that opened this page and the one that moves you through it
    read as the same control. */
 button[type="submit"] {
@@ -264,7 +264,7 @@ button[type="submit"]:disabled {
 .demo__remaining {
   flex-shrink: 0;
   background: var(--gold-soft);
-  color: var(--gold-ink); /* 5.15:1 on amber-soft */
+  color: var(--gold-ink); /* 5.15:1 on --gold-soft */
   font-size: 0.72rem;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
@@ -319,7 +319,7 @@ button[type="submit"]:disabled {
 .demo__sources li {
   font-family: var(--mono);
   font-size: 0.7rem;
-  color: var(--gold-ink); /* 5.15:1 on amber-soft */
+  color: var(--gold-ink); /* 5.15:1 on --gold-soft */
   background: var(--gold-soft);
   border-radius: 6px;
   padding: 0.25rem 0.55rem;

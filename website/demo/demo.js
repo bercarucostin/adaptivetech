@@ -296,14 +296,24 @@ function addMessage(role, text, sources) {
   li.appendChild(body);
 
   if (sources && sources.length) {
-    const chips = document.createElement('ul');
-    chips.className = 'demo__sources';
-    for (const s of sources) {
-      const chip = document.createElement('li');
-      chip.textContent = s.section ? s.file + ' — ' + s.section : s.file;
-      chips.appendChild(chip);
+    // One line per FILE, not per chunk. Six chunks from one document used to
+    // render six chips, each repeating the same filename with a different
+    // section after it -- most of the width, none of the information. The
+    // visitor only needs to know what the answer was grounded in.
+    //
+    // Deduplicated rather than hardcoded to one: a session uploads a single
+    // document today, and this stays correct if that ever changes.
+    const files = [...new Set(sources.map((s) => s.file).filter(Boolean))];
+    if (files.length) {
+      const chips = document.createElement('ul');
+      chips.className = 'demo__sources';
+      for (const file of files) {
+        const chip = document.createElement('li');
+        chip.textContent = file;
+        chips.appendChild(chip);
+      }
+      li.appendChild(chips);
     }
-    li.appendChild(chips);
   }
 
   $('messages').appendChild(li);
