@@ -1,3 +1,5 @@
 # Real deployment secrets. deploy/.env.example is the committed template;
 # deploy/.env holds live values and must never be tracked.
 deploy/.env
+# Local database backups contain production data and must never be committed.
+/backups/
