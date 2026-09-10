@@ -14,19 +14,20 @@ BEGIN
 
     WITH assigned AS (
         SELECT a.id AS assignment_id,a.work_order_id,wo.nume_pacient,wo.nume_partener,
-               wo.tip_lucrare,a.stage_key,
+               scope.items,scope.work_types,scope.work_type_summary,scope.element_count,a.stage_key,
                CASE a.stage_key WHEN 'model' THEN 'Model' WHEN 'modelare' THEN 'Modelare' ELSE 'Cer / Fin' END AS stage_label,
                CASE a.stage_key WHEN 'model' THEN coalesce(wo.status_model,'Not Started')
                                 WHEN 'modelare' THEN coalesce(wo.status_modelare,'Not Started')
                                 ELSE coalesce(wo.status_cer_fin,'Not Started') END AS stage_status,
-               a.unit_cost,a.agreed_amount,
+               a.unit_cost,public.assignment_agreed_amount(a.id) as agreed_amount,
                coalesce(pay.paid_amount,0)::numeric AS paid_amount,
-               CASE WHEN a.agreed_amount is null then null
-                    ELSE a.agreed_amount-coalesce(pay.paid_amount,0) END AS outstanding_amount,
+               CASE WHEN public.assignment_agreed_amount(a.id) is null then null
+                    ELSE public.assignment_agreed_amount(a.id)-coalesce(pay.paid_amount,0) END AS outstanding_amount,
                a.cost_source,a.started_at,a.ended_at,a.migrated
         FROM public.lab_work_order_stage_assignments a
         JOIN public.lab_work_orders wo
           ON wo.lab_organization_id=a.lab_organization_id AND wo.id=a.work_order_id
+        CROSS JOIN LATERAL public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope
         LEFT JOIN LATERAL (
             SELECT coalesce(sum(p.amount),0)::numeric AS paid_amount
             FROM public.technician_payments p WHERE p.assignment_id=a.id
@@ -45,7 +46,7 @@ BEGIN
         SELECT coalesce(jsonb_agg(jsonb_build_object(
             'Assignment_ID',assignment_id,'Work_Order_ID',work_order_id,
             'Nume_Pacient',nume_pacient,'Nume_Partener',nume_partener,
-            'Tip_Lucrare',tip_lucrare,'Stage',stage_key,'Stage_Label',stage_label,
+            'items',items,'work_types',work_types,'work_type_summary',work_type_summary,'element_count',element_count,'Stage',stage_key,'Stage_Label',stage_label,
             'Stage_Status',stage_status,
             'Payment_Status',case when agreed_amount is not null and paid_amount>=agreed_amount then 'Paid' else 'Not Paid' end,
             'Unit_Cost',unit_cost,'Amount',agreed_amount,'Agreed_Amount',agreed_amount,

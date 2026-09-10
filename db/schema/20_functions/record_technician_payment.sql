@@ -37,11 +37,11 @@ BEGIN
         END IF;
         RETURN v_existing.id;
     END IF;
-    IF v_assignment.agreed_amount IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
+    IF public.assignment_agreed_amount(v_assignment.id) IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
 
     SELECT coalesce(sum(amount),0) INTO v_paid
     FROM public.technician_payments WHERE assignment_id=p_assignment_id;
-    v_outstanding := v_assignment.agreed_amount - v_paid;
+    v_outstanding := public.assignment_agreed_amount(v_assignment.id) - v_paid;
     IF p_amount > v_outstanding THEN RAISE EXCEPTION 'Payment exceeds outstanding amount'; END IF;
 
     INSERT INTO public.technician_payments (

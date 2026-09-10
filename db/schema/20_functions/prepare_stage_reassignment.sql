@@ -41,8 +41,8 @@ BEGIN
 
     SELECT coalesce(sum(amount),0) INTO v_paid
     FROM public.technician_payments WHERE assignment_id=v_assignment.id;
-    v_outstanding := CASE WHEN v_assignment.agreed_amount IS NULL THEN 0
-        ELSE greatest(v_assignment.agreed_amount-v_paid,0) END;
+    v_outstanding := CASE WHEN public.assignment_agreed_amount(v_assignment.id) IS NULL THEN 0
+        ELSE greatest(public.assignment_agreed_amount(v_assignment.id)-v_paid,0) END;
     IF v_outstanding<=0 THEN RETURN true; END IF;
 
     IF v_choice='pay_outstanding' THEN

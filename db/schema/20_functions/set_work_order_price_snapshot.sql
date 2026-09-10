@@ -39,7 +39,6 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
 
     v_before := jsonb_build_object(
-        'unit_price', v_order.snapshot_unit_price,
         'list_price', v_order.snapshot_list_price,
         'final_price', v_order.snapshot_final_price,
         'discount', v_order.discount,
@@ -52,7 +51,8 @@ BEGIN
     INTO v_before_items
     FROM public.lab_work_order_items
     WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
-    v_list := round(p_unit_price * coalesce(v_order.nr_elemente, 0), 2);
+    SELECT round(p_unit_price*sum(quantity),2) INTO v_list FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
+    IF v_list IS NULL THEN RAISE EXCEPTION 'Work Order requires items'; END IF;
     v_final := round(v_list * (1 - p_discount / 100), 2);
 
     UPDATE public.lab_work_order_items
@@ -63,8 +63,7 @@ BEGIN
     WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
 
     UPDATE public.lab_work_orders
-    SET snapshot_unit_price = round(p_unit_price, 2),
-        snapshot_list_price = v_list,
+    SET snapshot_list_price = v_list,
         snapshot_final_price = v_final,
         discount = p_discount,
         price_source = 'admin_override',

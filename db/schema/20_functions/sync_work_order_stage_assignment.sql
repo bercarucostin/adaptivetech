@@ -84,7 +84,7 @@ BEGIN
         technician_name, quantity, cost_source, created_by_user_id
     ) VALUES (
         p_lab, p_work_order_id, v_stage, v_user_id, v_name,
-        greatest(coalesce(v_order.nr_elemente, 1), 1), 'catalog', auth.uid()
+        (SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id), 'catalog', auth.uid()
     ) RETURNING id INTO v_assignment_id;
 
     INSERT INTO public.lab_work_order_assignment_cost_lines (
@@ -95,12 +95,6 @@ BEGIN
         FROM public.lab_work_order_items i
         WHERE i.lab_organization_id = p_lab AND i.work_order_id = p_work_order_id
         GROUP BY i.work_type
-        UNION ALL
-        SELECT v_order.tip_lucrare, greatest(coalesce(v_order.nr_elemente,1),1)::numeric
-        WHERE NOT EXISTS (
-            SELECT 1 FROM public.lab_work_order_items i
-            WHERE i.lab_organization_id = p_lab AND i.work_order_id = p_work_order_id
-        )
     )
     SELECT v_assignment_id, wl.work_type, wl.quantity, cost.cost,
            CASE WHEN cost.cost IS NULL THEN NULL ELSE round(cost.cost * wl.quantity, 2) END,

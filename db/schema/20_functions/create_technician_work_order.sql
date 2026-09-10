@@ -1,8 +1,4 @@
--- Flowrise Supabase function: public.create_technician_work_order(p_lab_organization_id uuid, p_deadline date, p_nume_pacient text, p_nume_partener text, p_tip_lucrare text, p_nr_elemente integer, p_data_receptie timestamp with time zone, p_my_stage text)
--- Generated from the Supabase schema snapshot dated 2026-09-04.
--- The complete CREATE OR REPLACE FUNCTION definition follows.
-
-CREATE OR REPLACE FUNCTION public.create_technician_work_order(p_lab_organization_id uuid, p_deadline date, p_nume_pacient text, p_nume_partener text, p_tip_lucrare text, p_nr_elemente integer DEFAULT 1, p_data_receptie timestamp with time zone DEFAULT NULL::timestamp with time zone, p_my_stage text DEFAULT 'Model'::text)
+CREATE OR REPLACE FUNCTION public.create_technician_work_order(p_lab_organization_id uuid, p_deadline date, p_nume_pacient text, p_nume_partener text, p_items jsonb, p_data_receptie timestamp with time zone DEFAULT NULL::timestamp with time zone, p_my_stage text DEFAULT 'Model'::text, p_case jsonb DEFAULT '{}'::jsonb)
  RETURNS bigint
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -15,7 +11,6 @@ declare
     v_model text := null;
     v_modelare text := null;
     v_cer_fin text := null;
-    v_price jsonb;
 begin
     if not public.is_lab_technician(p_lab_organization_id) then
         raise exception 'Technician access denied';
@@ -34,24 +29,6 @@ begin
         raise exception 'Nume_Partener is required';
     end if;
 
-    if trim(coalesce(p_tip_lucrare,'')) = '' then
-        raise exception 'Tip_Lucrare is required';
-    end if;
-
-    if coalesce(p_nr_elemente,0) <= 0 then
-        raise exception 'Nr_Elemente must be > 0';
-    end if;
-
-    if not exists (
-        select 1
-        from public.lab_work_types wt
-        where wt.lab_organization_id = p_lab_organization_id
-          and wt.active = true
-          and wt.tip_lucrare = trim(p_tip_lucrare)
-    ) then
-        raise exception 'Tip_Lucrare is not active';
-    end if;
-
     if v_stage = 'model' then
         v_model := v_tech;
     elsif v_stage = 'modelare' then
@@ -63,10 +40,6 @@ begin
     end if;
 
     v_id := public.next_lab_work_order_id(p_lab_organization_id);
-    v_price := public.resolve_work_order_price_snapshot(
-        p_lab_organization_id, trim(p_nume_partener), 'General', trim(p_tip_lucrare),
-        p_nr_elemente, 0
-    );
 
     insert into public.lab_work_orders (
         lab_organization_id,
@@ -76,7 +49,6 @@ begin
         nume_pacient,
         nume_partener,
         contract,
-        tip_lucrare,
         tehnician_model,
         tehnician1_modelare,
         tehnician2_cer_fin,
@@ -90,11 +62,9 @@ begin
         created_at,
         updated_by_user_id,
         updated_at,
-        nr_elemente,
         discount,
         data_receptie,
         locked,
-        snapshot_unit_price,
         snapshot_list_price,
         snapshot_final_price,
         price_source,
@@ -112,7 +82,6 @@ begin
         -- Commercial data is deliberately forced server-side.
         'General',
 
-        trim(p_tip_lucrare),
         v_model,
         v_modelare,
         v_cer_fin,
@@ -126,20 +95,21 @@ begin
         now(),
         public.current_legacy_user_id(),
         now(),
-        p_nr_elemente,
 
         -- Technician cannot set or infer client discount.
         0,
 
         p_data_receptie,
         false,
-        (v_price->>'unit_price')::numeric,
-        (v_price->>'list_price')::numeric,
-        (v_price->>'final_price')::numeric,
-        v_price->>'price_source',
+        null,
+        null,
+        'pending_items',
         now(),
         false
     );
+
+    perform public.replace_work_order_items(p_lab_organization_id,v_id,p_items,'General');
+    perform public.save_work_order_clinical_case(p_lab_organization_id,v_id,p_case);
 
     perform public.sync_work_order_stage_assignment(
         p_lab_organization_id, v_id,
@@ -152,7 +122,3 @@ begin
 end;
 $function$
 ;
-
--- Security definer: True
--- Return type: bigint
--- Identity arguments: p_lab_organization_id uuid, p_deadline date, p_nume_pacient text, p_nume_partener text, p_tip_lucrare text, p_nr_elemente integer, p_data_receptie timestamp with time zone, p_my_stage text

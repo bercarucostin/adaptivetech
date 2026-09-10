@@ -1,10 +1,3 @@
--- Management editor contract used by the V18.8+ browser. Applicability,
--- assignments, immutable costs and payment ledger changes are saved atomically.
-DROP FUNCTION IF EXISTS public.update_management_work_order_v188(
-    uuid,bigint,date,text,text,text,text,text,integer,numeric,timestamptz,
-    text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean
-);
-
 CREATE OR REPLACE FUNCTION public.update_management_work_order_v188(
     p_lab_organization_id uuid,
     p_work_order_id bigint,
@@ -13,8 +6,6 @@ CREATE OR REPLACE FUNCTION public.update_management_work_order_v188(
     p_nume_pacient text,
     p_nume_partener text,
     p_contract text,
-    p_tip_lucrare text,
-    p_nr_elemente integer,
     p_discount numeric,
     p_data_receptie timestamptz,
     p_tehnician_model text,
@@ -34,7 +25,8 @@ CREATE OR REPLACE FUNCTION public.update_management_work_order_v188(
     p_modelare_settlement text DEFAULT NULL,
     p_cer_fin_settlement text DEFAULT NULL,
     p_items jsonb DEFAULT NULL,
-    p_requested_contract text DEFAULT 'General'
+    p_requested_contract text DEFAULT 'General',
+    p_case jsonb DEFAULT '{}'::jsonb
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -72,16 +64,9 @@ BEGIN
 
     IF trim(coalesce(p_nume_pacient,''))='' THEN RAISE EXCEPTION 'Nume_Pacient is required'; END IF;
     IF trim(coalesce(p_nume_partener,''))='' THEN RAISE EXCEPTION 'Nume_Partener is required'; END IF;
-    IF trim(coalesce(p_tip_lucrare,''))='' THEN RAISE EXCEPTION 'Tip_Lucrare is required'; END IF;
-    IF coalesce(p_nr_elemente,0)<=0 THEN RAISE EXCEPTION 'Nr_Elemente must be > 0'; END IF;
     IF coalesce(p_discount,0)<0 OR coalesce(p_discount,0)>100 THEN
         RAISE EXCEPTION 'Discount must be between 0 and 100';
     END IF;
-    IF NOT EXISTS (
-        SELECT 1 FROM public.lab_work_types wt
-        WHERE wt.lab_organization_id=p_lab_organization_id
-          AND wt.active=true AND wt.tip_lucrare=trim(p_tip_lucrare)
-    ) THEN RAISE EXCEPTION 'Tip_Lucrare is not active'; END IF;
 
     v_model := CASE WHEN coalesce(p_model_not_applicable,false) THEN NULL
         ELSE nullif(trim(coalesce(p_tehnician_model,'')),'') END;
@@ -136,9 +121,20 @@ BEGIN
             p_lab_organization_id,p_work_order_id,'cer_fin',v_cer_fin,p_cer_fin_settlement);
     END IF;
 
+    -- Close changed technicians before the scope replacement; their frozen balance belongs
+    -- to the prior scope, and the new assignment is priced only after new items exist.
+    WITH closed AS (
+        UPDATE public.lab_work_order_stage_assignments SET ended_at=now()
+        WHERE lab_organization_id=p_lab_organization_id AND work_order_id=p_work_order_id AND ended_at IS NULL
+          AND ((stage_key='model' AND v_model_changed) OR (stage_key='modelare' AND v_modelare_changed)
+               OR (stage_key='cer_fin' AND v_cer_fin_changed)) RETURNING *
+    ) INSERT INTO public.work_order_financial_audit(lab_organization_id,work_order_id,entity_type,entity_id,action,before_value,after_value,changed_by_user_id)
+      SELECT p_lab_organization_id,p_work_order_id,'stage_assignment',id::text,'close_for_reassignment',
+          to_jsonb(closed)||jsonb_build_object('ended_at',null),to_jsonb(closed),auth.uid() FROM closed;
+
     v_before := jsonb_build_object(
         'list_price',v_old.snapshot_list_price,'final_price',v_old.snapshot_final_price,
-        'quantity',v_old.nr_elemente,'discount',v_old.discount
+        'discount',v_old.discount
     );
 
     UPDATE public.lab_work_orders wo
@@ -147,8 +143,6 @@ BEGIN
         nume_pacient=trim(p_nume_pacient),
         nume_partener=trim(p_nume_partener),
         contract=coalesce(nullif(trim(p_contract),''),'General'),
-        tip_lucrare=trim(p_tip_lucrare),
-        nr_elemente=p_nr_elemente,
         discount=coalesce(p_discount,0),
         data_receptie=p_data_receptie,
         tehnician_model=v_model,
@@ -164,28 +158,6 @@ BEGIN
         modelare_not_applicable=coalesce(p_modelare_not_applicable,false),
         cer_fin_not_applicable=coalesce(p_cer_fin_not_applicable,false),
         locked=coalesce(p_locked,false),
-        snapshot_list_price=CASE WHEN p_items IS NOT NULL THEN wo.snapshot_list_price
-            WHEN EXISTS (
-                SELECT 1 FROM public.lab_work_order_items i
-                WHERE i.lab_organization_id=p_lab_organization_id AND i.work_order_id=p_work_order_id
-            ) THEN (
-                SELECT CASE WHEN bool_and(i.line_total IS NOT NULL) THEN sum(i.line_total) END
-                FROM public.lab_work_order_items i
-                WHERE i.lab_organization_id=p_lab_organization_id AND i.work_order_id=p_work_order_id
-            )
-            WHEN wo.snapshot_unit_price IS NULL THEN NULL
-            ELSE round(wo.snapshot_unit_price*p_nr_elemente,2) END,
-        snapshot_final_price=CASE WHEN p_items IS NOT NULL THEN wo.snapshot_final_price
-            WHEN EXISTS (
-                SELECT 1 FROM public.lab_work_order_items i
-                WHERE i.lab_organization_id=p_lab_organization_id AND i.work_order_id=p_work_order_id
-            ) THEN round((
-                SELECT CASE WHEN bool_and(i.line_total IS NOT NULL) THEN sum(i.line_total) END
-                FROM public.lab_work_order_items i
-                WHERE i.lab_organization_id=p_lab_organization_id AND i.work_order_id=p_work_order_id
-            )*(1-coalesce(p_discount,0)/100),2)
-            WHEN wo.snapshot_unit_price IS NULL THEN NULL
-            ELSE round(wo.snapshot_unit_price*p_nr_elemente*(1-coalesce(p_discount,0)/100),2) END,
         updated_by_user_id=public.current_legacy_user_id(),
         updated_at=now()
     WHERE wo.lab_organization_id=p_lab_organization_id AND wo.id=p_work_order_id
@@ -193,16 +165,15 @@ BEGIN
 
     -- Price lines must be fixed before technician costs. This prevents a
     -- multi-type case from assigning every tooth the primary work-type cost.
-    IF p_items IS NOT NULL THEN
-        PERFORM public.replace_work_order_items(
-            p_lab_organization_id,p_work_order_id,p_items,p_requested_contract);
-        SELECT * INTO v_saved FROM public.lab_work_orders
-        WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;
-    END IF;
+    IF p_items IS NULL THEN RAISE EXCEPTION 'At least one configured tooth is required'; END IF;
+    PERFORM public.replace_work_order_items(
+        p_lab_organization_id,p_work_order_id,p_items,p_requested_contract);
+    SELECT * INTO v_saved FROM public.lab_work_orders
+    WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;
 
     v_after := jsonb_build_object(
         'list_price',v_saved.snapshot_list_price,'final_price',v_saved.snapshot_final_price,
-        'quantity',v_saved.nr_elemente,'discount',v_saved.discount
+        'discount',v_saved.discount
     );
     IF v_before IS DISTINCT FROM v_after THEN
         INSERT INTO public.work_order_financial_audit(
@@ -216,7 +187,7 @@ BEGIN
 
     UPDATE public.lab_patient_cases
     SET nume_pacient=trim(p_nume_pacient),nume_partener=trim(p_nume_partener),
-        tip_lucrare=trim(p_tip_lucrare),deadline=p_deadline,
+        deadline=p_deadline,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     WHERE lab_organization_id=p_lab_organization_id AND work_order_id=p_work_order_id;
 
@@ -237,17 +208,18 @@ BEGIN
         PERFORM public.set_stage_payment_status(p_lab_organization_id,p_work_order_id,'cer_fin',v_paid_cer_fin);
     END IF;
 
+    PERFORM public.save_work_order_clinical_case(p_lab_organization_id,p_work_order_id,p_case);
     RETURN true;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.update_management_work_order_v188(
-    uuid,bigint,date,text,text,text,text,text,integer,numeric,timestamptz,
+    uuid,bigint,date,text,text,text,text,numeric,timestamptz,
     text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,
-    text,text,text,jsonb,text
+    text,text,text,jsonb,text,jsonb
 ) FROM public;
 GRANT EXECUTE ON FUNCTION public.update_management_work_order_v188(
-    uuid,bigint,date,text,text,text,text,text,integer,numeric,timestamptz,
+    uuid,bigint,date,text,text,text,text,numeric,timestamptz,
     text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,
-    text,text,text,jsonb,text
+    text,text,text,jsonb,text,jsonb
 ) TO authenticated;

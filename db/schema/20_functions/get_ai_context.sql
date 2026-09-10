@@ -83,8 +83,8 @@ begin
                     'Nume_Pacient', wo.nume_pacient,
                     'Nume_Partener', wo.nume_partener,
                     'Contract', wo.contract,
-                    'Tip_Lucrare', wo.tip_lucrare,
-                    'Nr_Elemente', wo.nr_elemente,
+                    'items', scope.items,'work_types',scope.work_types,
+                    'work_type_summary',scope.work_type_summary,'element_count',scope.element_count,
                     'Tehnician_Model', wo.tehnician_model,
                     'Tehnician1_Modelare', wo.tehnician1_modelare,
                     'Tehnician2_Cer_Fin', wo.tehnician2_cer_fin,
@@ -96,13 +96,13 @@ begin
                     'Paid_Cer_Fin', wo.paid_cer_fin,
                     'Discount', wo.discount,
                     'Locked', wo.locked,
-                    'Pret_Element', wo.snapshot_unit_price,
                     'Total_Pret_Lista', wo.snapshot_list_price,
                     'Total_dupa_Discount', wo.snapshot_final_price,
                     'Price_Source', wo.price_source,
                     'Price_Migrated', wo.price_migrated
                 ) as obj
             from public.lab_work_orders wo
+        cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope
             where wo.lab_organization_id = v_lab
               and wo.archived_at is null
             order by wo.id desc
@@ -168,8 +168,8 @@ begin
                     'Status', wo.status,
                     'Nume_Pacient', wo.nume_pacient,
                     'Nume_Partener', wo.nume_partener,
-                    'Tip_Lucrare', wo.tip_lucrare,
-                    'Nr_Elemente', wo.nr_elemente,
+                    'items', scope.items,'work_types',scope.work_types,
+                    'work_type_summary',scope.work_type_summary,'element_count',scope.element_count,
                     'Tehnician_Model', wo.tehnician_model,
                     'Tehnician1_Modelare', wo.tehnician1_modelare,
                     'Tehnician2_Cer_Fin', wo.tehnician2_cer_fin,
@@ -187,6 +187,7 @@ begin
                              then wo.paid_cer_fin else null end
                 ) as obj
             from public.lab_work_orders wo
+        cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope
             where wo.lab_organization_id = v_lab
               and v_tech <> ''
               and v_tech in (

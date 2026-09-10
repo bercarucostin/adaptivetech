@@ -122,21 +122,37 @@ revoke update (
 ) on public.lab_work_order_items from anon, authenticated;
 revoke insert (
     lab_organization_id,id,deadline,status,nume_pacient,nume_partener,contract,
-    tip_lucrare,tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
+    tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
     status_model,status_modelare,status_cer_fin,paid_model,paid_modelare,
     paid_cer_fin,created_by_user_id,created_at,updated_by_user_id,updated_at,
-    nr_elemente,discount,data_receptie,locked,model_not_applicable,
+    discount,data_receptie,locked,model_not_applicable,
     modelare_not_applicable,cer_fin_not_applicable,migrated_at,
-    snapshot_unit_price,snapshot_list_price,snapshot_final_price,price_source,
+    snapshot_list_price,snapshot_final_price,price_source,
     price_fixed_at,price_migrated,archived_at
 ) on public.lab_work_orders from anon, authenticated;
 revoke update (
     lab_organization_id,id,deadline,status,nume_pacient,nume_partener,contract,
-    tip_lucrare,tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
+    tehnician_model,tehnician1_modelare,tehnician2_cer_fin,
     status_model,status_modelare,status_cer_fin,paid_model,paid_modelare,
     paid_cer_fin,created_by_user_id,created_at,updated_by_user_id,updated_at,
-    nr_elemente,discount,data_receptie,locked,model_not_applicable,
+    discount,data_receptie,locked,model_not_applicable,
     modelare_not_applicable,cer_fin_not_applicable,migrated_at,
-    snapshot_unit_price,snapshot_list_price,snapshot_final_price,price_source,
+    snapshot_list_price,snapshot_final_price,price_source,
     price_fixed_at,price_migrated,archived_at
 ) on public.lab_work_orders from anon, authenticated;
+
+-- Public per-tooth RPC contracts. Internal writers/resolvers stay inaccessible.
+DO $$
+DECLARE f record;
+BEGIN
+    FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.proname IN ('create_work_order','create_technician_work_order',
+        'update_doctor_work_order','update_management_work_order_v188','upsert_patient_case',
+        'save_my_work_order_case','get_patient_case','get_my_work_orders','get_my_work_orders_v188','get_my_production')
+    LOOP
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM public,anon',f.signature);
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated',f.signature);
+    END LOOP;
+END $$;
+REVOKE INSERT,UPDATE,DELETE ON public.lab_patient_cases FROM anon,authenticated;
+REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM anon,authenticated;

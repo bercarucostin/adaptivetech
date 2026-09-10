@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.lab_work_order_items (
     PRIMARY KEY (lab_organization_id, work_order_id, tooth_number),
     FOREIGN KEY (lab_organization_id, work_order_id)
         REFERENCES public.lab_work_orders(lab_organization_id, id) ON DELETE CASCADE,
-    CHECK (tooth_number BETWEEN 11 AND 48),
+    CHECK (tooth_number / 10 BETWEEN 1 AND 4 AND tooth_number % 10 BETWEEN 1 AND 8),
     CHECK (quantity > 0),
     CHECK (unit_price IS NULL OR unit_price >= 0),
     CHECK (line_total IS NULL OR line_total >= 0)

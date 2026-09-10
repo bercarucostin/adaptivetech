@@ -14,9 +14,10 @@ as $$
 declare
     v_role text := public.effective_lab_role(p_lab_organization_id);
     v_order public.lab_work_orders%rowtype;
-    v_first_type text;
     v_first_contract text;
-    v_count integer;
+    v_count numeric;
+    v_scope_before jsonb;
+    v_scope_after jsonb;
     v_list numeric;
     v_final numeric;
     v_lines jsonb;
@@ -25,7 +26,7 @@ declare
     v_order_price_source text;
     v_order_price_fixed_at timestamptz;
 begin
-    if v_role not in ('admin','manager','doctor') then
+    if v_role not in ('admin','manager','doctor','technician') then
         raise exception 'Work Order item update denied';
     end if;
     if jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' then
@@ -53,6 +54,9 @@ begin
         if lower(trim(coalesce(v_order.status,''))) <> 'not started' then
             raise exception 'Doctor can edit only Not Started Work Orders';
         end if;
+    elsif v_role='technician' then
+        if not public.can_access_work_order(p_lab_organization_id,p_work_order_id) then raise exception 'Work Order access denied'; end if;
+        if v_order.locked then raise exception 'Work Order is locked'; end if;
     elsif not public.is_lab_management(p_lab_organization_id) then
         raise exception 'Management access denied';
     end if;
@@ -63,7 +67,8 @@ begin
         select 1
         from jsonb_array_elements(p_items) item
         where trim(coalesce(item->>'work_type','')) = ''
-           or coalesce((item->>'tooth_number')::integer,0) not between 11 and 48
+           or coalesce((item->>'tooth_number')::integer,0) / 10 not between 1 and 4
+           or coalesce((item->>'tooth_number')::integer,0) % 10 not between 1 and 8
            or not exists (
                select 1 from public.lab_work_types wt
                where wt.lab_organization_id=p_lab_organization_id and wt.active=true
@@ -75,12 +80,18 @@ begin
         group by (item->>'tooth_number')::integer having count(*)>1
     ) then raise exception 'Duplicate tooth number'; end if;
 
+    select coalesce(jsonb_agg(jsonb_build_object('work_type',work_type,'quantity',quantity) order by work_type),'[]'::jsonb)
+    into v_scope_before from (select work_type,sum(quantity) quantity from public.lab_work_order_items
+    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id group by work_type) scope;
+
     with incoming as (
         select (item->>'tooth_number')::integer as tooth_number,
                trim(item->>'work_type') as work_type
         from jsonb_array_elements(p_items) item
     ), resolved as (
-        select i.tooth_number,i.work_type,
+        select i.tooth_number,coalesce(old.work_type,i.work_type) as work_type,
+               coalesce(old.quantity,1) as quantity,
+               case when old.tooth_number is not null then old.line_total else round(price.pret,2) end as line_total,
                case when old.tooth_number is not null then old.contract
                     else coalesce(price.contract,'General') end as contract,
                case when old.tooth_number is not null then old.unit_price
@@ -119,7 +130,7 @@ begin
         created_by_user_id,updated_by_user_id,updated_at
     )
     select p_lab_organization_id,p_work_order_id,tooth_number,work_type,contract,
-           unit_price,1,case when unit_price is null then null else round(unit_price,2) end,
+           unit_price,quantity,line_total,
            price_source,price_fixed_at,price_migrated,
            public.current_legacy_user_id(),public.current_legacy_user_id(),now()
     from resolved
@@ -139,12 +150,12 @@ begin
           where (item->>'tooth_number')::integer=existing.tooth_number
       );
 
-    select work_type,contract into v_first_type,v_first_contract
+    select contract into v_first_contract
     from public.lab_work_order_items
     where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id
     order by tooth_number limit 1;
 
-    select count(*)::integer,
+    select sum(quantity),
            case when bool_and(line_total is not null) then round(sum(line_total),2) else null end,
            coalesce(bool_and(unit_price is not null),false),
            coalesce(jsonb_agg(jsonb_build_object(
@@ -163,16 +174,15 @@ begin
         else round(v_list*(1-(case when v_role='doctor' then 0 else v_order.discount end)/100),2) end;
 
     update public.lab_work_orders
-    set tip_lucrare=v_first_type,nr_elemente=v_count,contract=coalesce(v_first_contract,'General'),
+    set contract=coalesce(v_first_contract,'General'),
         discount=case when v_role='doctor' then 0 else discount end,
-        snapshot_unit_price=case when v_list is null or v_count=0 then null else round(v_list/v_count,2) end,
         snapshot_list_price=v_list,snapshot_final_price=v_final,
         price_source=v_order_price_source,price_fixed_at=coalesce(v_order_price_fixed_at,now()),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
 
-    if (v_order.snapshot_list_price,v_order.snapshot_final_price,v_order.nr_elemente,v_before_lines)
-       is distinct from (v_list,v_final,v_count,v_lines) then
+    if (v_order.snapshot_list_price,v_order.snapshot_final_price,v_before_lines)
+       is distinct from (v_list,v_final,v_lines) then
         insert into public.work_order_financial_audit (
             lab_organization_id,work_order_id,entity_type,entity_id,action,
             before_value,after_value,changed_by_user_id
@@ -181,7 +191,7 @@ begin
             'item_change',
             jsonb_build_object(
                 'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price,
-                'quantity',v_order.nr_elemente,'items',v_before_lines
+                'items',v_before_lines
             ),
             jsonb_build_object(
                 'list_price',v_list,'final_price',v_final,'quantity',v_count,'items',v_lines
@@ -189,10 +199,18 @@ begin
         );
     end if;
 
-    update public.lab_patient_cases
-    set tip_lucrare=v_first_type,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
+    select coalesce(jsonb_agg(jsonb_build_object('work_type',work_type,'quantity',quantity) order by work_type),'[]'::jsonb)
+    into v_scope_after from (select work_type,sum(quantity) quantity from public.lab_work_order_items
+    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id group by work_type) scope;
+    if v_scope_before is distinct from v_scope_after then
+        perform public.adjust_work_order_scope_costs(p_lab_organization_id,p_work_order_id,v_scope_before,v_scope_after);
+        insert into public.work_order_financial_audit(lab_organization_id,work_order_id,entity_type,entity_id,action,before_value,after_value,changed_by_user_id)
+        values(p_lab_organization_id,p_work_order_id,'work_order_scope',p_work_order_id::text,'scope_change',v_scope_before,v_scope_after,auth.uid());
+    end if;
 
+    if v_role='technician' then
+        return (select to_jsonb(scope) from public.work_order_item_scope(p_lab_organization_id,p_work_order_id,false) scope);
+    end if;
     return jsonb_build_object(
         'lines',v_lines,'element_count',v_count,'list_price',v_list,
         'discount',case when v_role='doctor' then 0 else v_order.discount end,

@@ -9,7 +9,7 @@ begin
     select string_agg(required.column_name, ', ' order by required.column_name)
       into v_missing
     from (values
-        ('snapshot_unit_price'), ('snapshot_list_price'), ('snapshot_final_price'),
+        ('snapshot_list_price'), ('snapshot_final_price'),
         ('price_source'), ('price_fixed_at'), ('price_migrated'), ('archived_at'),
         ('model_not_applicable'), ('modelare_not_applicable'), ('cer_fin_not_applicable')
     ) required(column_name)
@@ -77,7 +77,7 @@ begin
        or has_any_column_privilege('authenticated','public.lab_work_order_items','UPDATE') then
         raise exception 'Authenticated callers can rewrite per-tooth snapshots';
     end if;
-    if to_regprocedure('public.update_management_work_order_v188(uuid,bigint,date,text,text,text,text,text,integer,numeric,timestamp with time zone,text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,text,text,text,jsonb,text)') is null then
+    if to_regprocedure('public.update_management_work_order_v188(uuid,bigint,date,text,text,text,text,numeric,timestamp with time zone,text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,text,text,text,jsonb,text,jsonb)') is null then
         raise exception 'Management V188 update RPC is missing';
     end if;
     if to_regprocedure('public.update_management_work_order_stage_field(uuid,bigint,text,text,text)') is null then

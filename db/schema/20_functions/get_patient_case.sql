@@ -3,7 +3,7 @@
 -- The complete CREATE OR REPLACE FUNCTION definition follows.
 
 CREATE OR REPLACE FUNCTION public.get_patient_case(p_lab_organization_id uuid, p_work_order_id bigint)
- RETURNS TABLE(id bigint, work_order_id bigint, nume_pacient text, nume_partener text, tip_lucrare text, deadline date, selected_teeth text, tooth_details_json text, material text, shade text, method text, clinic_note text, production_notes text, created_at timestamp with time zone, updated_at timestamp with time zone)
+ RETURNS TABLE(id bigint, work_order_id bigint, nume_pacient text, nume_partener text, deadline date, selected_teeth text, tooth_details_json text, shade text, method text, clinic_note text, production_notes text, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
@@ -27,11 +27,9 @@ begin
         pc.work_order_id,
         pc.nume_pacient,
         pc.nume_partener,
-        pc.tip_lucrare,
         pc.deadline,
         pc.selected_teeth,
         pc.tooth_details_json,
-        pc.material,
         pc.shade,
         pc.method,
         pc.clinic_note,
@@ -46,7 +44,3 @@ begin
 end;
 $function$
 ;
-
--- Security definer: True
--- Return type: TABLE(id bigint, work_order_id bigint, nume_pacient text, nume_partener text, tip_lucrare text, deadline date, selected_teeth text, tooth_details_json text, material text, shade text, method text, clinic_note text, production_notes text, created_at timestamp with time zone, updated_at timestamp with time zone)
--- Identity arguments: p_lab_organization_id uuid, p_work_order_id bigint

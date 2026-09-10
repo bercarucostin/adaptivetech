@@ -3,7 +3,7 @@
 -- The complete CREATE OR REPLACE FUNCTION definition follows.
 
 CREATE OR REPLACE FUNCTION public.get_my_work_orders(p_lab_organization_id uuid)
- RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, tip_lucrare text, nr_elemente integer, data_receptie timestamp with time zone, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text, contract text, discount numeric, paid_model text, paid_modelare text, paid_cer_fin text, created_by_user_id text, created_at timestamp with time zone, updated_by_user_id text, updated_at timestamp with time zone, unit_price numeric, list_price numeric, final_price numeric)
+ RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, items jsonb, work_types text[], work_type_summary text, element_count numeric, data_receptie timestamp with time zone, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text, contract text, discount numeric, paid_model text, paid_modelare text, paid_cer_fin text, created_by_user_id text, created_at timestamp with time zone, updated_by_user_id text, updated_at timestamp with time zone, list_price numeric, final_price numeric)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
@@ -25,8 +25,7 @@ begin
         wo.status,
         wo.nume_pacient,
         wo.nume_partener,
-        wo.tip_lucrare,
-        wo.nr_elemente,
+        scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
         wo.data_receptie,
         wo.locked,
 
@@ -53,7 +52,6 @@ begin
         case when v_is_management then wo.updated_by_user_id else null end,
         wo.updated_at,
 
-        case when v_is_management or v_is_doctor then wo.snapshot_unit_price else null end,
         case when v_is_management or v_is_doctor
              then wo.snapshot_list_price
              else null end,
@@ -61,6 +59,7 @@ begin
              then wo.snapshot_final_price
              else null end
     from public.lab_work_orders wo
+    cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,v_is_management or v_is_doctor) scope
     where wo.lab_organization_id = p_lab_organization_id
       and wo.archived_at is null
       and (
@@ -83,7 +82,3 @@ begin
 end;
 $function$
 ;
-
--- Security definer: True
--- Return type: TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, tip_lucrare text, nr_elemente integer, data_receptie timestamp with time zone, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text, contract text, discount numeric, paid_model text, paid_modelare text, paid_cer_fin text, created_by_user_id text, created_at timestamp with time zone, updated_by_user_id text, updated_at timestamp with time zone, unit_price numeric, list_price numeric, final_price numeric)
--- Identity arguments: p_lab_organization_id uuid

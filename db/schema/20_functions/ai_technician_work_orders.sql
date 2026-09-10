@@ -29,8 +29,7 @@ begin
             wo.data_receptie,
             wo.nume_pacient,
             wo.nume_partener,
-            wo.tip_lucrare,
-            coalesce(wo.nr_elemente,0) as nr_elemente,
+            scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
             wo.status,
             coalesce(wo.locked,false) as locked,
             s.stage_key,
@@ -43,6 +42,7 @@ begin
             cost_rule.agreed_amount,
             coalesce(case_row.case_data,'{}'::jsonb) as case_data
         from public.lab_work_orders wo
+        cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope
         cross join lateral (
             values
                 (
@@ -74,7 +74,7 @@ begin
                 )
         ) as s(stage_key,stage_label,stage_order,technician_name,stage_status,payment_status,not_applicable)
         left join lateral (
-            select a.unit_cost,a.agreed_amount
+            select a.unit_cost,public.assignment_agreed_amount(a.id) as agreed_amount
             from public.lab_work_order_stage_assignments a
             where a.lab_organization_id=wo.lab_organization_id
               and a.work_order_id=wo.id
@@ -111,8 +111,7 @@ begin
             a.data_receptie,
             a.nume_pacient,
             a.nume_partener,
-            a.tip_lucrare,
-            a.nr_elemente,
+            a.items,a.work_types,a.work_type_summary,a.element_count,
             a.status,
             a.locked,
             a.case_data,
@@ -130,7 +129,7 @@ begin
             coalesce(sum(a.agreed_amount),0)::numeric as own_technician_cost
         from assigned a
         group by a.id,a.deadline,a.data_receptie,a.nume_pacient,a.nume_partener,
-                 a.tip_lucrare,a.nr_elemente,a.status,a.locked,a.case_data
+                 a.items,a.work_types,a.work_type_summary,a.element_count,a.status,a.locked,a.case_data
     )
     select coalesce(
         jsonb_agg(
@@ -141,8 +140,7 @@ begin
                 'Status', o.status,
                 'Nume_Pacient', o.nume_pacient,
                 'Nume_Partener', o.nume_partener,
-                'Tip_Lucrare', o.tip_lucrare,
-                'Nr_Elemente', o.nr_elemente,
+                'items',o.items,'work_types',o.work_types,'work_type_summary',o.work_type_summary,'element_count',o.element_count,
                 'Locked', o.locked,
                 'Dental_Case', o.case_data,
                 'My_Stages', o.my_stages,

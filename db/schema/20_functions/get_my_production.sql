@@ -3,7 +3,7 @@
 -- The complete CREATE OR REPLACE FUNCTION definition follows.
 
 CREATE OR REPLACE FUNCTION public.get_my_production(p_lab_organization_id uuid)
- RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, tip_lucrare text, nr_elemente integer, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text)
+ RETURNS TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, items jsonb, work_types text[], work_type_summary text, element_count numeric, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
@@ -25,8 +25,7 @@ begin
         wo.status,
         wo.nume_pacient,
         wo.nume_partener,
-        wo.tip_lucrare,
-        wo.nr_elemente,
+        scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
         wo.locked,
 
         wo.tehnician_model,
@@ -37,6 +36,7 @@ begin
         wo.status_modelare,
         wo.status_cer_fin
     from public.lab_work_orders wo
+    cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,false) scope
     where wo.lab_organization_id = p_lab_organization_id
       and wo.archived_at is null
       and lower(wo.status) in ('not started','started','finished','shipped')
@@ -60,7 +60,3 @@ begin
 end;
 $function$
 ;
-
--- Security definer: True
--- Return type: TABLE(id bigint, deadline date, status text, nume_pacient text, nume_partener text, tip_lucrare text, nr_elemente integer, locked boolean, tehnician_model text, tehnician1_modelare text, tehnician2_cer_fin text, status_model text, status_modelare text, status_cer_fin text)
--- Identity arguments: p_lab_organization_id uuid

@@ -30,7 +30,7 @@ begin
         raise exception 'Payment reversal must append rather than delete';
     end if;
 
-    select pg_get_functiondef('public.update_management_work_order_v188(uuid,bigint,date,text,text,text,text,text,integer,numeric,timestamp with time zone,text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,text,text,text,jsonb,text)'::regprocedure)
+    select pg_get_functiondef('public.update_management_work_order_v188(uuid,bigint,date,text,text,text,text,numeric,timestamp with time zone,text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,text,text,text,jsonb,text,jsonb)'::regprocedure)
       into v_definition;
     if v_definition not ilike '%sync_work_order_stage_assignment%'
        or v_definition not ilike '%set_stage_payment_status%'
@@ -56,4 +56,21 @@ begin
     end if;
 end $$;
 
+rollback;
+
+-- Scope edits append deltas; original assignments and settled payments stay intact.
+begin;
+do $$
+declare v_definition text;
+begin
+    select pg_get_functiondef('public.adjust_work_order_scope_costs(uuid,bigint,jsonb,jsonb)'::regprocedure) into v_definition;
+    if v_definition not ilike '%p_before is not distinct from p_after%'
+       or v_definition not ilike '%insert into public.lab_work_order_assignment_adjustments%'
+       or v_definition ilike '%update public.technician_payments%'
+       or v_definition ilike '%update public.lab_work_order_assignment_cost_lines%' then
+        raise exception 'Scope adjustments must be idempotent and append-only';
+    end if;
+    select pg_get_functiondef('public.get_my_salary(uuid)'::regprocedure) into v_definition;
+    if v_definition not ilike '%assignment_agreed_amount%' then raise exception 'Salary omits scope adjustments'; end if;
+end $$;
 rollback;

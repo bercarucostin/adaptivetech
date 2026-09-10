@@ -25,9 +25,9 @@ BEGIN
            CASE a.stage_key WHEN 'model' THEN coalesce(wo.status_model,'Not Started')
                             WHEN 'modelare' THEN coalesce(wo.status_modelare,'Not Started')
                             ELSE coalesce(wo.status_cer_fin,'Not Started') END,
-           CASE WHEN a.agreed_amount is not null AND coalesce(pay.paid,0)>=a.agreed_amount THEN 'Paid' ELSE 'Not Paid' END,
+           CASE WHEN public.assignment_agreed_amount(a.id) is not null AND coalesce(pay.paid,0)>=public.assignment_agreed_amount(a.id) THEN 'Paid' ELSE 'Not Paid' END,
            a.unit_cost,
-           a.agreed_amount
+           public.assignment_agreed_amount(a.id)
     FROM public.lab_work_order_stage_assignments a
     JOIN public.lab_work_orders wo
       ON wo.lab_organization_id=a.lab_organization_id AND wo.id=a.work_order_id

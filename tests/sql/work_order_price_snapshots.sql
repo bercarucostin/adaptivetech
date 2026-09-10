@@ -25,7 +25,7 @@ end $$;
 select 1 / case when exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='lab_work_orders'
-      and column_name='snapshot_unit_price'
+      and column_name='snapshot_list_price'
 ) then 1 else 0 end;
 
 rollback;

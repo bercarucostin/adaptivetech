@@ -196,13 +196,14 @@ begin
             select
                 wo.*,
                 wo.contract as matched_price_contract,
-                wo.snapshot_unit_price as unit_price,
+                scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
                 wo.snapshot_list_price as list_price,
                 wo.snapshot_final_price as final_price,
-                (wo.snapshot_unit_price is not null) as price_matched,
+                (wo.snapshot_list_price is not null) as price_matched,
                 wo.price_source,
                 wo.price_migrated
             from public.lab_work_orders wo
+            cross join lateral public.work_order_item_scope(wo.lab_organization_id,wo.id,true) scope
             where wo.lab_organization_id=v_lab
               and wo.archived_at is null
             order by wo.id desc
@@ -216,11 +217,11 @@ begin
         select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) into v_rows
         from (
             select a.id as assignment_id,a.work_order_id,a.stage_key,a.technician_name,
-                   a.unit_cost,a.quantity,a.agreed_amount,a.cost_source,a.fixed_at,
+                   a.unit_cost,a.quantity,public.assignment_agreed_amount(a.id) as agreed_amount,a.cost_source,a.fixed_at,
                    a.started_at,a.ended_at,a.migrated,
                    coalesce(pay.paid_amount,0)::numeric as paid_amount,
-                   case when a.agreed_amount is null then null
-                        else a.agreed_amount-coalesce(pay.paid_amount,0) end as outstanding_amount,
+                   case when public.assignment_agreed_amount(a.id) is null then null
+                        else public.assignment_agreed_amount(a.id)-coalesce(pay.paid_amount,0) end as outstanding_amount,
                    coalesce(pay.payments,'[]'::jsonb) as payments
             from public.lab_work_order_stage_assignments a
             left join lateral (

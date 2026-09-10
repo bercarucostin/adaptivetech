@@ -24,7 +24,7 @@ BEGIN
         ('calendar_event','create'),('calendar_event','update'),('calendar_event','delete')
     ) THEN RAISE EXCEPTION 'Unsupported AI entity or operation'; END IF;
     v_allowed:=case v_entity
-      when 'work_order' then array['Deadline','Data_Receptie','Nume_Pacient','Nume_Partener','Tip_Lucrare','Nr_Elemente','Contract','Status','Discount','Tehnician_Model','Tehnician1_Modelare','Tehnician2_Cer_Fin','Status_Model','Status_Modelare','Status_Cer_Fin','Paid_Model','Paid_Modelare','Paid_Cer_Fin','Locked']
+      when 'work_order' then array['Deadline','Data_Receptie','Nume_Pacient','Nume_Partener','items','case','Contract','Status','Discount','Tehnician_Model','Tehnician1_Modelare','Tehnician2_Cer_Fin','Status_Model','Status_Modelare','Status_Cer_Fin','Paid_Model','Paid_Modelare','Paid_Cer_Fin','Locked']
       when 'work_order_price' then array['unit_price','discount','reason']
       when 'contract_price' then array['id','contract','work_type','price','source_contract','target_contract','conflict_mode']
       when 'technician_cost' then array['technician','work_type','stage','cost','source_technician','target_technician','conflict_mode']

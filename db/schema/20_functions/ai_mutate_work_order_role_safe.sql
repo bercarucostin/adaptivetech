@@ -41,14 +41,14 @@ begin
             nullif(v_fields->>'Deadline','')::date,
             coalesce(v_fields->>'Nume_Pacient',''),
             coalesce(v_fields->>'Nume_Partener',''),
-            coalesce(v_fields->>'Tip_Lucrare',''),
-            coalesce(nullif(v_fields->>'Nr_Elemente','')::integer,1),
+            v_fields->'items',
             nullif(v_fields->>'Data_Receptie','')::timestamptz,
             coalesce(
                 nullif(v_fields->>'My_Stage',''),
                 nullif(p_payload->>'my_stage',''),
                 'Model'
-            )
+            ),
+            coalesce(v_fields->'case','{}'::jsonb)
         );
     exception
         when others then

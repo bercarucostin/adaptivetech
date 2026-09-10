@@ -51,6 +51,7 @@ for (const f of list('30_policies')) lines.push('\\i db/schema/30_policies/' + f
 
 lines.push('', '\\echo == 40 grants ==', '\\i db/schema/40_grants.sql');
 lines.push('', '\\echo == 50 storage buckets ==', '\\i db/schema/50_storage.sql');
+lines.push('', '\\echo == 60 per-tooth work order cutover ==', '\\i db/schema/60_per_tooth_work_order_cutover.sql');
 lines.push('', 'commit;', '');
 
 const content = lines.join('\n');

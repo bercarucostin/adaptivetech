@@ -31,16 +31,18 @@ BEGIN
     SELECT jsonb_build_object(
         'Work_Order_ID',wo.id,
         'Sale_Price',case when v_role in ('admin','manager') then jsonb_build_object(
-            'Unit_Price',wo.snapshot_unit_price,'List_Price',wo.snapshot_list_price,
+            'List_Price',wo.snapshot_list_price,
             'Final_Price',wo.snapshot_final_price,'Discount',wo.discount,
             'Source',wo.price_source,'Fixed_At',wo.price_fixed_at,'Migrated',wo.price_migrated
         ) else null end,
         'Assignments',coalesce((
             SELECT jsonb_agg(jsonb_build_object(
                 'Assignment_ID',a.id,'Stage',a.stage_key,'Technician',a.technician_name,
-                'Unit_Cost',a.unit_cost,'Quantity',a.quantity,'Agreed_Amount',a.agreed_amount,
+                'Unit_Cost',a.unit_cost,'Quantity',a.quantity,'Agreed_Amount',public.assignment_agreed_amount(a.id),
                 'Cost_Source',a.cost_source,'Fixed_At',a.fixed_at,'Started_At',a.started_at,
                 'Ended_At',a.ended_at,'Migrated',a.migrated,
+                'Original_Agreed_Amount',a.agreed_amount,
+                'Adjustments',coalesce((select jsonb_agg(to_jsonb(d) order by d.created_at,d.id) from public.lab_work_order_assignment_adjustments d where d.assignment_id=a.id),'[]'::jsonb),
                 'Cost_Lines',coalesce((select jsonb_agg(to_jsonb(l) order by l.work_type)
                     from public.lab_work_order_assignment_cost_lines l where l.assignment_id=a.id),'[]'::jsonb),
                 'Payments',coalesce((select jsonb_agg(jsonb_build_object(

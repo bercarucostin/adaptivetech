@@ -52,7 +52,9 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/29_ai_operation_requests.sql
 
 \echo == 20 functions ==
+\i db/schema/20_functions/00_per_tooth_rpc_cutover.sql
 \i db/schema/20_functions/adjust_material_quantity.sql
+\i db/schema/20_functions/adjust_work_order_scope_costs.sql
 \i db/schema/20_functions/admin_bulk_config_import.sql
 \i db/schema/20_functions/admin_clear_ai_history_older_than_30_days.sql
 \i db/schema/20_functions/admin_clear_chat_messages_older_than_30_days.sql
@@ -74,6 +76,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/ai_technician_work_orders.sql
 \i db/schema/20_functions/ai_technician_work_types.sql
 \i db/schema/20_functions/append_my_chat_message.sql
+\i db/schema/20_functions/assignment_agreed_amount.sql
 \i db/schema/20_functions/backfill_work_order_financial_history.sql
 \i db/schema/20_functions/can_access_work_order.sql
 \i db/schema/20_functions/chat_can_message.sql
@@ -134,7 +137,9 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
 \i db/schema/20_functions/resolve_work_order_price_snapshot.sql
 \i db/schema/20_functions/reverse_technician_payment.sql
+\i db/schema/20_functions/sanitize_tooth_details.sql
 \i db/schema/20_functions/save_my_work_order_case.sql
+\i db/schema/20_functions/save_work_order_clinical_case.sql
 \i db/schema/20_functions/set_stage_payment_status.sql
 \i db/schema/20_functions/set_updated_at.sql
 \i db/schema/20_functions/set_work_order_lock.sql
@@ -148,6 +153,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/update_material_quantity.sql
 \i db/schema/20_functions/update_my_stage_status.sql
 \i db/schema/20_functions/upsert_patient_case.sql
+\i db/schema/20_functions/work_order_item_scope.sql
 
 \echo == 30 policies, triggers, function-dependent constraints ==
 \i db/schema/30_policies/01_profiles.sql
@@ -185,5 +191,8 @@ set local check_function_bodies = off;
 
 \echo == 50 storage buckets ==
 \i db/schema/50_storage.sql
+
+\echo == 60 per-tooth work order cutover ==
+\i db/schema/60_per_tooth_work_order_cutover.sql
 
 commit;

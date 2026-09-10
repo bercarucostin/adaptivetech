@@ -51,3 +51,19 @@ ALTER TABLE public.lab_work_order_assignment_cost_lines ENABLE ROW LEVEL SECURIT
 
 CREATE INDEX IF NOT EXISTS assignment_cost_lines_assignment_idx
     ON public.lab_work_order_assignment_cost_lines(assignment_id);
+
+-- Signed, frozen scope deltas preserve original assignment lines and payments.
+CREATE TABLE IF NOT EXISTS public.lab_work_order_assignment_adjustments (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    assignment_id uuid NOT NULL REFERENCES public.lab_work_order_stage_assignments(id),
+    work_type text NOT NULL,
+    quantity_delta numeric(14,3) NOT NULL CHECK(quantity_delta <> 0),
+    unit_cost numeric(14,2) CHECK(unit_cost IS NULL OR unit_cost >= 0),
+    amount numeric(14,2),
+    cost_source text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by_user_id uuid
+);
+ALTER TABLE public.lab_work_order_assignment_adjustments ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS assignment_adjustments_assignment_idx ON public.lab_work_order_assignment_adjustments(assignment_id);
+REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM public,authenticated;

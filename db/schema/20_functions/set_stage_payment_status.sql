@@ -51,10 +51,10 @@ BEGIN
 
     SELECT coalesce(sum(amount),0) INTO v_net_paid
     FROM public.technician_payments WHERE assignment_id=v_assignment.id;
-    v_outstanding := v_assignment.agreed_amount - v_net_paid;
+    v_outstanding := public.assignment_agreed_amount(v_assignment.id) - v_net_paid;
 
     IF lower(v_paid)='paid' THEN
-        IF v_assignment.agreed_amount IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
+        IF public.assignment_agreed_amount(v_assignment.id) IS NULL THEN RAISE EXCEPTION 'Assignment cost is missing'; END IF;
         IF v_outstanding > 0 THEN
             PERFORM public.record_technician_payment(
                 v_assignment.id,v_outstanding,(current_timestamp at time zone 'Europe/Bucharest')::date,
