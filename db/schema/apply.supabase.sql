@@ -9171,48 +9171,97 @@ ON CONFLICT (id) DO UPDATE SET
 -- Authorized destructive cutover: empty or invalid-FDI orders have no supported clinical scope.
 -- apply.sql wraps this and the new API definitions in one transaction.
 LOCK TABLE public.lab_work_orders,public.lab_work_order_items IN SHARE ROW EXCLUSIVE MODE;
-CREATE TEMP TABLE per_tooth_removed_orders ON COMMIT DROP AS
-SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i
-    WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
-OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid
-    WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
-      AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8));
 
 -- Storage metadata can be deleted transactionally only on installations that permit it.
 DO $$
 BEGIN
     IF to_regclass('storage.objects') IS NOT NULL THEN
         BEGIN
-            DELETE FROM storage.objects o USING public.work_order_files f,per_tooth_removed_orders d
-            WHERE f.lab_organization_id=d.lab_organization_id AND f.legacy_work_order_id=d.id
-              AND o.bucket_id=f.bucket_name AND o.name=f.object_path
-              AND NOT EXISTS(SELECT 1 FROM public.work_order_files retained
-                  WHERE retained.bucket_name=f.bucket_name AND retained.object_path=f.object_path
-                    AND NOT EXISTS(SELECT 1 FROM per_tooth_removed_orders r
-                        WHERE r.lab_organization_id=retained.lab_organization_id AND r.id=retained.legacy_work_order_id));
+            WITH per_tooth_removed_orders AS MATERIALIZED (
+                SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+                WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i
+                    WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+                OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid
+                    WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+                      AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+            ), removable_objects AS (
+                SELECT DISTINCT f.bucket_name,f.object_path
+                FROM public.work_order_files f JOIN per_tooth_removed_orders d
+                  ON f.lab_organization_id=d.lab_organization_id AND f.legacy_work_order_id=d.id
+                WHERE NOT EXISTS(SELECT 1 FROM public.work_order_files retained
+                    WHERE retained.bucket_name=f.bucket_name AND retained.object_path=f.object_path
+                      AND NOT EXISTS(SELECT 1 FROM per_tooth_removed_orders r
+                          WHERE r.lab_organization_id=retained.lab_organization_id AND r.id=retained.legacy_work_order_id))
+            )
+            DELETE FROM storage.objects o USING removable_objects removable
+            WHERE o.bucket_id=removable.bucket_name AND o.name=removable.object_path;
         EXCEPTION WHEN insufficient_privilege OR raise_exception THEN
             RAISE NOTICE 'Storage service prevents transactional deletion; remove orphaned objects through Storage API: %',SQLERRM;
         END;
     END IF;
 END $$;
-DELETE FROM public.work_order_files f USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.work_order_files f USING per_tooth_removed_orders d
 WHERE f.lab_organization_id=d.lab_organization_id AND f.legacy_work_order_id=d.id;
-DELETE FROM public.lab_patient_cases pc USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_patient_cases pc USING per_tooth_removed_orders d
 WHERE pc.lab_organization_id=d.lab_organization_id AND pc.work_order_id=d.id;
-DELETE FROM public.work_order_financial_audit a USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.work_order_financial_audit a USING per_tooth_removed_orders d
 WHERE a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
-DELETE FROM public.technician_payments p USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.technician_payments p USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE p.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
-DELETE FROM public.lab_work_order_assignment_adjustments l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_work_order_assignment_adjustments l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE l.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
-DELETE FROM public.lab_work_order_assignment_cost_lines l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_work_order_assignment_cost_lines l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE l.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
-DELETE FROM public.lab_work_order_stage_assignments a USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_work_order_stage_assignments a USING per_tooth_removed_orders d
 WHERE a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
-DELETE FROM public.lab_work_order_items i USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_work_order_items i USING per_tooth_removed_orders d
 WHERE i.lab_organization_id=d.lab_organization_id AND i.work_order_id=d.id;
-DELETE FROM public.lab_work_orders wo USING per_tooth_removed_orders d
+WITH per_tooth_removed_orders AS MATERIALIZED (
+    SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
+    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+       OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
+           AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
+) DELETE FROM public.lab_work_orders wo USING per_tooth_removed_orders d
 WHERE wo.lab_organization_id=d.lab_organization_id AND wo.id=d.id;
 
 -- Drain invariant/FK trigger events before altering tables on a repeated apply.
