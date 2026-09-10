@@ -78,3 +78,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS lab_work_orders_pkey ON public.lab_work_orders
 CREATE INDEX IF NOT EXISTS lab_work_orders_status_idx ON public.lab_work_orders USING btree (lab_organization_id, status);
 
 CREATE INDEX IF NOT EXISTS lab_work_orders_type_idx ON public.lab_work_orders USING btree (lab_organization_id, lower(tip_lucrare));
+
+-- Financial values are fixed when the Work Order is created.  They live on
+-- the order instead of being recomputed from the mutable contract catalog.
+ALTER TABLE public.lab_work_orders
+    ADD COLUMN IF NOT EXISTS snapshot_unit_price numeric(14,2),
+    ADD COLUMN IF NOT EXISTS snapshot_list_price numeric(14,2),
+    ADD COLUMN IF NOT EXISTS snapshot_final_price numeric(14,2),
+    ADD COLUMN IF NOT EXISTS price_source text,
+    ADD COLUMN IF NOT EXISTS price_fixed_at timestamptz,
+    ADD COLUMN IF NOT EXISTS price_migrated boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'lab_work_orders_snapshot_prices_nonnegative'
+          AND conrelid = 'public.lab_work_orders'::regclass
+    ) THEN
+        ALTER TABLE public.lab_work_orders
+            ADD CONSTRAINT lab_work_orders_snapshot_prices_nonnegative CHECK (
+                (snapshot_unit_price IS NULL OR snapshot_unit_price >= 0)
+                AND (snapshot_list_price IS NULL OR snapshot_list_price >= 0)
+                AND (snapshot_final_price IS NULL OR snapshot_final_price >= 0)
+            );
+    END IF;
+END $$;

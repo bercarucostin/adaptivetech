@@ -99,3 +99,9 @@ revoke update on public.profiles from authenticated;
 -- frontend does call would break the application at runtime, and the call
 -- sites cannot be confirmed from the schema alone.
 -- ---------------------------------------------------------------------
+
+-- Financial history is append-only from the browser. SECURITY DEFINER RPCs
+-- own every write so callers cannot rewrite payments or their audit trail.
+revoke insert, update, delete on table public.lab_work_order_stage_assignments from authenticated;
+revoke insert, update, delete on table public.technician_payments from authenticated;
+revoke insert, update, delete on table public.work_order_financial_audit from authenticated;

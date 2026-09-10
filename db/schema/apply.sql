@@ -44,6 +44,10 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/21_relationship_terms.sql
 \i db/schema/10_tables/22_role_permissions.sql
 \i db/schema/10_tables/23_work_order_files.sql
+\i db/schema/10_tables/24_work_order_items.sql
+\i db/schema/10_tables/25_work_order_stage_assignments.sql
+\i db/schema/10_tables/26_technician_payments.sql
+\i db/schema/10_tables/27_work_order_financial_audit.sql
 
 \echo == 20 functions ==
 \i db/schema/20_functions/admin_bulk_config_import.sql
@@ -144,6 +148,10 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/21_relationship_terms.sql
 \i db/schema/30_policies/22_role_permissions.sql
 \i db/schema/30_policies/23_work_order_files.sql
+\i db/schema/30_policies/24_work_order_items.sql
+\i db/schema/30_policies/25_work_order_stage_assignments.sql
+\i db/schema/30_policies/26_technician_payments.sql
+\i db/schema/30_policies/27_work_order_financial_audit.sql
 
 \echo == 40 grants ==
 \i db/schema/40_grants.sql
