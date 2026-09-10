@@ -118,8 +118,14 @@ function aiClientRequestId(){return crypto.randomUUID?.()||`${Date.now()}-${Math
 
 function normalize(v){return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"").trim();}
 function num(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function nullableMoney(v){
+  if(v===null||v===undefined||v==="")return null;
+  const n=Number(v);
+  return Number.isFinite(n)?n:null;
+}
 function boolish(v){return v===true||v===1||["true","1","yes","y","locked"].includes(String(v??"").trim().toLowerCase());}
 function money(v){return new Intl.NumberFormat("ro-RO",{style:"currency",currency:"RON",maximumFractionDigits:0}).format(num(v));}
+function technicianMoney(v){return v===null?"Cost neconfigurat":money(v);}
 function fmtDate(d){
   if(!d)return "—";
   const raw=String(d).trim();
@@ -2196,14 +2202,19 @@ function selectedTechnicianCost(o,technician){
   const t=normalize(technician);
 
   if(isTechnician() && t===normalize(auth?.user?.Technician_Name)){
-    return num(o.ownCost);
+    return nullableMoney(o.ownCost);
   }
 
-  let total=0;
-  if(normalize(o.modelTech)===t)total+=num(o.costModel);
-  if(normalize(o.modelingTech)===t)total+=num(o.costModeling);
-  if(normalize(o.ceramicTech)===t)total+=num(o.costCerFin);
-  return total;
+  const values=[];
+  if(normalize(o.modelTech)===t)values.push(nullableMoney(o.costModel));
+  if(normalize(o.modelingTech)===t)values.push(nullableMoney(o.costModeling));
+  if(normalize(o.ceramicTech)===t)values.push(nullableMoney(o.costCerFin));
+  return values.some(value=>value===null)?null:values.reduce((sum,value)=>sum+value,0);
+}
+
+function sumSelectedTechnicianCosts(rows,technician){
+  const values=rows.map(order=>selectedTechnicianCost(order,technician));
+  return values.some(value=>value===null)?null:values.reduce((sum,value)=>sum+value,0);
 }
 
 function technicianSalaryStageHtml(o){
@@ -2213,7 +2224,7 @@ function technicianSalaryStageHtml(o){
     <div class="salary-stage-row">
       <div><strong>${escapeHtml(s.stageLabel)}</strong><span>${escapeHtml(uiText(s.stageStatus))}</span></div>
       <span class="salary-payment-badge ${s.paymentStatus==="Paid"?"is-paid":"is-unpaid"}">${escapeHtml(uiText(s.paymentStatus))}</span>
-      <strong class="salary-stage-amount">${money(s.amount)}</strong>
+      <strong class="salary-stage-amount">${technicianMoney(s.amount)}</strong>
     </div>`).join("")}</div>`;
 }
 
@@ -2405,7 +2416,7 @@ function wireTechnicianReportFilters(){
         stage.stageLabel||"—",
         uiText(stage.stageStatus),
         uiText(stage.paymentStatus),
-        money(stage.amount)
+        technicianMoney(stage.amount)
       ]));
       openPdfReport({
         title:`Salariu - ${selected}`,
@@ -2413,7 +2424,7 @@ function wireTechnicianReportFilters(){
         totals:[
           {label:"Lucrări",value:String(rows.length)},
           {label:"Etape",value:String(salaryLines.length)},
-          {label:"De încasat",value:money(rows.reduce((sum,o)=>sum+selectedTechnicianCost(o,selected),0))}
+          {label:"De încasat",value:technicianMoney(sumSelectedTechnicianCosts(rows,selected))}
         ],
         columns:["Lucrare","Pacient","Etapa mea","Status etapă","Status plată","De încasat"],
         rows:salaryLines,
@@ -2428,13 +2439,13 @@ function wireTechnicianReportFilters(){
       totals:[
         {label:"Work orders",value:String(rows.length)},
         {label:"Elements",value:String(rows.reduce((s,o)=>s+num(o.elements),0))},
-        {label:"Technician cost",value:money(rows.reduce((s,o)=>s+selectedTechnicianCost(o,selected),0))}
+        {label:"Technician cost",value:technicianMoney(sumSelectedTechnicianCosts(rows,selected))}
       ],
       rows:rows.map(o=>[
         o.patient||"—",
         o.partner||"—",
         String(o.elements),
-        money(selectedTechnicianCost(o,selected)),
+        technicianMoney(selectedTechnicianCost(o,selected)),
         o.status||"—"
       ])
     });
@@ -3910,7 +3921,7 @@ function renderTechnicians(){
 
     if(isMobileLayout()){
       content.innerHTML=dateBar+filterBar+`<div class="kpi-grid">
-        ${kpi("De încasat",money(baseRows.reduce((s,o)=>s+selectedTechnicianCost(o,selectedTech),0)),"Lucrări filtrate")}
+        ${kpi("De încasat",technicianMoney(sumSelectedTechnicianCosts(baseRows,selectedTech)),"Lucrări filtrate")}
         ${kpi("Lucrări asignate",baseRows.length,"Lucrări filtrate")}
         ${kpi("Elemente",baseRows.reduce((s,o)=>s+o.elements,0),"Lucrări filtrate")}
         ${kpi("Status",uiText(technicianReportFilters.status||"Toate"),"Filtru curent")}
@@ -3922,7 +3933,7 @@ function renderTechnicians(){
         </div>
         <div class="mobile-card-grid">
           <div><span>Elemente</span><strong>${o.elements}</strong></div>
-          <div><span>De încasat</span><strong>${money(selectedTechnicianCost(o,selectedTech))}</strong></div>
+          <div><span>De încasat</span><strong>${technicianMoney(selectedTechnicianCost(o,selectedTech))}</strong></div>
           <div><span>Tip lucrare</span><strong>${escapeHtml(o.workType)||"—"}</strong></div>
           <div><span>Termen</span><strong>${fmtDate(o.deadline)}</strong></div>
         </div>
@@ -3940,7 +3951,7 @@ function renderTechnicians(){
       {key:"partner",label:"Partener",type:"text",r:o=>escapeHtml(o.partner)},
       {key:"workType",label:"Tip lucrare",type:"text",r:o=>escapeHtml(o.workType)},
       {key:"elements",label:"Elemente",type:"number",r:o=>o.elements},
-      {key:"ownCost",label:"De încasat",type:"number",sortValue:o=>selectedTechnicianCost(o,selectedTech),r:o=>`<strong>${money(selectedTechnicianCost(o,selectedTech))}</strong>`},
+      {key:"ownCost",label:"De încasat",type:"number",sortValue:o=>selectedTechnicianCost(o,selectedTech),r:o=>`<strong>${technicianMoney(selectedTechnicianCost(o,selectedTech))}</strong>`},
       {key:"status",label:"Status lucrare",type:"text",r:o=>escapeHtml(uiText(o.status))},
       {key:"stages",label:"Etapa mea / Plată",type:"text",sortValue:o=>technicianSalarySearchText(o),r:o=>technicianSalaryStageHtml(o)}
     ];
@@ -3956,7 +3967,7 @@ function renderTechnicians(){
     rows=sortedByColumns(rows,cols,techSort);
 
     content.innerHTML=dateBar+filterBar+`<div class="kpi-grid">
-      ${kpi("De încasat",money(rows.reduce((s,o)=>s+selectedTechnicianCost(o,selectedTech),0)),"Lucrări filtrate")}
+      ${kpi("De încasat",technicianMoney(sumSelectedTechnicianCosts(rows,selectedTech)),"Lucrări filtrate")}
       ${kpi("Lucrări asignate",rows.length,"Lucrări filtrate")}
       ${kpi("Elemente",rows.reduce((s,o)=>s+o.elements,0),"Lucrări filtrate")}
       ${kpi("Status",uiText(technicianReportFilters.status||"Toate"),"Filtru curent")}
@@ -3980,7 +3991,7 @@ function renderTechnicians(){
       {key:"workType",label:"Work Type",type:"text",r:o=>escapeHtml(o.workType)},
       {key:"elements",label:"Elements",type:"number",r:o=>o.elements},
       {key:"status",label:"Status",type:"text",r:o=>escapeHtml(uiText(o.status))},
-      {key:"selectedCost",label:selectedTech?`${escapeHtml(selectedTech)} Cost`:"Selected Tech Cost",type:"number",sortValue:o=>selectedTech?selectedTechnicianCost(o,selectedTech):0,r:o=>selectedTech?money(selectedTechnicianCost(o,selectedTech)):"—"},
+      {key:"selectedCost",label:selectedTech?`${escapeHtml(selectedTech)} Cost`:"Selected Tech Cost",type:"number",sortValue:o=>selectedTech?selectedTechnicianCost(o,selectedTech):0,r:o=>selectedTech?technicianMoney(selectedTechnicianCost(o,selectedTech)):"—"},
       {key:"modelTech",label:"Model Tech",type:"text",r:o=>escapeHtml(o.modelTech)||"—"},
       {key:"modelingTech",label:"Modelare Tech",type:"text",r:o=>escapeHtml(o.modelingTech)||"—"},
       {key:"ceramicTech",label:"Cer Fin Tech",type:"text",r:o=>escapeHtml(o.ceramicTech)||"—"}
@@ -3992,14 +4003,14 @@ function renderTechnicians(){
     }));
     rows=sortedByColumns(rows,cols,techSort);
 
-    const selectedTotal=selectedTech?rows.reduce((s,o)=>s+selectedTechnicianCost(o,selectedTech),0):0;
+    const selectedTotal=selectedTech?sumSelectedTechnicianCosts(rows,selectedTech):0;
 
     if(isMobileLayout()){
       content.innerHTML=dateBar+filterBar+`<div class="kpi-grid">
         ${kpi("Tehnician",selectedTech||"—","Selected filter")}
         ${kpi("Lucrări",rows.length,"Filtered rows")}
         ${kpi("Elements",rows.reduce((s,o)=>s+o.elements,0),"Filtered rows")}
-        ${kpi("Technician cost",selectedTech?money(selectedTotal):"—","Selected technician")}
+        ${kpi("Technician cost",selectedTech?technicianMoney(selectedTotal):"—","Selected technician")}
       </div>
       <div class="mobile-card-list">${rows.length?rows.map(o=>`<article class="mobile-order-card">
         <div class="mobile-card-head">
@@ -4008,7 +4019,7 @@ function renderTechnicians(){
         </div>
         <div class="mobile-card-grid">
           <div><span>Elements</span><strong>${o.elements}</strong></div>
-          <div><span>${escapeHtml(selectedTech||"Tehnician")} cost</span><strong>${selectedTech?money(selectedTechnicianCost(o,selectedTech)):"Selectează tehnician"}</strong></div>
+          <div><span>${escapeHtml(selectedTech||"Tehnician")} cost</span><strong>${selectedTech?technicianMoney(selectedTechnicianCost(o,selectedTech)):"Selectează tehnician"}</strong></div>
           <div><span>Work type</span><strong>${escapeHtml(o.workType)||"—"}</strong></div>
           <div><span>Deadline</span><strong>${fmtDate(o.deadline)}</strong></div>
         </div>
@@ -4022,7 +4033,7 @@ function renderTechnicians(){
       ${kpi("Tehnician",selectedTech||"—","Selected filter")}
       ${kpi("Lucrări",rows.length,"Filtered rows")}
       ${kpi("Elements",rows.reduce((s,o)=>s+o.elements,0),"Filtered rows")}
-      ${kpi("Technician cost",selectedTech?money(selectedTotal):"—","Selected technician")}
+      ${kpi("Technician cost",selectedTech?technicianMoney(selectedTotal):"—","Selected technician")}
     </div>
     <div class="card panel">
       <div class="table-tools"><strong>Technician Costs</strong><button id="clearTechFilters" class="secondary-btn">Clear column filters</button></div>
@@ -7034,18 +7045,26 @@ function mapSupabaseOrder(r){
   const modelingNA=Boolean(r.modelare_not_applicable);
   const ceramicNA=Boolean(r.cer_fin_not_applicable);
 
-  const costModel=num(r.cost_model);
-  const costModeling=num(r.cost_modelare);
-  const costCerFin=num(r.cost_cer_fin);
+  const costModel=nullableMoney(r.cost_model);
+  const costModeling=nullableMoney(r.cost_modelare);
+  const costCerFin=nullableMoney(r.cost_cer_fin);
 
   const ownTech=normalize(auth?.user?.Technician_Name||"");
   const myStages=[];
   let ownCost=0;
   if(ownTech){
-    if(!modelNA&&normalize(modelTechName)===ownTech){myStages.push({stage:"Model",status:r.status_model??"Not Started",cost:costModel,paid:null});ownCost+=costModel;}
-    if(!modelingNA&&normalize(modelingTechName)===ownTech){myStages.push({stage:"Modelare",status:r.status_modelare??"Not Started",cost:costModeling,paid:null});ownCost+=costModeling;}
-    if(!ceramicNA&&normalize(ceramicTechName)===ownTech){myStages.push({stage:"Cer_Fin",status:r.status_cer_fin??"Not Started",cost:costCerFin,paid:null});ownCost+=costCerFin;}
+    if(!modelNA&&normalize(modelTechName)===ownTech){myStages.push({stage:"Model",status:r.status_model??"Not Started",cost:costModel,paid:null});ownCost=ownCost===null||costModel===null?null:ownCost+costModel;}
+    if(!modelingNA&&normalize(modelingTechName)===ownTech){myStages.push({stage:"Modelare",status:r.status_modelare??"Not Started",cost:costModeling,paid:null});ownCost=ownCost===null||costModeling===null?null:ownCost+costModeling;}
+    if(!ceramicNA&&normalize(ceramicTechName)===ownTech){myStages.push({stage:"Cer_Fin",status:r.status_cer_fin??"Not Started",cost:costCerFin,paid:null});ownCost=ownCost===null||costCerFin===null?null:ownCost+costCerFin;}
   }
+
+  const assignedCosts=[];
+  if(modelTechName)assignedCosts.push(costModel);
+  if(modelingTechName)assignedCosts.push(costModeling);
+  if(ceramicTechName)assignedCosts.push(costCerFin);
+  const totalTechCost=assignedCosts.some(value=>value===null)
+    ? null
+    : assignedCosts.reduce((sum,value)=>sum+value,0);
 
   return {
     id:num(r.id),
@@ -7077,7 +7096,7 @@ function mapSupabaseOrder(r){
     costModel,
     costModeling,
     costCerFin,
-    totalTechCost:num(r.total_technician_cost??(costModel+costModeling+costCerFin)),
+    totalTechCost:nullableMoney(r.total_technician_cost)??totalTechCost,
     myStages,
     ownCost,
     clinicNote:"",
@@ -7197,7 +7216,7 @@ loadAll=async function(show=true){
       stageStatus:String(row.stage_status||"Not Started"),
       paymentStatus:String(row.payment_status||"Not Paid"),
       unitCost:num(row.unit_cost),
-      amount:num(row.amount)
+      amount:nullableMoney(row.amount)
     })):[];
 
     const salaryByOrder=new Map();
@@ -7210,7 +7229,9 @@ loadAll=async function(show=true){
       const salaryStages=salaryByOrder.get(order.id)||[];
       if(isTechnician()){
         order.salaryStages=salaryStages;
-        order.ownCost=salaryStages.reduce((sum,stage)=>sum+num(stage.amount),0);
+        order.ownCost=salaryStages.some(stage=>stage.amount===null)
+          ? null
+          : salaryStages.reduce((sum,stage)=>sum+stage.amount,0);
         order.myStages=(order.myStages||[]).map(stage=>{
           const salary=salaryStages.find(row=>costStageKey(row.stageKey)===costStageKey(stage.stage));
           return salary?{...stage,cost:salary.amount,paid:salary.paymentStatus}:stage;

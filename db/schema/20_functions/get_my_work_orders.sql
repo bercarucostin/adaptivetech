@@ -70,7 +70,8 @@ begin
             case when bool_and(amount is not null) filter(where stage_key='cer_fin') then sum(amount) filter(where stage_key='cer_fin') end as cost_cer_fin
         from (select a.stage_key,public.assignment_agreed_amount(a.id) amount
             from public.lab_work_order_stage_assignments a
-            where a.lab_organization_id=wo.lab_organization_id and a.work_order_id=wo.id) assignments
+            where a.lab_organization_id=wo.lab_organization_id and a.work_order_id=wo.id
+              and a.ended_at is null) assignments
     ) costs
     where wo.lab_organization_id = p_lab_organization_id
       and wo.archived_at is null

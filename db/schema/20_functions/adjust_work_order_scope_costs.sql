@@ -23,13 +23,14 @@ BEGIN
                 v_existing:=FOUND;
             END IF;
             IF NOT v_existing THEN
-                SELECT tc.cost,'catalog' INTO v_cost,v_source FROM public.lab_technician_costs tc
-                WHERE tc.lab_organization_id=p_lab AND lower(trim(tc.tehnician))=lower(trim(a.technician_name))
-                    AND lower(trim(tc.tip_lucrare))=lower(trim(d.work_type))
-                    AND CASE a.stage_key WHEN 'model' THEN lower(trim(tc.etapa))='model'
-                        WHEN 'modelare' THEN lower(trim(tc.etapa))='modelare'
-                        ELSE regexp_replace(lower(coalesce(tc.etapa,'')),'[^a-z0-9]','','g') IN ('cerfin','ceramicafinisare','ceramicfinisare') END
-                ORDER BY tc.source_row_no LIMIT 1;
+                v_cost:=public.resolve_technician_unit_cost(
+                    p_lab,a.technician_name,d.work_type,a.stage_key
+                );
+                v_source:=CASE WHEN v_cost IS NULL THEN 'missing' ELSE 'catalog' END;
+            END IF;
+            IF v_cost IS NULL THEN
+                RAISE EXCEPTION 'Missing technician cost configuration: % / % / %',
+                    a.technician_name,d.work_type,a.stage_key;
             END IF;
             INSERT INTO public.lab_work_order_assignment_adjustments(assignment_id,work_type,quantity_delta,unit_cost,amount,cost_source,created_by_user_id)
             VALUES(a.id,d.work_type,d.delta,v_cost,round(v_cost*d.delta,2),coalesce(v_source,'missing'),auth.uid());

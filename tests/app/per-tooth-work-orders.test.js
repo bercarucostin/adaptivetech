@@ -26,11 +26,12 @@ function toothScope(selectedTeeth){
 
 function mappedOrder(row){
   const map=Function(
-    'deriveWorkOrderScope','num','isDoctor','isTechnician','normalize','boolish','auth',
+    'deriveWorkOrderScope','num','nullableMoney','isDoctor','isTechnician','normalize','boolish','auth',
     `return (${namedFunction('mapSupabaseOrder')})`
   )(
     toothScope,
     value=>Number(value)||0,
+    value=>value===null||value===undefined||value===''?null:(Number.isFinite(Number(value))?Number(value):null),
     ()=>false,
     ()=>false,
     value=>String(value??'').trim().toLowerCase(),
@@ -136,9 +137,25 @@ test('read-model technician costs use frozen assignment amounts without catalog 
 
   const mapper=namedFunction('mapSupabaseOrder');
   assert.doesNotMatch(mapper,/technicianStageCost|technicianCostRules/);
-  assert.match(mapper,/num\(r\.cost_model\)/);
-  assert.match(mapper,/num\(r\.cost_modelare\)/);
-  assert.match(mapper,/num\(r\.cost_cer_fin\)/);
+  assert.match(mapper,/nullableMoney\(r\.cost_model\)/);
+  assert.match(mapper,/nullableMoney\(r\.cost_modelare\)/);
+  assert.match(mapper,/nullableMoney\(r\.cost_cer_fin\)/);
+});
+
+test('missing technician costs remain missing instead of becoming zero',()=>{
+  const mapped=mappedOrder({
+    id:16,
+    items:[{tooth_number:11,work_type:'Coroană'}],
+    work_types:['Coroană'],
+    work_type_summary:'Coroană',
+    element_count:1,
+    tehnician_model:'Denis',
+    cost_model:null
+  });
+
+  assert.equal(mapped.costModel,null);
+  assert.equal(mapped.totalTechCost,null);
+  assert.match(source,/Cost neconfigurat/);
 });
 
 test('not-applicable stages retain historical frozen technician costs',()=>{

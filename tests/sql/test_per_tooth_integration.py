@@ -6,6 +6,47 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def read(name): return (ROOT / name).read_text()
 def sql(name): return read('db/schema/20_functions/' + name + '.sql')
 class IntegrationRegressions(unittest.TestCase):
+    def test_technician_salary_is_resolved_from_every_tooth_work_type(self):
+        self.assertTrue((ROOT / 'db/schema/20_functions/resolve_work_order_technician_costs.sql').is_file())
+        resolver = sql('resolve_work_order_technician_costs')
+        self.assertIn('FROM public.lab_work_order_items', resolver)
+        self.assertIn('work_type_key', resolver)
+        self.assertIn('GROUP BY work_type_key', resolver)
+        self.assertIn('public.lab_technician_costs', resolver)
+        self.assertRegex(resolver, r'round\(tc\.cost\s*\*\s*scope\.quantity,\s*2\)')
+
+        sync = sql('sync_work_order_stage_assignment')
+        self.assertIn('public.resolve_work_order_technician_costs', sync)
+        self.assertIn('repair_incomplete', sync)
+        self.assertIn('repair_aggregate', sync)
+        self.assertIn('WITH effective_saved AS', sync)
+        self.assertIn('quantity_delta', sync)
+        self.assertIn('EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base', sync)
+        self.assertIn('Missing technician cost configuration', sync)
+        self.assertIn('v_current.agreed_amount IS DISTINCT FROM v_saved_amount', sync)
+        self.assertLess(sync.index("'repair_aggregate'"), sync.index('DELETE FROM public.lab_work_order_assignment_cost_lines'))
+
+    def test_salary_reconciliation_repairs_existing_assignments(self):
+        backfill = sql('backfill_work_order_financial_history')
+        self.assertIn('public.sync_work_order_stage_assignment', backfill)
+        self.assertNotIn("'assignments',0", backfill.replace(' ', ''))
+        self.assertIn("'missing_costs'", backfill)
+        self.assertIn("'unresolved_assignments'", backfill)
+        self.assertIn("action='repair_incomplete'", backfill)
+        self.assertNotIn('archived_at IS NULL', backfill)
+
+        reader = sql('get_my_work_orders')
+        costs = reader[reader.index('from (select a.stage_key'):]
+        self.assertIn('a.ended_at is null', costs.lower())
+
+    def test_missing_salary_is_not_coerced_to_zero_in_the_app(self):
+        app = read('website/app/app.js')
+        start = app.index('function mapSupabaseOrder(')
+        mapper = app[start:start + 18000]
+        self.assertIn('nullableMoney(r.cost_model)', mapper)
+        self.assertIn('nullableMoney(row.amount)', mapper)
+        self.assertIn('Cost neconfigurat', app)
+
     def test_management_create_is_one_transactional_rpc(self):
         source = sql('create_work_order')
         self.assertIn('FUNCTION public.create_management_work_order(', source)

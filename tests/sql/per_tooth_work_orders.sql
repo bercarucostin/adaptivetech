@@ -4,7 +4,7 @@ begin;
 do $$
 declare
     v_lab uuid:=gen_random_uuid(); v_tech uuid:=gen_random_uuid(); v_admin uuid:=gen_random_uuid();
-    v_id bigint; v_assignment uuid; v_scope record; v_amount numeric; v_rows integer;
+    v_id bigint; v_assignment uuid; v_single_id bigint; v_single_assignment uuid; v_scope record; v_amount numeric; v_rows integer;
     v_items jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":21,"work_type":"Bridge"}]';
     v_changed jsonb:='[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"Crown"}]';
     v_failed boolean; v_audits integer; v_result jsonb; v_management_id bigint; v_case_input jsonb;
@@ -32,6 +32,16 @@ begin
     perform set_config('request.jwt.claim.sub',v_tech::text,true);
     v_id:=public.create_technician_work_order(v_lab,current_date,'Patient','Partner',v_items,null,'Model',
         '{"tooth_details_json":{"11":{"material":"remove","shade":"A2"},"__case":{"material":"remove"}}}');
+    v_single_id:=public.create_technician_work_order(v_lab,current_date,'Single type patient','Partner',
+        '[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"crown"},{"tooth_number":13,"work_type":"CROWN"}]',
+        null,'Model','{}');
+    select id into v_single_assignment from public.lab_work_order_stage_assignments
+    where lab_organization_id=v_lab and work_order_id=v_single_id and stage_key='model' and ended_at is null;
+    if public.assignment_agreed_amount(v_single_assignment)<>60 then
+        raise exception 'Single work type salary must equal unit technician cost times configured teeth'; end if;
+    select amount into v_amount from public.get_my_salary(v_lab)
+    where work_order_id=v_single_id and stage_key='Model';
+    if v_amount<>60 then raise exception 'Technician salary reader did not return the calculated assignment amount'; end if;
     set constraints all immediate;
     set constraints all deferred;
     if not exists(select 1 from public.lab_patient_cases where lab_organization_id=v_lab and work_order_id=v_id and tooth_details_json not like '%material%') then
@@ -50,9 +60,16 @@ begin
     execute 'RESET ROLE';
     select id into v_assignment from public.lab_work_order_stage_assignments where lab_organization_id=v_lab and work_order_id=v_id;
     if public.assignment_agreed_amount(v_assignment)<>70 then raise exception 'Mixed item costs incorrect'; end if;
+    delete from public.lab_work_order_assignment_cost_lines where assignment_id=v_assignment;
+    update public.lab_work_order_stage_assignments set agreed_amount=null,unit_cost=null,cost_source='missing' where id=v_assignment;
+    perform public.sync_work_order_stage_assignment(v_lab,v_id,'model','Per tooth technician');
+    if public.assignment_agreed_amount(v_assignment)<>70 then raise exception 'Incomplete same-technician assignment was not repaired'; end if;
+    update public.lab_technician_costs set cost=999 where lab_organization_id=v_lab;
+    update public.lab_work_order_stage_assignments set agreed_amount=999 where id=v_assignment;
+    perform public.sync_work_order_stage_assignment(v_lab,v_id,'model','Per tooth technician');
+    if public.assignment_agreed_amount(v_assignment)<>70 then raise exception 'Stale assignment aggregate was not repaired from frozen lines'; end if;
     if (select snapshot_list_price from public.lab_work_orders where lab_organization_id=v_lab and id=v_id)<>350 then raise exception 'Mixed snapshot incorrect'; end if;
     update public.lab_contract_work_prices set pret=999 where lab_organization_id=v_lab;
-    update public.lab_technician_costs set cost=999 where lab_organization_id=v_lab;
     select count(*) into v_audits from public.work_order_financial_audit where lab_organization_id=v_lab and work_order_id=v_id and entity_type='work_order_price';
     perform public.replace_work_order_items(v_lab,v_id,v_items,'General');
     if (select count(*) from public.work_order_financial_audit where lab_organization_id=v_lab and work_order_id=v_id and entity_type='work_order_price')<>v_audits then raise exception 'Unchanged save adds a price audit'; end if;

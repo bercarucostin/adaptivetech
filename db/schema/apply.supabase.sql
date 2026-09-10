@@ -1687,13 +1687,14 @@ BEGIN
                 v_existing:=FOUND;
             END IF;
             IF NOT v_existing THEN
-                SELECT tc.cost,'catalog' INTO v_cost,v_source FROM public.lab_technician_costs tc
-                WHERE tc.lab_organization_id=p_lab AND lower(trim(tc.tehnician))=lower(trim(a.technician_name))
-                    AND lower(trim(tc.tip_lucrare))=lower(trim(d.work_type))
-                    AND CASE a.stage_key WHEN 'model' THEN lower(trim(tc.etapa))='model'
-                        WHEN 'modelare' THEN lower(trim(tc.etapa))='modelare'
-                        ELSE regexp_replace(lower(coalesce(tc.etapa,'')),'[^a-z0-9]','','g') IN ('cerfin','ceramicafinisare','ceramicfinisare') END
-                ORDER BY tc.source_row_no LIMIT 1;
+                v_cost:=public.resolve_technician_unit_cost(
+                    p_lab,a.technician_name,d.work_type,a.stage_key
+                );
+                v_source:=CASE WHEN v_cost IS NULL THEN 'missing' ELSE 'catalog' END;
+            END IF;
+            IF v_cost IS NULL THEN
+                RAISE EXCEPTION 'Missing technician cost configuration: % / % / %',
+                    a.technician_name,d.work_type,a.stage_key;
             END IF;
             INSERT INTO public.lab_work_order_assignment_adjustments(assignment_id,work_type,quantity_delta,unit_cost,amount,cost_source,created_by_user_id)
             VALUES(a.id,d.work_type,d.delta,v_cost,round(v_cost*d.delta,2),coalesce(v_source,'missing'),auth.uid());
@@ -3682,10 +3683,23 @@ REVOKE ALL ON FUNCTION public.work_order_stage_payment_status(uuid,bigint,text) 
 -- END db/schema/20_functions/assignment_agreed_amount.sql
 
 -- BEGIN db/schema/20_functions/backfill_work_order_financial_history.sql
--- Backfill only stored item snapshots. Current catalogs cannot reconstruct history.
+-- Repairs current assignments from the current catalog. This is intentionally
+-- limited to incomplete snapshots without payments or adjustments; valid frozen
+-- history is never recalculated.
 CREATE OR REPLACE FUNCTION public.backfill_work_order_financial_history(p_lab uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_count integer;
+DECLARE
+    v_order public.lab_work_orders%rowtype;
+    v_stage record;
+    v_assignment_id uuid;
+    v_before_id uuid;
+    v_before_repair_audits integer;
+    v_after_repair_audits integer;
+    v_prices integer := 0;
+    v_assignments integer := 0;
+    v_repaired integer := 0;
+    v_missing jsonb := '[]'::jsonb;
+    v_unresolved jsonb := '[]'::jsonb;
 BEGIN
     IF lower(coalesce(public.current_org_role(p_lab),''))<>'admin' THEN RAISE EXCEPTION 'Admin access required'; END IF;
     UPDATE public.lab_work_orders wo SET
@@ -3696,8 +3710,76 @@ BEGIN
         FROM public.lab_work_order_items WHERE lab_organization_id=p_lab GROUP BY work_order_id) totals
     WHERE wo.lab_organization_id=p_lab AND wo.id=totals.work_order_id AND wo.price_fixed_at IS NULL
       AND wo.snapshot_list_price IS NULL AND wo.snapshot_final_price IS NULL;
-    GET DIAGNOSTICS v_count=ROW_COUNT;
-    RETURN jsonb_build_object('prices',v_count,'assignments',0,'migration_balances',0);
+    GET DIAGNOSTICS v_prices=ROW_COUNT;
+
+    FOR v_order IN
+        SELECT * FROM public.lab_work_orders
+        WHERE lab_organization_id=p_lab
+        ORDER BY id
+    LOOP
+        FOR v_stage IN SELECT * FROM (VALUES
+            ('model'::text,v_order.tehnician_model),
+            ('modelare'::text,v_order.tehnician1_modelare),
+            ('cer_fin'::text,v_order.tehnician2_cer_fin)
+        ) stages(stage_key,technician_name)
+        LOOP
+            IF nullif(trim(coalesce(v_stage.technician_name,'')),'') IS NULL THEN CONTINUE; END IF;
+
+            v_before_id:=NULL;
+            SELECT count(*)::integer INTO v_before_repair_audits
+            FROM public.work_order_financial_audit
+            WHERE lab_organization_id=p_lab AND work_order_id=v_order.id
+              AND entity_type='stage_assignment'
+              AND (action='repair_incomplete' OR action='repair_aggregate');
+            SELECT a.id INTO v_before_id
+            FROM public.lab_work_order_stage_assignments a
+            WHERE a.lab_organization_id=p_lab AND a.work_order_id=v_order.id
+              AND a.stage_key=v_stage.stage_key AND a.ended_at IS NULL;
+
+            BEGIN
+                v_assignment_id:=public.sync_work_order_stage_assignment(
+                    p_lab,v_order.id,v_stage.stage_key,v_stage.technician_name
+                );
+                IF v_before_id IS NULL THEN
+                    v_assignments:=v_assignments+1;
+                ELSE
+                    SELECT count(*)::integer INTO v_after_repair_audits
+                    FROM public.work_order_financial_audit
+                    WHERE lab_organization_id=p_lab AND work_order_id=v_order.id
+                      AND entity_type='stage_assignment'
+                      AND (action='repair_incomplete' OR action='repair_aggregate');
+                    IF v_after_repair_audits>v_before_repair_audits THEN
+                        v_repaired:=v_repaired+1;
+                    END IF;
+                END IF;
+                UPDATE public.lab_work_order_stage_assignments SET migrated=true
+                WHERE id=v_assignment_id AND (
+                    v_before_id IS NULL OR v_after_repair_audits>v_before_repair_audits
+                );
+            EXCEPTION WHEN OTHERS THEN
+                IF SQLERRM LIKE 'Missing technician cost configuration:%' THEN
+                    v_missing:=v_missing||jsonb_build_array(jsonb_build_object(
+                        'work_order_id',v_order.id,'stage',v_stage.stage_key,
+                        'technician',v_stage.technician_name,'error',SQLERRM
+                    ));
+                ELSIF SQLERRM LIKE 'Incomplete technician cost snapshot cannot be repaired%' THEN
+                    v_unresolved:=v_unresolved||jsonb_build_array(jsonb_build_object(
+                        'work_order_id',v_order.id,'stage',v_stage.stage_key,
+                        'technician',v_stage.technician_name,'error',SQLERRM
+                    ));
+                ELSE
+                    RAISE;
+                END IF;
+            END;
+        END LOOP;
+    END LOOP;
+
+    RETURN jsonb_build_object(
+        'prices',v_prices,'assignments',v_assignments,
+        'repaired_assignments',v_repaired,'missing_costs',v_missing,
+        'unresolved_assignments',v_unresolved,
+        'migration_balances',0
+    );
 END; $$;
 REVOKE ALL ON FUNCTION public.backfill_work_order_financial_history(uuid) FROM public;
 GRANT EXECUTE ON FUNCTION public.backfill_work_order_financial_history(uuid) TO authenticated;
@@ -6173,7 +6255,8 @@ begin
             case when bool_and(amount is not null) filter(where stage_key='cer_fin') then sum(amount) filter(where stage_key='cer_fin') end as cost_cer_fin
         from (select a.stage_key,public.assignment_agreed_amount(a.id) amount
             from public.lab_work_order_stage_assignments a
-            where a.lab_organization_id=wo.lab_organization_id and a.work_order_id=wo.id) assignments
+            where a.lab_organization_id=wo.lab_organization_id and a.work_order_id=wo.id
+              and a.ended_at is null) assignments
     ) costs
     where wo.lab_organization_id = p_lab_organization_id
       and wo.archived_at is null
@@ -7303,6 +7386,88 @@ REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,t
 REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) FROM authenticated;
 -- END db/schema/20_functions/resolve_work_order_price_snapshot.sql
 
+-- BEGIN db/schema/20_functions/resolve_work_order_technician_costs.sql
+-- Canonical catalog lookup shared by assignment creation and scope adjustments.
+CREATE OR REPLACE FUNCTION public.resolve_technician_unit_cost(
+    p_lab uuid,
+    p_technician_name text,
+    p_work_type text,
+    p_stage text
+)
+RETURNS numeric
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT tc.cost
+    FROM public.lab_technician_costs tc
+    WHERE tc.lab_organization_id = p_lab
+      AND regexp_replace(lower(trim(tc.tehnician)), '[[:space:]]+', ' ', 'g')
+          = regexp_replace(lower(trim(p_technician_name)), '[[:space:]]+', ' ', 'g')
+      AND regexp_replace(lower(trim(tc.tip_lucrare)), '[[:space:]]+', ' ', 'g')
+          = regexp_replace(lower(trim(p_work_type)), '[[:space:]]+', ' ', 'g')
+      AND CASE lower(trim(p_stage))
+          WHEN 'model' THEN regexp_replace(lower(coalesce(tc.etapa,'')), '[^a-z0-9]', '', 'g') = 'model'
+          WHEN 'modelare' THEN regexp_replace(lower(coalesce(tc.etapa,'')), '[^a-z0-9]', '', 'g') = 'modelare'
+          WHEN 'cer_fin' THEN regexp_replace(lower(coalesce(tc.etapa,'')), '[^a-z0-9]', '', 'g')
+              IN ('cerfin','ceramicafinisare','ceramicfinisare')
+          ELSE false
+      END
+    ORDER BY tc.source_row_no
+    LIMIT 1
+$$;
+
+REVOKE ALL ON FUNCTION public.resolve_technician_unit_cost(uuid,text,text,text) FROM public,authenticated;
+
+-- One row per selected work type. Quantity is the number of configured teeth
+-- carrying that type; amount is the frozen technician cost for the stage.
+CREATE OR REPLACE FUNCTION public.resolve_work_order_technician_costs(
+    p_lab uuid,
+    p_work_order_id bigint,
+    p_stage text,
+    p_technician_name text
+)
+RETURNS TABLE (
+    work_type text,
+    quantity numeric,
+    unit_cost numeric,
+    amount numeric,
+    cost_source text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    WITH normalized_scope AS (
+        SELECT i.work_type,i.quantity,
+               regexp_replace(lower(trim(i.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key
+        FROM public.lab_work_order_items i
+        WHERE i.lab_organization_id = p_lab
+          AND i.work_order_id = p_work_order_id
+    ), scope AS (
+        SELECT min(work_type) AS work_type,work_type_key,sum(quantity)::numeric AS quantity
+        FROM normalized_scope
+        GROUP BY work_type_key
+    )
+    SELECT scope.work_type,
+           scope.quantity,
+           tc.cost AS unit_cost,
+           CASE WHEN tc.cost IS NULL THEN NULL ELSE round(tc.cost * scope.quantity, 2) END AS amount,
+           CASE WHEN tc.cost IS NULL THEN 'missing' ELSE 'catalog' END AS cost_source
+    FROM scope
+    LEFT JOIN LATERAL (
+        SELECT public.resolve_technician_unit_cost(
+            p_lab,p_technician_name,scope.work_type,p_stage
+        ) AS cost
+    ) tc ON true
+    ORDER BY scope.work_type
+$$;
+
+REVOKE ALL ON FUNCTION public.resolve_work_order_technician_costs(uuid,bigint,text,text) FROM public,authenticated;
+-- END db/schema/20_functions/resolve_work_order_technician_costs.sql
+
 -- BEGIN db/schema/20_functions/reverse_technician_payment.sql
 CREATE OR REPLACE FUNCTION public.reverse_technician_payment(
     p_payment_id uuid,
@@ -7804,6 +7969,15 @@ DECLARE
     v_assignment_id uuid;
     v_user_ids uuid[];
     v_user_id uuid;
+    v_missing text;
+    v_line_count integer;
+    v_repair_incomplete boolean := false;
+    v_lines_complete boolean := false;
+    v_adjustments_complete boolean := true;
+    v_saved_amount numeric;
+    v_saved_unit_cost numeric;
+    v_saved_quantity numeric;
+    v_has_financial_activity boolean := false;
 BEGIN
     IF public.effective_lab_role(p_lab) NOT IN ('admin', 'manager', 'technician') THEN
         RAISE EXCEPTION 'Stage assignment update denied';
@@ -7827,7 +8001,102 @@ BEGIN
     FOR UPDATE;
 
     IF FOUND AND lower(trim(v_current.technician_name)) = lower(coalesce(v_name, '')) THEN
-        RETURN v_current.id;
+        WITH effective_saved AS (
+            SELECT min(saved_scope.work_type) AS work_type,
+                   saved_scope.work_type_key,
+                   sum(saved_scope.quantity)::numeric AS quantity
+            FROM (
+                SELECT saved.work_type,
+                       regexp_replace(lower(trim(saved.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       saved.quantity
+                FROM public.lab_work_order_assignment_cost_lines saved
+                WHERE saved.assignment_id=v_current.id
+                UNION ALL
+                SELECT delta.work_type,
+                       regexp_replace(lower(trim(delta.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       delta.quantity_delta AS quantity
+                FROM public.lab_work_order_assignment_adjustments delta
+                WHERE delta.assignment_id=v_current.id
+            ) saved_scope
+            GROUP BY work_type_key
+            HAVING sum(saved_scope.quantity)<>0
+        )
+        SELECT EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base
+                       WHERE base.assignment_id=v_current.id)
+               AND EXISTS (
+                   SELECT 1 FROM public.resolve_work_order_technician_costs(
+                       p_lab,p_work_order_id,v_stage,v_name
+                   ) expected
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM public.resolve_work_order_technician_costs(
+                       p_lab,p_work_order_id,v_stage,v_name
+                   ) expected
+                   LEFT JOIN effective_saved saved
+                     ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                   WHERE saved.work_type_key IS NULL
+                      OR saved.quantity IS DISTINCT FROM expected.quantity
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM effective_saved saved
+                   LEFT JOIN public.resolve_work_order_technician_costs(
+                       p_lab,p_work_order_id,v_stage,v_name
+                   ) expected
+                     ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                   WHERE expected.work_type IS NULL
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM public.lab_work_order_assignment_cost_lines saved
+                   WHERE saved.assignment_id=v_current.id AND saved.amount IS NULL
+               ),
+               (SELECT sum(saved.amount) FROM public.lab_work_order_assignment_cost_lines saved
+                WHERE saved.assignment_id=v_current.id),
+               (SELECT CASE WHEN count(*)=1 THEN max(saved.unit_cost) END
+                FROM public.lab_work_order_assignment_cost_lines saved
+                WHERE saved.assignment_id=v_current.id),
+               (SELECT sum(saved.quantity) FROM public.lab_work_order_assignment_cost_lines saved
+                WHERE saved.assignment_id=v_current.id),
+               NOT EXISTS (
+                   SELECT 1 FROM public.lab_work_order_assignment_adjustments d
+                   WHERE d.assignment_id=v_current.id AND d.amount IS NULL
+               )
+          INTO v_lines_complete,v_saved_amount,v_saved_unit_cost,v_saved_quantity,v_adjustments_complete;
+
+        IF v_lines_complete AND v_current.agreed_amount IS DISTINCT FROM v_saved_amount THEN
+            UPDATE public.lab_work_order_stage_assignments
+            SET agreed_amount=v_saved_amount,unit_cost=v_saved_unit_cost,quantity=v_saved_quantity,
+                cost_source=CASE WHEN cost_source='missing' THEN 'catalog' ELSE cost_source END
+            WHERE id=v_current.id;
+            INSERT INTO public.work_order_financial_audit (
+                lab_organization_id,work_order_id,entity_type,entity_id,action,
+                before_value,after_value,changed_by_user_id
+            ) VALUES (
+                p_lab,p_work_order_id,'stage_assignment',v_current.id::text,'repair_aggregate',
+                to_jsonb(v_current),
+                (SELECT to_jsonb(a) FROM public.lab_work_order_stage_assignments a WHERE a.id=v_current.id),
+                auth.uid()
+            );
+            IF v_adjustments_complete THEN RETURN v_current.id; END IF;
+        END IF;
+
+        IF v_lines_complete AND v_adjustments_complete
+           AND public.assignment_agreed_amount(v_current.id) IS NOT NULL THEN
+            RETURN v_current.id;
+        END IF;
+
+        SELECT EXISTS (SELECT 1 FROM public.technician_payments p WHERE p.assignment_id=v_current.id)
+            OR EXISTS (SELECT 1 FROM public.lab_work_order_assignment_adjustments d WHERE d.assignment_id=v_current.id)
+          INTO v_has_financial_activity;
+        IF v_has_financial_activity THEN
+            RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired after financial activity for assignment %',v_current.id;
+        END IF;
+
+        -- repair_incomplete: legacy/current assignments without a usable per-type
+        -- snapshot are rebuilt in place. Valid frozen snapshots never reach here.
+        v_repair_incomplete := true;
+        v_assignment_id := v_current.id;
     END IF;
 
     IF v_name IS NULL THEN
@@ -7861,46 +8130,46 @@ BEGIN
     END IF;
     v_user_id := v_user_ids[1];
 
-    IF v_current.id IS NOT NULL THEN
+    IF v_current.id IS NOT NULL AND NOT v_repair_incomplete THEN
         UPDATE public.lab_work_order_stage_assignments SET ended_at = now()
         WHERE id = v_current.id;
     END IF;
 
-    INSERT INTO public.lab_work_order_stage_assignments (
-        lab_organization_id, work_order_id, stage_key, technician_user_id,
-        technician_name, quantity, cost_source, created_by_user_id
-    ) VALUES (
-        p_lab, p_work_order_id, v_stage, v_user_id, v_name,
-        (SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id), 'catalog', auth.uid()
-    ) RETURNING id INTO v_assignment_id;
+    IF v_repair_incomplete THEN
+        DELETE FROM public.lab_work_order_assignment_cost_lines
+        WHERE assignment_id=v_assignment_id;
+        UPDATE public.lab_work_order_stage_assignments
+        SET technician_user_id=coalesce(technician_user_id,v_user_id)
+        WHERE id=v_assignment_id;
+    ELSE
+        INSERT INTO public.lab_work_order_stage_assignments (
+            lab_organization_id, work_order_id, stage_key, technician_user_id,
+            technician_name, quantity, cost_source, created_by_user_id
+        ) VALUES (
+            p_lab, p_work_order_id, v_stage, v_user_id, v_name,
+            (SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id), 'catalog', auth.uid()
+        ) RETURNING id INTO v_assignment_id;
+    END IF;
 
     INSERT INTO public.lab_work_order_assignment_cost_lines (
         assignment_id, work_type, quantity, unit_cost, amount, cost_source
     )
-    WITH work_lines AS (
-        SELECT i.work_type, sum(i.quantity)::numeric AS quantity
-        FROM public.lab_work_order_items i
-        WHERE i.lab_organization_id = p_lab AND i.work_order_id = p_work_order_id
-        GROUP BY i.work_type
-    )
-    SELECT v_assignment_id, wl.work_type, wl.quantity, cost.cost,
-           CASE WHEN cost.cost IS NULL THEN NULL ELSE round(cost.cost * wl.quantity, 2) END,
-           CASE WHEN cost.cost IS NULL THEN 'missing' ELSE 'catalog' END
-    FROM work_lines wl
-    LEFT JOIN LATERAL (
-        SELECT tc.cost
-        FROM public.lab_technician_costs tc
-        WHERE tc.lab_organization_id = p_lab
-          AND lower(trim(tc.tehnician)) = lower(v_name)
-          AND lower(trim(tc.tip_lucrare)) = lower(trim(wl.work_type))
-          AND CASE v_stage
-              WHEN 'model' THEN lower(trim(tc.etapa)) = 'model'
-              WHEN 'modelare' THEN lower(trim(tc.etapa)) = 'modelare'
-              ELSE regexp_replace(lower(coalesce(tc.etapa,'')), '[^a-z0-9]', '', 'g')
-                   IN ('cerfin','ceramicafinisare','ceramicfinisare')
-          END
-        ORDER BY tc.source_row_no LIMIT 1
-    ) cost ON true;
+    SELECT v_assignment_id,costs.work_type,costs.quantity,costs.unit_cost,costs.amount,costs.cost_source
+    FROM public.resolve_work_order_technician_costs(
+        p_lab,p_work_order_id,v_stage,v_name
+    ) costs;
+
+    SELECT count(*)::integer,
+           string_agg(work_type,', ' ORDER BY work_type) FILTER (WHERE amount IS NULL)
+      INTO v_line_count,v_missing
+    FROM public.lab_work_order_assignment_cost_lines
+    WHERE assignment_id=v_assignment_id;
+    IF v_line_count=0 THEN
+        RAISE EXCEPTION 'Cannot calculate technician cost without configured teeth';
+    END IF;
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION 'Missing technician cost configuration: % / % / %',v_name,v_missing,v_stage;
+    END IF;
 
     UPDATE public.lab_work_order_stage_assignments a
     SET unit_cost = totals.unit_cost,
@@ -7922,7 +8191,8 @@ BEGIN
         before_value, after_value, changed_by_user_id
     ) VALUES (
         p_lab, p_work_order_id, 'stage_assignment', v_assignment_id::text,
-        CASE WHEN v_current.id IS NULL THEN 'assign' ELSE 'reassign' END,
+        CASE WHEN v_repair_incomplete THEN 'repair_incomplete'
+             WHEN v_current.id IS NULL THEN 'assign' ELSE 'reassign' END,
         CASE WHEN v_current.id IS NULL THEN '{}'::jsonb ELSE to_jsonb(v_current) END,
         (SELECT to_jsonb(a) FROM public.lab_work_order_stage_assignments a WHERE a.id=v_assignment_id),
         auth.uid()

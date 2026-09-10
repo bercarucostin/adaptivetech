@@ -136,6 +136,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
 \i db/schema/20_functions/resolve_work_order_price_snapshot.sql
+\i db/schema/20_functions/resolve_work_order_technician_costs.sql
 \i db/schema/20_functions/reverse_technician_payment.sql
 \i db/schema/20_functions/sanitize_tooth_details.sql
 \i db/schema/20_functions/save_my_work_order_case.sql
