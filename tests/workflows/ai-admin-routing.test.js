@@ -28,6 +28,12 @@ test('legacy Work Order intents use the idempotent adapter',()=>{
   assert.match(mutation.body,/client_request_id/);
 });
 
+test('Work Order adapter carries item scopes without scalar clinical fields',()=>{
+  const mutation=node('Supabase - Role Safe AI Mutation').parameters;
+  assert.match(mutation.body,/p_payload/);
+  assert.doesNotMatch(mutation.body,/Tip_Lucrare|Nr_Elemente|material/);
+});
+
 test('preview response carries the exact pending operation',()=>{
   const code=node('AI - Mutation Result').parameters.jsCode;
   assert.match(code,/pending_operation/);

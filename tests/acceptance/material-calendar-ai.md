@@ -6,7 +6,9 @@ non-production laboratory.
 1. As Technician A, ask for current stock, add 5 to one material, subtract 2,
    and set an absolute quantity after reading it. Verify the results are atomic,
    a repeated request key changes stock once, a stale expected quantity fails,
-   and stock cannot become negative.
+   and stock cannot become negative. These are inventory-material operations;
+   they remain available even though Work Orders no longer accept clinical
+   material fields.
 2. As Technician A, create one personal and one shared event. Verify both are
    visible to A and only the shared event is visible to Technician B.
 3. As Technician B, update the title/date/description of A's shared event.
