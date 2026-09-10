@@ -77,6 +77,43 @@ test('parser rejects clinical material and scalar type/count fields in Work Orde
   assert.equal(parsed.intent,'clarify');
 });
 
+test('parser canonicalizes tooth items and recursively removes clinical material',()=>{
+  const fields={
+    Nume_Pacient:'Ana Pop',
+    Nume_Partener:'Dr. Ionescu',
+    items:[{
+      tooth_number:11,
+      work_type:'Coroană ceramică',
+      material:'Zirconiu',
+      shade:'A2',
+      note:'Nu păstra aceste detalii aici'
+    }],
+    case:{
+      notes:'Control inițial',
+      material:'Zirconiu',
+      tooth_details:[{tooth_number:11,material:'Metal',details:{Material:'Compozit',shade:'A2'}}],
+      __case:{material:'Ceramică',nested:{MATERIAL:'Rășină',shade:'A1'}}
+    }
+  };
+  const direct=parse({intent:'create',reply:'Creez lucrarea.',payload:{fields}});
+  const typed=parse({
+    intent:'preview',
+    reply:'Previzualizez lucrarea.',
+    operation:{entity:'work_order',operation:'create',target:{},fields}
+  },{role:'admin'});
+  const expectedItems=[{tooth_number:11,work_type:'Coroană ceramică'}];
+  const expectedCase={
+    notes:'Control inițial',
+    tooth_details:[{tooth_number:11,details:{shade:'A2'}}],
+    __case:{nested:{shade:'A1'}}
+  };
+
+  assert.deepEqual(direct.payload.fields.items,expectedItems);
+  assert.deepEqual(direct.payload.fields.case,expectedCase);
+  assert.deepEqual(typed.operation.fields.items,expectedItems);
+  assert.deepEqual(typed.operation.fields.case,expectedCase);
+});
+
 test('technician may submit an item-only Work Order scope update',()=>{
   const parsed=parse({
     intent:'update',
