@@ -78,6 +78,19 @@ begin
     if (select selected_teeth from public.lab_patient_cases where lab_organization_id=v_lab and work_order_id=v_id)<>'11,12,13,14' then raise exception 'Atomic AI writer did not synchronize clinical scope'; end if;
     if (select item->'My_Stages'->0->>'Payment_Status' from jsonb_array_elements(public.ai_technician_work_orders()) as rows(item) where (item->>'ID')::bigint=v_id)<>'Not Paid' then raise exception 'AI payment status ignores adjusted outstanding balance'; end if;
     perform set_config('request.jwt.claim.sub',v_admin::text,true);
+    -- Scope-only management edits pass NULL payment actions, preserving overpayments
+    -- on contraction and outstanding balances on expansion without moving money.
+    v_result:=public.ai_mutate_work_order('update',jsonb_build_object('id',v_id,'fields',jsonb_build_object('items',v_changed)));
+    if not coalesce((v_result->>'ok')::boolean,false) then raise exception 'Scope contraction failed: %',v_result; end if;
+    if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>70
+        or public.work_order_stage_payment_status(v_lab,v_id,'model')<>'Paid' then
+        raise exception 'Scope contraction reversed an overpayment'; end if;
+    v_result:=public.ai_mutate_work_order('update',jsonb_build_object('id',v_id,'fields',jsonb_build_object('items',
+        '[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"Crown"},{"tooth_number":13,"work_type":"Crown"},{"tooth_number":14,"work_type":"Crown"}]'::jsonb)));
+    if not coalesce((v_result->>'ok')::boolean,false) then raise exception 'Scope expansion failed: %',v_result; end if;
+    if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>70
+        or public.work_order_stage_payment_status(v_lab,v_id,'model')<>'Not Paid' then
+        raise exception 'Scope expansion recorded an unauthorized payment'; end if;
     -- Legacy cache says Paid, but the adjusted amount is 80 and only 70 was paid.
     update public.lab_work_orders set paid_model='Paid' where lab_organization_id=v_lab and id=v_id;
     if (select paid_model from public.get_my_work_orders(v_lab) where id=v_id)<>'Not Paid' then

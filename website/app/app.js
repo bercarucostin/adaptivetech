@@ -6199,6 +6199,7 @@ async function editOrder(id){
     partnerSuggestions?.classList.add("hidden");
     discount.value=o.discount||0;
     populateFormOptions(o);
+    [paidModel,paidModeling,paidCerFin].forEach(input=>{input.dataset.originalValue=input.value;});
     renderTechnicianAssignmentSummary(o);
     recalcFormPrice();
     setModalRoleMode();
@@ -7486,9 +7487,9 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
         p_status_model:fields.Status_Model||"Not Started",
         p_status_modelare:fields.Status_Modelare||"Not Started",
         p_status_cer_fin:fields.Status_Cer_Fin||"Not Started",
-        p_paid_model:fields.Paid_Model||"Not Paid",
-        p_paid_modelare:fields.Paid_Modelare||"Not Paid",
-        p_paid_cer_fin:fields.Paid_Cer_Fin||"Not Paid",
+        p_paid_model:id&&fields.Paid_Model===paidModel.dataset.originalValue?null:(fields.Paid_Model||"Not Paid"),
+        p_paid_modelare:id&&fields.Paid_Modelare===paidModeling.dataset.originalValue?null:(fields.Paid_Modelare||"Not Paid"),
+        p_paid_cer_fin:id&&fields.Paid_Cer_Fin===paidCerFin.dataset.originalValue?null:(fields.Paid_Cer_Fin||"Not Paid"),
         p_model_not_applicable:Boolean(fields.Model_Not_Applicable),
         p_modelare_not_applicable:Boolean(fields.Modelare_Not_Applicable),
         p_cer_fin_not_applicable:Boolean(fields.Cer_Fin_Not_Applicable),

@@ -167,3 +167,44 @@ test('saved prices render per-tooth snapshots and frozen aggregate totals',()=>{
   assert.match(recalc,/renderToothPriceBreakdown\(\{[\s\S]*saved\.items/);
   assert.doesNotMatch(recalc.slice(0,recalc.indexOf('const items=')),/box\.innerHTML=""/);
 });
+
+function managementPaymentPayload({id=42,loaded=['Paid','Paid','Paid'],selected=loaded,items=[{tooth_number:11,work_type:'Crown'}]}={}){
+  const helper=source.slice(source.indexOf('async function saveManagementWorkOrderSupabase'),source.indexOf('async function handleSupabaseOrderSubmit'));
+  const object=helper.slice(helper.indexOf('const payload={')+'const payload='.length,helper.indexOf('\n      };')+8);
+  return Function('id','fields','labId','choices','currentOrderScope','caseDraftPayload','orderCaseDraft','paidModel','paidModeling','paidCerFin',`return (${object});`)(
+    id,{Paid_Model:selected[0],Paid_Modelare:selected[1],Paid_Cer_Fin:selected[2]},'lab',{},()=>({items}),()=>({}),{},
+    ...loaded.map(value=>({dataset:{originalValue:value}}))
+  );
+}
+
+test('scope-only management edits leave every payment action unset',()=>{
+  // Expansion leaves a new balance; contraction may leave an overpayment.
+  // Neither scope change authorizes recording or reversing money.
+  for(const items of [[{tooth_number:11,work_type:'Crown'},{tooth_number:12,work_type:'Crown'}],[{tooth_number:11,work_type:'Crown'}]]){
+    for(const loaded of [['Paid','Paid','Paid'],['Not Paid','Not Paid','Not Paid']]){
+      const payload=managementPaymentPayload({loaded,items});
+      assert.equal(payload.p_paid_model,null);
+      assert.equal(payload.p_paid_modelare,null);
+      assert.equal(payload.p_paid_cer_fin,null);
+      assert.deepEqual(payload.p_items,items);
+    }
+  }
+});
+
+test('management sends only changed payment selections and preserves initial create choices',()=>{
+  const payload=managementPaymentPayload({loaded:['Paid','Not Paid','Paid'],selected:['Not Paid','Paid','Paid']});
+  assert.equal(payload.p_paid_model,'Not Paid');
+  assert.equal(payload.p_paid_modelare,'Paid');
+  assert.equal(payload.p_paid_cer_fin,null);
+  const created=managementPaymentPayload({id:null,selected:['Paid','Not Paid','Paid']});
+  assert.equal(created.p_paid_model,'Paid');
+  assert.equal(created.p_paid_modelare,'Not Paid');
+  assert.equal(created.p_paid_cer_fin,'Paid');
+});
+
+test('payment comparison uses the selection loaded when the edit modal opens',()=>{
+  const edit=source.slice(source.indexOf('async function editOrder('),source.indexOf('window.editOrder=editOrder;'));
+  assert.match(edit,/\[paidModel,paidModeling,paidCerFin\]/);
+  assert.match(edit,/dataset\.originalValue=.*\.value/);
+  assert.match(source,/sbRpc\("set_stage_payment_status",\{p_lab_organization_id:labId,p_work_order_id:Number\(id\),p_stage:stage,p_paid_status:value\}\)/);
+});
