@@ -160,6 +160,62 @@ class BillingModeContracts(unittest.TestCase):
             self.assertRegex(source, r"i\.tooth_number\s*/\s*10\s+BETWEEN\s+1\s+AND\s+4")
             self.assertRegex(source, r"i\.tooth_number\s*%\s*10\s+BETWEEN\s+1\s+AND\s+8")
 
+    def test_technician_history_freezes_billing_mode(self):
+        source = read("db/schema/10_tables/25_work_order_stage_assignments.sql").lower()
+        for table in (
+            "lab_work_order_assignment_cost_lines",
+            "lab_work_order_assignment_adjustments",
+        ):
+            section = source[source.index(f"create table if not exists public.{table}"):]
+            self.assertRegex(
+                section,
+                r"billing_mode\s+text\s+not null\s+default\s+'per_tooth'",
+            )
+            self.assertRegex(
+                source,
+                rf"alter table public\.{table}\s+add column if not exists\s+billing_mode\s+text\s+not null\s+default\s+'per_tooth'",
+            )
+            self.assertIn(f"{table}_billing_mode_check", source)
+        for mode in ("per_tooth", "per_arch", "per_piece"):
+            self.assertGreaterEqual(source.count("'" + mode + "'"), 2)
+        self.assertNotIn("lab_work_types", source)
+        self.assertNotIn("lab_technician_costs", source)
+
+    def test_technician_costs_consume_canonical_billable_scope(self):
+        resolver = read("db/schema/20_functions/resolve_work_order_technician_costs.sql")
+        self.assertIn("public.work_order_billing_scope", resolver)
+        self.assertIn("billing_mode", resolver)
+        self.assertNotIn("FROM public.lab_work_order_items", resolver)
+        self.assertRegex(resolver, r"round\(tc\.cost\s*\*\s*scope\.quantity,\s*2\)")
+
+        sync = read("db/schema/20_functions/sync_work_order_stage_assignment.sql")
+        self.assertRegex(
+            sync,
+            r"assignment_id,\s*work_type,\s*billing_mode,\s*quantity,\s*unit_cost,\s*amount,\s*cost_source",
+        )
+        self.assertIn("costs.billing_mode", sync)
+        self.assertRegex(
+            sync,
+            r"SELECT sum\(quantity\) FROM public\.resolve_work_order_technician_costs",
+        )
+
+    def test_scope_adjustments_compare_normalized_type_and_frozen_mode(self):
+        source = read("db/schema/20_functions/adjust_work_order_scope_costs.sql")
+        self.assertIn("billing_mode", source)
+        self.assertIn("work_type_key", source)
+        self.assertRegex(source, r"FULL JOIN after_scope n\s+USING\(work_type_key,billing_mode\)")
+        self.assertIn("l.billing_mode=d.billing_mode", source)
+        self.assertNotRegex(source, r"(?i)update\s+public\.technician_payments")
+        self.assertNotRegex(
+            source,
+            r"(?i)update\s+public\.lab_work_order_assignment_(?:cost_lines|adjustments)",
+        )
+
+        history = read("db/schema/20_functions/get_work_order_financial_history.sql")
+        assignments = history[history.index("'Assignments'"):]
+        self.assertIn("d.billing_mode", assignments)
+        self.assertIn("l.billing_mode", assignments)
+
     def test_apply_includes_every_billing_mode_object(self):
         apply = read("db/schema/apply.sql")
         for path in (

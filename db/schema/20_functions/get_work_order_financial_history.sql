@@ -53,8 +53,17 @@ BEGIN
                 'Cost_Source',a.cost_source,'Fixed_At',a.fixed_at,'Started_At',a.started_at,
                 'Ended_At',a.ended_at,'Migrated',a.migrated,
                 'Original_Agreed_Amount',a.agreed_amount,
-                'Adjustments',coalesce((select jsonb_agg(to_jsonb(d) order by d.created_at,d.id) from public.lab_work_order_assignment_adjustments d where d.assignment_id=a.id),'[]'::jsonb),
-                'Cost_Lines',coalesce((select jsonb_agg(to_jsonb(l) order by l.work_type)
+                'Adjustments',coalesce((select jsonb_agg(jsonb_build_object(
+                    'id',d.id,'assignment_id',d.assignment_id,'work_type',d.work_type,
+                    'billing_mode',d.billing_mode,'quantity_delta',d.quantity_delta,
+                    'unit_cost',d.unit_cost,'amount',d.amount,'cost_source',d.cost_source,
+                    'created_at',d.created_at,'created_by_user_id',d.created_by_user_id
+                ) order by d.created_at,d.id) from public.lab_work_order_assignment_adjustments d where d.assignment_id=a.id),'[]'::jsonb),
+                'Cost_Lines',coalesce((select jsonb_agg(jsonb_build_object(
+                    'assignment_id',l.assignment_id,'work_type',l.work_type,
+                    'billing_mode',l.billing_mode,'quantity',l.quantity,
+                    'unit_cost',l.unit_cost,'amount',l.amount,'cost_source',l.cost_source
+                ) order by l.work_type,l.billing_mode)
                     from public.lab_work_order_assignment_cost_lines l where l.assignment_id=a.id),'[]'::jsonb),
                 'Payments',coalesce((select jsonb_agg(jsonb_build_object(
                     'ID',p.id,'Amount',p.amount,'Currency',p.currency,'Paid_On',p.paid_on,

@@ -1,6 +1,8 @@
 -- Repairs current assignments from the current catalog. This is intentionally
 -- limited to incomplete snapshots without payments or adjustments; valid frozen
--- history is never recalculated.
+-- history is never recalculated. The table upgrade labels pre-existing cost lines
+-- and adjustments per_tooth without this routine consulting catalog billing modes
+-- or rewriting their saved quantities and amounts.
 CREATE OR REPLACE FUNCTION public.backfill_work_order_financial_history(p_lab uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE

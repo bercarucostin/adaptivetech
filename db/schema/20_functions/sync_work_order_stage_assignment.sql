@@ -52,21 +52,24 @@ BEGIN
         WITH effective_saved AS (
             SELECT min(saved_scope.work_type) AS work_type,
                    saved_scope.work_type_key,
+                   saved_scope.billing_mode,
                    sum(saved_scope.quantity)::numeric AS quantity
             FROM (
                 SELECT saved.work_type,
                        regexp_replace(lower(trim(saved.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       saved.billing_mode,
                        saved.quantity
                 FROM public.lab_work_order_assignment_cost_lines saved
                 WHERE saved.assignment_id=v_current.id
                 UNION ALL
                 SELECT delta.work_type,
                        regexp_replace(lower(trim(delta.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       delta.billing_mode,
                        delta.quantity_delta AS quantity
                 FROM public.lab_work_order_assignment_adjustments delta
                 WHERE delta.assignment_id=v_current.id
             ) saved_scope
-            GROUP BY work_type_key
+            GROUP BY work_type_key,billing_mode
             HAVING sum(saved_scope.quantity)<>0
         )
         SELECT EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base
@@ -83,6 +86,7 @@ BEGIN
                    ) expected
                    LEFT JOIN effective_saved saved
                      ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                    AND saved.billing_mode=expected.billing_mode
                    WHERE saved.work_type_key IS NULL
                       OR saved.quantity IS DISTINCT FROM expected.quantity
                )
@@ -93,6 +97,7 @@ BEGIN
                        p_lab,p_work_order_id,v_stage,v_name
                    ) expected
                      ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                    AND saved.billing_mode=expected.billing_mode
                    WHERE expected.work_type IS NULL
                )
                AND NOT EXISTS (
@@ -195,14 +200,17 @@ BEGIN
             technician_name, quantity, cost_source, created_by_user_id
         ) VALUES (
             p_lab, p_work_order_id, v_stage, v_user_id, v_name,
-            (SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id), 'catalog', auth.uid()
+            (SELECT sum(quantity) FROM public.resolve_work_order_technician_costs(
+                p_lab,p_work_order_id,v_stage,v_name
+            )), 'catalog', auth.uid()
         ) RETURNING id INTO v_assignment_id;
     END IF;
 
     INSERT INTO public.lab_work_order_assignment_cost_lines (
-        assignment_id, work_type, quantity, unit_cost, amount, cost_source
+        assignment_id, work_type, billing_mode, quantity, unit_cost, amount, cost_source
     )
-    SELECT v_assignment_id,costs.work_type,costs.quantity,costs.unit_cost,costs.amount,costs.cost_source
+    SELECT v_assignment_id,costs.work_type,costs.billing_mode,costs.quantity,
+           costs.unit_cost,costs.amount,costs.cost_source
     FROM public.resolve_work_order_technician_costs(
         p_lab,p_work_order_id,v_stage,v_name
     ) costs;

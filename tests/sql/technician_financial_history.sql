@@ -1,8 +1,11 @@
 -- Run after db/schema/apply.sql against a disposable Supabase database.
 begin;
 
-select assignment_id, work_type, quantity, unit_cost, amount, cost_source
+select assignment_id, work_type, billing_mode, quantity, unit_cost, amount, cost_source
 from public.lab_work_order_assignment_cost_lines limit 0;
+
+select assignment_id, work_type, billing_mode, quantity_delta, unit_cost, amount, cost_source
+from public.lab_work_order_assignment_adjustments limit 0;
 
 do $$
 declare
@@ -15,6 +18,10 @@ begin
     end if;
     if v_definition not ilike '%lab_work_order_assignment_cost_lines%' then
         raise exception 'Assignment synchronization must snapshot all work-type cost lines';
+    end if;
+    if v_definition not ilike '%costs.billing_mode%'
+       or v_definition not ilike '%work_order_billing_scope%' then
+        raise exception 'Assignment synchronization must snapshot canonical billing modes and quantities';
     end if;
 
     select pg_get_functiondef('public.record_technician_payment(uuid,numeric,date,text)'::regprocedure)
@@ -66,6 +73,8 @@ begin
     select pg_get_functiondef('public.adjust_work_order_scope_costs(uuid,bigint,jsonb,jsonb)'::regprocedure) into v_definition;
     if v_definition not ilike '%p_before is not distinct from p_after%'
        or v_definition not ilike '%insert into public.lab_work_order_assignment_adjustments%'
+       or v_definition not ilike '%billing_mode%'
+       or v_definition not ilike '%work_type_key%'
        or v_definition ilike '%update public.technician_payments%'
        or v_definition ilike '%update public.lab_work_order_assignment_cost_lines%' then
         raise exception 'Scope adjustments must be idempotent and append-only';

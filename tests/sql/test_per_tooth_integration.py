@@ -6,12 +6,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def read(name): return (ROOT / name).read_text()
 def sql(name): return read('db/schema/20_functions/' + name + '.sql')
 class IntegrationRegressions(unittest.TestCase):
-    def test_technician_salary_is_resolved_from_every_tooth_work_type(self):
+    def test_technician_salary_is_resolved_from_canonical_billing_scope(self):
         self.assertTrue((ROOT / 'db/schema/20_functions/resolve_work_order_technician_costs.sql').is_file())
         resolver = sql('resolve_work_order_technician_costs')
-        self.assertIn('FROM public.lab_work_order_items', resolver)
-        self.assertIn('work_type_key', resolver)
-        self.assertIn('GROUP BY work_type_key', resolver)
+        self.assertIn('FROM public.work_order_billing_scope', resolver)
+        self.assertNotIn('FROM public.lab_work_order_items', resolver)
+        self.assertIn('billing_mode', resolver)
         self.assertIn('public.lab_technician_costs', resolver)
         self.assertRegex(resolver, r'round\(tc\.cost\s*\*\s*scope\.quantity,\s*2\)')
 
@@ -20,6 +20,7 @@ class IntegrationRegressions(unittest.TestCase):
         self.assertIn('repair_incomplete', sync)
         self.assertIn('repair_aggregate', sync)
         self.assertIn('WITH effective_saved AS', sync)
+        self.assertIn('saved.billing_mode', sync)
         self.assertIn('quantity_delta', sync)
         self.assertIn('EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base', sync)
         self.assertIn('Missing technician cost configuration', sync)
