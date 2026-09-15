@@ -216,6 +216,19 @@ class BillingModeContracts(unittest.TestCase):
         self.assertIn("d.billing_mode", assignments)
         self.assertIn("l.billing_mode", assignments)
 
+    def test_partial_technician_snapshots_are_reported_without_rebuild(self):
+        sync = read("db/schema/20_functions/sync_work_order_stage_assignment.sql")
+        self.assertIn("v_base_line_count", sync)
+        self.assertRegex(
+            sync,
+            r"IF v_base_line_count>0 OR v_has_financial_activity THEN\s+RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired for assignment %'",
+        )
+        self.assertNotIn("DELETE FROM public.lab_work_order_assignment_cost_lines", sync)
+
+        backfill = read("db/schema/20_functions/backfill_work_order_financial_history.sql")
+        self.assertIn("SQLERRM LIKE 'Incomplete technician cost snapshot cannot be repaired%'", backfill)
+        self.assertIn("'unresolved_assignments'", backfill)
+
     def test_apply_includes_every_billing_mode_object(self):
         apply = read("db/schema/apply.sql")
         for path in (

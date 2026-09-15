@@ -1,6 +1,6 @@
--- Repairs current assignments from the current catalog. This is intentionally
--- limited to incomplete snapshots without payments or adjustments; valid frozen
--- history is never recalculated. The table upgrade labels pre-existing cost lines
+-- Populates current assignments with no saved base lines from the current catalog.
+-- Partial or otherwise inconsistent saved snapshots are reported as unresolved;
+-- valid frozen history is never recalculated. The table upgrade labels existing lines
 -- and adjustments per_tooth without this routine consulting catalog billing modes
 -- or rewriting their saved quantities and amounts.
 CREATE OR REPLACE FUNCTION public.backfill_work_order_financial_history(p_lab uuid)

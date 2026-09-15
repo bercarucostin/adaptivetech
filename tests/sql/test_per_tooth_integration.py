@@ -25,7 +25,7 @@ class IntegrationRegressions(unittest.TestCase):
         self.assertIn('EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base', sync)
         self.assertIn('Missing technician cost configuration', sync)
         self.assertIn('v_current.agreed_amount IS DISTINCT FROM v_saved_amount', sync)
-        self.assertLess(sync.index("'repair_aggregate'"), sync.index('DELETE FROM public.lab_work_order_assignment_cost_lines'))
+        self.assertNotIn('DELETE FROM public.lab_work_order_assignment_cost_lines', sync)
 
     def test_salary_reconciliation_repairs_existing_assignments(self):
         backfill = sql('backfill_work_order_financial_history')

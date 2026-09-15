@@ -145,6 +145,8 @@ declare
     v_admin uuid:=gen_random_uuid();
     v_technician uuid:=gen_random_uuid();
     v_model_assignment uuid;
+    v_partial_assignment uuid;
+    v_backfill jsonb;
     v_amount numeric;
     v_quantity numeric;
     v_rows integer;
@@ -186,7 +188,10 @@ begin
         lab_organization_id,id,status,nume_pacient,nume_partener,discount
     ) values
         (v_lab,101,'Not Started','Mode technician patient','Partner',0),
-        (v_lab,102,'Not Started','Missing technician patient','Partner',0);
+        (v_lab,102,'Not Started','Missing technician patient','Partner',0),
+        (v_lab,103,'Not Started','Partial technician patient','Partner',0);
+    update public.lab_work_orders set tehnician_model='Billing technician'
+    where lab_organization_id=v_lab and id=103;
 
     perform set_config('request.jwt.claim.sub',v_admin::text,true);
     perform public.replace_work_order_items(v_lab,101,v_initial_items,'General');
@@ -298,6 +303,65 @@ begin
        or (select sum(amount) from public.technician_payments
         where assignment_id=v_model_assignment)<>70 then
         raise exception 'Scope edits rewrote base technician history or payment history';
+    end if;
+
+    -- A partial historical snapshot must not be rebuilt from today's catalog.
+    perform public.replace_work_order_items(
+        v_lab,103,
+        '[{"tooth_number":41,"work_type":"Crown"},{"tooth_number":42,"work_type":"Bridge"}]'::jsonb,
+        'General'
+    );
+    perform public.sync_work_order_stage_assignment(v_lab,103,'model','Billing technician');
+    select id into v_partial_assignment
+    from public.lab_work_order_stage_assignments
+    where lab_organization_id=v_lab and work_order_id=103 and stage_key='model';
+    delete from public.lab_work_order_assignment_cost_lines
+    where assignment_id=v_partial_assignment and lower(work_type)='bridge';
+    update public.lab_technician_costs set cost=999
+    where lab_organization_id=v_lab and source_row_no in (1,2);
+
+    v_error:=null;
+    begin
+        perform public.sync_work_order_stage_assignment(v_lab,103,'model','Billing technician');
+    exception when others then
+        v_error:=SQLERRM;
+    end;
+    if v_error is distinct from format(
+        'Incomplete technician cost snapshot cannot be repaired for assignment %s',
+        v_partial_assignment
+    ) then
+        raise exception 'Partial snapshot sync did not report unresolved: %',v_error;
+    end if;
+    if (select count(*) from public.lab_work_order_assignment_cost_lines
+        where assignment_id=v_partial_assignment)<>1
+       or not exists(
+        select 1 from public.lab_work_order_assignment_cost_lines
+        where assignment_id=v_partial_assignment and lower(work_type)='crown'
+          and billing_mode='per_tooth' and quantity=1 and unit_cost=10 and amount=10
+    ) then
+        raise exception 'Partial snapshot sync rewrote its frozen saved line';
+    end if;
+
+    v_backfill:=public.backfill_work_order_financial_history(v_lab);
+    if not exists(
+        select 1 from jsonb_array_elements(v_backfill->'unresolved_assignments') unresolved
+        where (unresolved->>'work_order_id')::bigint=103
+          and unresolved->>'stage'='model'
+          and unresolved->>'error'=format(
+              'Incomplete technician cost snapshot cannot be repaired for assignment %s',
+              v_partial_assignment
+          )
+    ) then
+        raise exception 'Backfill did not report the partial snapshot as unresolved: %',v_backfill;
+    end if;
+    if (select count(*) from public.lab_work_order_assignment_cost_lines
+        where assignment_id=v_partial_assignment)<>1
+       or not exists(
+        select 1 from public.lab_work_order_assignment_cost_lines
+        where assignment_id=v_partial_assignment and lower(work_type)='crown'
+          and billing_mode='per_tooth' and quantity=1 and unit_cost=10 and amount=10
+    ) then
+        raise exception 'Backfill rewrote the partial snapshot saved line';
     end if;
 end $$;
 

@@ -25,6 +25,7 @@ DECLARE
     v_saved_amount numeric;
     v_saved_unit_cost numeric;
     v_saved_quantity numeric;
+    v_base_line_count integer := 0;
     v_has_financial_activity boolean := false;
 BEGIN
     IF public.effective_lab_role(p_lab) NOT IN ('admin', 'manager', 'technician') THEN
@@ -139,15 +140,18 @@ BEGIN
             RETURN v_current.id;
         END IF;
 
-        SELECT EXISTS (SELECT 1 FROM public.technician_payments p WHERE p.assignment_id=v_current.id)
-            OR EXISTS (SELECT 1 FROM public.lab_work_order_assignment_adjustments d WHERE d.assignment_id=v_current.id)
-          INTO v_has_financial_activity;
-        IF v_has_financial_activity THEN
-            RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired after financial activity for assignment %',v_current.id;
+        SELECT (SELECT count(*)::integer
+                FROM public.lab_work_order_assignment_cost_lines base
+                WHERE base.assignment_id=v_current.id),
+               EXISTS (SELECT 1 FROM public.technician_payments p WHERE p.assignment_id=v_current.id)
+               OR EXISTS (SELECT 1 FROM public.lab_work_order_assignment_adjustments d WHERE d.assignment_id=v_current.id)
+          INTO v_base_line_count,v_has_financial_activity;
+        IF v_base_line_count>0 OR v_has_financial_activity THEN
+            RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired for assignment %',v_current.id;
         END IF;
 
-        -- repair_incomplete: legacy/current assignments without a usable per-type
-        -- snapshot are rebuilt in place. Valid frozen snapshots never reach here.
+        -- Only an assignment with no saved base cost can be populated from the
+        -- current catalog. Any partial snapshot is frozen history and fails above.
         v_repair_incomplete := true;
         v_assignment_id := v_current.id;
     END IF;
@@ -189,8 +193,6 @@ BEGIN
     END IF;
 
     IF v_repair_incomplete THEN
-        DELETE FROM public.lab_work_order_assignment_cost_lines
-        WHERE assignment_id=v_assignment_id;
         UPDATE public.lab_work_order_stage_assignments
         SET technician_user_id=coalesce(technician_user_id,v_user_id)
         WHERE id=v_assignment_id;
