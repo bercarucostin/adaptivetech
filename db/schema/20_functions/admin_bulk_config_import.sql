@@ -24,6 +24,7 @@ declare
     v_price numeric;
     v_cost numeric;
     v_active boolean;
+    v_billing_mode text;
     v_next_work_type bigint;
     v_next_cost_row integer;
 begin
@@ -114,8 +115,12 @@ begin
         for v_row in select * from jsonb_array_elements(p_rows)
         loop
             v_work_type := trim(coalesce(v_row->>'tip_lucrare',''));
+            v_billing_mode := coalesce(nullif(lower(trim(v_row->>'billing_mode')),''),'per_tooth');
             if v_work_type = '' then
                 raise exception 'Each work type row requires Tip_Lucrare';
+            end if;
+            if v_billing_mode not in ('per_tooth','per_arch','per_piece') then
+                raise exception 'Invalid Billing_Mode: %', coalesce(v_row->>'billing_mode','');
             end if;
 
             if nullif(trim(coalesce(v_row->>'id','')),'') is not null then
@@ -144,6 +149,7 @@ begin
 
         for v_row in select * from jsonb_array_elements(p_rows)
         loop
+            v_billing_mode := coalesce(nullif(lower(trim(v_row->>'billing_mode')),''),'per_tooth');
             if nullif(trim(coalesce(v_row->>'id','')),'') is null then
                 v_id_big := v_next_work_type;
                 v_next_work_type := v_next_work_type + 1;
@@ -162,6 +168,7 @@ begin
                 id,
                 tip_lucrare,
                 active,
+                billing_mode,
                 updated_at
             )
             values (
@@ -169,12 +176,14 @@ begin
                 v_id_big,
                 trim(v_row->>'tip_lucrare'),
                 v_active,
+                v_billing_mode,
                 now()
             )
             on conflict (lab_organization_id,id)
             do update set
                 tip_lucrare = excluded.tip_lucrare,
                 active = excluded.active,
+                billing_mode = excluded.billing_mode,
                 updated_at = now();
 
             v_count := v_count + 1;

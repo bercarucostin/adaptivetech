@@ -28,12 +28,16 @@ BEGIN
       when 'work_order_price' then array['unit_price','discount','reason']
       when 'contract_price' then array['id','contract','work_type','price','source_contract','target_contract','conflict_mode']
       when 'technician_cost' then array['technician','work_type','stage','cost','source_technician','target_technician','conflict_mode']
-      when 'work_type' then array['work_type','active']
+      when 'work_type' then array['work_type','active','billing_mode']
       when 'material' then array['value','expected_quantity']
       when 'calendar_event' then array['title','event_type','description','status','start_date','end_date','start_time','calendar_scope'] else null end;
     IF v_allowed IS NULL OR EXISTS (
         SELECT 1 FROM jsonb_object_keys(coalesce(p_envelope->'fields','{}'::jsonb)) k WHERE NOT k=ANY(v_allowed)
     ) THEN RAISE EXCEPTION 'Unsupported field for AI entity'; END IF;
+    IF v_entity='work_type' AND coalesce(p_envelope->'fields','{}'::jsonb)?'billing_mode'
+       AND lower(trim(coalesce(p_envelope#>>'{fields,billing_mode}',''))) NOT IN ('per_tooth','per_arch','per_piece') THEN
+        RAISE EXCEPTION 'Unknown billing mode: %',coalesce(p_envelope#>>'{fields,billing_mode}','');
+    END IF;
     v_allowed_target:=case v_entity
       when 'work_order' then array['id','ids']
       when 'work_order_price' then array['id']

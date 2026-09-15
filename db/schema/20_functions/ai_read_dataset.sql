@@ -264,7 +264,8 @@ begin
         select count(*) into v_total from public.lab_work_types where lab_organization_id=v_lab;
         select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) into v_rows
         from (
-            select * from public.lab_work_types
+            select id,tip_lucrare,active,billing_mode,created_at,updated_at
+            from public.lab_work_types
             where lab_organization_id=v_lab
             order by tip_lucrare,id
             limit v_limit offset v_offset

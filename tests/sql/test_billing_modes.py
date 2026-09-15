@@ -240,6 +240,75 @@ class BillingModeContracts(unittest.TestCase):
         ):
             self.assertIn(path, apply)
 
+    def test_admin_csv_reference_and_ai_contracts_expose_validated_mode(self):
+        reference = read("db/schema/20_functions/get_work_order_reference_data.sql")
+        self.assertIn("'billing_mode', wt.billing_mode", reference)
+
+        bulk = read("db/schema/20_functions/admin_bulk_config_import.sql")
+        self.assertIn("v_billing_mode", bulk)
+        self.assertRegex(
+            bulk,
+            r"coalesce\(nullif\(lower\(trim\(v_row->>'billing_mode'\)\),'\s*'\),'per_tooth'\)",
+        )
+        for mode in ("per_tooth", "per_arch", "per_piece"):
+            self.assertIn("'" + mode + "'", bulk)
+        self.assertRegex(bulk, r"billing_mode\s*,\s*updated_at")
+
+        config = read("db/schema/20_functions/ai_admin_config_operation.sql")
+        self.assertIn("v_billing_mode", config)
+        self.assertIn("Unknown billing mode", config)
+        self.assertRegex(config, r"billing_mode\s*=\s*case when p_fields\?'billing_mode'")
+
+        for relative_path in (
+            "db/schema/20_functions/ai_preview_operation.sql",
+            "db/schema/20_functions/ai_execute_operation.sql",
+        ):
+            source = read(relative_path)
+            self.assertRegex(source, r"when 'work_type' then array\['work_type','active','billing_mode'\]")
+
+        preview = read("db/schema/20_functions/ai_preview_operation.sql")
+        self.assertIn("Unknown billing mode", preview)
+        self.assertRegex(preview, r"per_tooth.*per_arch.*per_piece")
+
+    def test_technician_and_management_work_type_reads_include_mode_without_prices(self):
+        technician = read("db/schema/20_functions/ai_technician_work_types.sql")
+        self.assertIn("'billing_mode',wt.billing_mode", technician)
+        self.assertNotIn("pret", technician.lower())
+        self.assertNotIn("price", technician.lower())
+        self.assertNotIn("contract", technician.lower())
+
+        management = read("db/schema/20_functions/ai_read_dataset.sql")
+        work_types_start = management.rindex("elsif v_dataset = 'work_types'")
+        work_types = management[
+            work_types_start:
+            management.index("elsif v_dataset = 'contract_prices'", work_types_start)
+        ]
+        self.assertIn("billing_mode", work_types)
+
+    def test_app_and_active_workflow_have_billing_mode_contracts(self):
+        app = read("website/app/app.js")
+        for value in ("per_tooth", "per_arch", "per_piece"):
+            self.assertIn(value, app)
+        for label in ("Per dinte", "Per arcadă", "Per piesă"):
+            self.assertIn(label, app)
+        self.assertIn('headers:["ID","Tip_Lucrare","Active","Billing_Mode"]', app)
+        self.assertIn('sbRpc("get_work_order_price_lines"', app)
+        self.assertIn("billing_unit_count", app)
+        self.assertNotIn("Preț / element", app)
+        self.assertNotIn("Cost / element", app)
+        styles = read("website/app/styles.css")
+        self.assertRegex(styles, r"\.admin-worktype-add\{grid-template-columns:1\.5fr 1fr auto auto\}")
+
+        import json
+        workflow = json.loads(read("workflows/Flowrise Dental - AI Client V17.4.json"))
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        prompt = nodes["AI - Build Final Prompt"]["parameters"]["jsCode"]
+        parser = nodes["AI - Parse Final"]["parameters"]["jsCode"]
+        self.assertIn("billing_mode?", prompt)
+        self.assertIn("per_tooth|per_arch|per_piece", prompt)
+        self.assertIn('new Set(["per_tooth","per_arch","per_piece"])', parser)
+        self.assertIn("Modul de facturare trebuie să fie", parser)
+
 
 if __name__ == "__main__":
     unittest.main()

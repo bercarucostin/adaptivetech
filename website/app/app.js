@@ -124,6 +124,27 @@ function nullableMoney(v){
   return Number.isFinite(n)?n:null;
 }
 function boolish(v){return v===true||v===1||["true","1","yes","y","locked"].includes(String(v??"").trim().toLowerCase());}
+const BILLING_MODE_LABELS={per_tooth:"Per dinte",per_arch:"Per arcadă",per_piece:"Per piesă"};
+function normalizeBillingMode(value){
+  const mode=String(value??"").trim().toLowerCase()||"per_tooth";
+  if(!Object.prototype.hasOwnProperty.call(BILLING_MODE_LABELS,mode)){
+    throw new Error(`Billing_Mode invalid: ${value}. Folosește per_tooth, per_arch sau per_piece.`);
+  }
+  return mode;
+}
+function billingModeLabel(value){return BILLING_MODE_LABELS[normalizeBillingMode(value)];}
+function billingModeSelectHtml(id,value="per_tooth"){
+  const selected=normalizeBillingMode(value);
+  return `<select id="${escapeHtml(id)}">${Object.entries(BILLING_MODE_LABELS).map(([mode,label])=>`<option value="${mode}" ${mode===selected?"selected":""}>${label}</option>`).join("")}</select>`;
+}
+function billingScopeLabel(scope){
+  const value=String(scope??"");
+  if(value==="arch:upper")return "Arcada superioară";
+  if(value==="arch:lower")return "Arcada inferioară";
+  if(value==="piece")return "Piesă";
+  if(value.startsWith("tooth:"))return `Dinte ${value.slice(6)}`;
+  return value||"—";
+}
 function money(v){return new Intl.NumberFormat("ro-RO",{style:"currency",currency:"RON",maximumFractionDigits:0}).format(num(v));}
 function technicianMoney(v){return v===null?"Cost neconfigurat":money(v);}
 function fmtDate(d){
@@ -4547,10 +4568,10 @@ function renderAdminConfig(){
   let body="";
   if(adminConfigTab==="prices"){
     const rows=allPrices.filter(r=>String(r.Contract??"")===selectedAdminContract&&(!q||normalize([r.Contract,r.Tip_Lucrare,r.Pret].join(" ")).includes(q)));
-    body=`<div class="admin-contract-workspace"><aside class="admin-contract-list"><div class="admin-pane-title"><strong>Contracte</strong><span>${contracts.length}</span></div><div class="admin-contract-items">${visibleContracts.length?visibleContracts.map(c=>`<button type="button" class="${c===selectedAdminContract?"active":""}" data-admin-contract="${escapeHtml(c)}"><span>${escapeHtml(c)}</span><small>${allPrices.filter(r=>String(r.Contract??"")===c).length} prețuri</small></button>`).join(""):'<div class="admin-empty-small">Niciun contract</div>'}</div></aside><section class="admin-contract-detail"><div class="admin-section-head"><div><h3>${escapeHtml(selectedAdminContract||"Contract nou")}</h3><p>Selectează un contract în stânga; modifică doar rândul de care ai nevoie.</p></div>${selectedAdminContract?`<div class="admin-group-actions"><button class="secondary-btn admin-duplicate-group-btn" type="button" onclick="adminDuplicateSelectedContract()">Duplică contractul</button><button class="danger-btn" type="button" onclick="adminDeleteSelectedContract()">Șterge contract</button></div>`:""}</div><div class="admin-create-card compact"><div class="admin-create-title">+ Adaugă preț</div><div class="admin-add-grid"><label>Contract ${adminInput("newPriceContract",selectedAdminContract)}</label><label>Tip lucrare<input id="newPriceWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label><label>Preț / element ${adminInput("newPriceValue","0","number",'min="0" step="0.01"')}</label><button class="primary-btn" type="button" onclick="adminCreatePrice()">Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Preț</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td><input id="priceWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="priceContract${id}" type="hidden" value="${escapeHtml(r.Contract??"")}"></td><td>${adminInput(`priceValue${id}`,r.Pret,"number",'min="0" step="0.01"')}</td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSavePrice(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeletePrice(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="3">Nu există prețuri pentru contractul selectat.</td></tr>'}</tbody></table></div></section></div>`;
+    body=`<div class="admin-contract-workspace"><aside class="admin-contract-list"><div class="admin-pane-title"><strong>Contracte</strong><span>${contracts.length}</span></div><div class="admin-contract-items">${visibleContracts.length?visibleContracts.map(c=>`<button type="button" class="${c===selectedAdminContract?"active":""}" data-admin-contract="${escapeHtml(c)}"><span>${escapeHtml(c)}</span><small>${allPrices.filter(r=>String(r.Contract??"")===c).length} prețuri</small></button>`).join(""):'<div class="admin-empty-small">Niciun contract</div>'}</div></aside><section class="admin-contract-detail"><div class="admin-section-head"><div><h3>${escapeHtml(selectedAdminContract||"Contract nou")}</h3><p>Selectează un contract în stânga; modifică doar rândul de care ai nevoie.</p></div>${selectedAdminContract?`<div class="admin-group-actions"><button class="secondary-btn admin-duplicate-group-btn" type="button" onclick="adminDuplicateSelectedContract()">Duplică contractul</button><button class="danger-btn" type="button" onclick="adminDeleteSelectedContract()">Șterge contract</button></div>`:""}</div><div class="admin-create-card compact"><div class="admin-create-title">+ Adaugă preț</div><div class="admin-add-grid"><label>Contract ${adminInput("newPriceContract",selectedAdminContract)}</label><label>Tip lucrare<input id="newPriceWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label><label>Tarif ${adminInput("newPriceValue","0","number",'min="0" step="0.01"')}</label><button class="primary-btn" type="button" onclick="adminCreatePrice()">Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Tarif</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td><input id="priceWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="priceContract${id}" type="hidden" value="${escapeHtml(r.Contract??"")}"></td><td>${adminInput(`priceValue${id}`,r.Pret,"number",'min="0" step="0.01"')}</td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSavePrice(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeletePrice(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="3">Nu există prețuri pentru contractul selectat.</td></tr>'}</tbody></table></div></section></div>`;
   }else if(adminConfigTab==="types"){
     const rows=allTypes.filter(r=>!q||normalize([r.Tip_Lucrare,r.Active].join(" ")).includes(q));
-    body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Tipuri lucrări</h3><p>Lista folosită în formularul de lucrare.</p></div><span class="table-count">${rows.length} rânduri</span></div><div class="admin-create-card compact"><div class="admin-add-grid admin-worktype-add"><label>Tip lucrare ${adminInput("newWorkTypeName","")}</label><label class="admin-checkbox-label"><input id="newWorkTypeActive" type="checkbox" checked> Activ</label><button class="primary-btn" type="button" onclick="adminCreateWorkType()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Activ</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td>${adminInput(`workTypeName${id}`,r.Tip_Lucrare)}</td><td><input id="workTypeActive${id}" type="checkbox" ${active(r.Active)?"checked":""}></td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSaveWorkType(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeleteWorkType(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="3">Niciun tip de lucrare.</td></tr>'}</tbody></table></div></section>`;
+    body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Tipuri lucrări</h3><p>Lista folosită în formularul de lucrare.</p></div><span class="table-count">${rows.length} rânduri</span></div><div class="admin-create-card compact"><div class="admin-add-grid admin-worktype-add"><label>Tip lucrare ${adminInput("newWorkTypeName","")}</label><label>Mod facturare ${billingModeSelectHtml("newWorkTypeBillingMode","per_tooth")}</label><label class="admin-checkbox-label"><input id="newWorkTypeActive" type="checkbox" checked> Activ</label><button class="primary-btn" type="button" onclick="adminCreateWorkType()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Mod facturare</th><th>Activ</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td>${adminInput(`workTypeName${id}`,r.Tip_Lucrare)}</td><td>${billingModeSelectHtml(`workTypeBillingMode${id}`,r.Billing_Mode)}</td><td><input id="workTypeActive${id}" type="checkbox" ${active(r.Active)?"checked":""}></td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSaveWorkType(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeleteWorkType(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="4">Niciun tip de lucrare.</td></tr>'}</tbody></table></div></section>`;
   }else if(adminConfigTab==="costs"){
     const rows=allCosts.filter(r=>String(r.Tehnician??"")===selectedAdminTechnician&&(!q||normalize([r.Tehnician,r.Tip_Lucrare,r.Etapa,r.Cost].join(" ")).includes(q)));
     body=`<div class="admin-contract-workspace admin-technician-workspace">
@@ -4562,7 +4583,7 @@ function renderAdminConfig(){
       </aside>
       <section class="admin-contract-detail">
         <div class="admin-section-head">
-          <div><h3>${escapeHtml(selectedAdminTechnician||"Tehnician")}</h3><p>Cost / element după tip lucrare + etapă. Selectează tehnicianul din stânga.</p></div>
+          <div><h3>${escapeHtml(selectedAdminTechnician||"Tehnician")}</h3><p>Tarif după tip lucrare + etapă. Selectează tehnicianul din stânga.</p></div>
           <div class="admin-group-actions">
             <span class="table-count">${rows.length} rânduri</span>
             ${selectedAdminTechnician?`<button class="secondary-btn admin-duplicate-group-btn" type="button" onclick="adminDuplicateSelectedTechnician()">Duplică tehnicianul</button>`:""}
@@ -4574,13 +4595,13 @@ function renderAdminConfig(){
             <label>Tehnician<select id="newCostTech">${optionHtml(costTechnicians,selectedAdminTechnician,false)}</select></label>
             <label>Tip lucrare<input id="newCostWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label>
             <label>Etapă<select id="newCostStage">${optionHtml(["Model","Modelare","Cer_Fin"],"",true)}</select></label>
-            <label>Cost / element ${adminInput("newCostValue","0","number",'min="0" step="0.01"')}</label>
+            <label>Tarif ${adminInput("newCostValue","0","number",'min="0" step="0.01"')}</label>
             <button class="primary-btn" type="button" onclick="adminCreateCost()">+ Adaugă</button>
           </div>
         </div>
         <div class="table-wrap admin-config-table">
           <table>
-            <thead><tr><th>Tip lucrare</th><th>Etapă</th><th>Cost</th><th>Acțiuni</th></tr></thead>
+            <thead><tr><th>Tip lucrare</th><th>Etapă</th><th>Tarif</th><th>Acțiuni</th></tr></thead>
             <tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr>
               <td><input id="costWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="costTech${id}" type="hidden" value="${escapeHtml(r.Tehnician??"")}"></td>
               <td><select id="costStage${id}">${optionHtml(["Model","Modelare","Cer_Fin"],String(r.Etapa??""),false)}</select></td>
@@ -5049,14 +5070,19 @@ async function adminDeleteContract(){
 async function adminCreateWorkType(){
   const Tip_Lucrare=$("newWorkTypeName").value.trim();
   if(!Tip_Lucrare){alert("Work type is required.");return;}
-  await adminConfigRequest("work_type","create",{Tip_Lucrare,Active:$("newWorkTypeActive").checked});
+  await adminConfigRequest("work_type","create",{
+    Tip_Lucrare,
+    Active:$("newWorkTypeActive").checked,
+    Billing_Mode:normalizeBillingMode($("newWorkTypeBillingMode").value)
+  });
 }
 
 async function adminSaveWorkType(ID){
   await adminConfigRequest("work_type","update",{
     ID,
     Tip_Lucrare:$(`workTypeName${ID}`).value.trim(),
-    Active:$(`workTypeActive${ID}`).checked
+    Active:$(`workTypeActive${ID}`).checked,
+    Billing_Mode:normalizeBillingMode($(`workTypeBillingMode${ID}`).value)
   });
 }
 
@@ -7167,7 +7193,7 @@ loadAll=async function(show=true){
       ? supabaseClient.from("lab_contract_work_prices").select("id,contract,tip_lucrare,pret").eq("lab_organization_id",labId).order("contract").order("tip_lucrare")
       : Promise.resolve({data:[],error:null});
     const adminTypesPromise=isAdmin()
-      ? supabaseClient.from("lab_work_types").select("id,tip_lucrare,active").eq("lab_organization_id",labId).order("tip_lucrare")
+      ? supabaseClient.from("lab_work_types").select("id,tip_lucrare,active,billing_mode").eq("lab_organization_id",labId).order("tip_lucrare")
       : Promise.resolve({data:[],error:null});
     const legacyAdminPromise=loadLegacyAdminUsersSafe();
 
@@ -7257,7 +7283,7 @@ loadAll=async function(show=true){
         Tip_Lucrare:r.tip_lucrare,
         Pret:num(r.pret)
       }));
-      const types=(adminTypeRes.data||[]).map(r=>({ID:num(r.id),Tip_Lucrare:r.tip_lucrare,Active:Boolean(r.active)}));
+      const types=(adminTypeRes.data||[]).map(r=>({ID:num(r.id),Tip_Lucrare:r.tip_lucrare,Active:Boolean(r.active),Billing_Mode:normalizeBillingMode(r.billing_mode)}));
       const costs=technicianCostRules.map(r=>({...r}));
       adminConfigData={
         prices,
@@ -7298,8 +7324,9 @@ let toothPriceEstimateRequest=0;
 function renderToothPriceBreakdown(result={}){
   const box=$("priceBreakdown");
   const lines=(Array.isArray(result.lines)?result.lines:[]).map(line=>({
-    toothNumber:line?.tooth_number??null,
     workType:String(line?.work_type??line?.workType??"—"),
+    billingMode:normalizeBillingMode(line?.billing_mode),
+    billingScope:String(line?.billing_scope??(line?.tooth_number?`tooth:${line.tooth_number}`:"")),
     quantity:Math.max(0,num(line?.quantity??1)),
     contract:String(line?.contract||"General"),
     itemPrice:num(line?.unit_price??line?.pret),
@@ -7316,10 +7343,10 @@ function renderToothPriceBreakdown(result={}){
           <colgroup>
             <col class="price-col-type"><col class="price-col-count"><col class="price-col-unit"><col class="price-col-subtotal">
           </colgroup>
-          <thead><tr><th>Tip</th><th>Nr. Elem.</th><th>Preț / Elem</th><th>Subtotal</th></tr></thead>
+          <thead><tr><th>Tip și unitate</th><th>Unități</th><th>Tarif</th><th>Subtotal</th></tr></thead>
           <tbody>${lines.map(line=>`
             <tr class="${line.matched?"":"price-breakdown-unmatched"}">
-              <td><strong>${line.toothNumber?`${escapeHtml(line.toothNumber)} · `:""}${escapeHtml(line.workType)}</strong>${isManagement()?`<small>Contract: ${escapeHtml(line.contract)}</small>`:""}</td>
+              <td><strong>${escapeHtml(line.workType)}</strong><small>${escapeHtml(billingModeLabel(line.billingMode))} · ${escapeHtml(billingScopeLabel(line.billingScope))}${isManagement()?` · Contract: ${escapeHtml(line.contract)}`:""}</small></td>
               <td>${line.quantity}</td>
               <td>${money(line.itemPrice)}</td>
               <td><strong>${money(line.subtotal)}</strong></td>
@@ -7335,21 +7362,42 @@ function renderToothPriceBreakdown(result={}){
   }
 
   const count=Math.max(0,num(result.element_count));
+  const billingUnitCount=Math.max(0,num(result.billing_unit_count??lines.reduce((sum,line)=>sum+line.quantity,0)));
   listPrice.value=list;
   finalPrice.value=total;
 
   const firstContract=lines[0]?.contract;
   if(firstContract&&!result.saved)setFormContractValue(firstContract);
   if(result.saved){
-    priceHint.textContent="Prețuri salvate pe dinte și totaluri salvate pentru această lucrare.";
+    priceHint.textContent=`${count} ${count===1?"dinte selectat":"dinți selectați"} · ${billingUnitCount} ${billingUnitCount===1?"unitate facturabilă":"unități facturabile"} · prețuri salvate pentru această lucrare.`;
     priceHint.classList.remove("error-text");
   }else if(lines.length&&!result.matched_all){
     const missing=lines.filter(line=>!line.matched).map(line=>line.workType).join(", ");
     priceHint.textContent=`Lipsesc prețuri pentru: ${missing}. Liniile respective au valoarea 0.`;
     priceHint.classList.add("error-text");
   }else if(lines.length){
-    priceHint.textContent=`${count} ${count===1?"element":"elemente"} · ${lines.length} ${lines.length===1?"tip de lucrare":"tipuri de lucrare"}`;
+    priceHint.textContent=`${count} ${count===1?"dinte selectat":"dinți selectați"} · ${billingUnitCount} ${billingUnitCount===1?"unitate facturabilă":"unități facturabile"}`;
     priceHint.classList.remove("error-text");
+  }
+}
+
+async function loadSavedWorkOrderPriceLines(saved,requestId){
+  if(isTechnician()||!can("Can_View_Client_Pricing"))return null;
+  try{
+    const result=await sbRpc("get_work_order_price_lines",{
+      p_lab:await resolveLabOrganizationId(),
+      p_order:Number(saved.id)
+    });
+    if(requestId!==toothPriceEstimateRequest||Number(orderId?.value)!==Number(saved.id))return null;
+    renderToothPriceBreakdown({...result,saved:true,matched_all:true});
+    return result;
+  }catch(err){
+    if(requestId!==toothPriceEstimateRequest)return null;
+    const box=$("priceBreakdown");
+    if(box)box.innerHTML="";
+    priceHint.textContent=`Prețurile salvate nu au putut fi încărcate: ${err.message}`;
+    priceHint.classList.add("error-text");
+    return null;
   }
 }
 
@@ -7381,12 +7429,9 @@ recalcFormPrice=function(){
   const requestId=++toothPriceEstimateRequest;
   const saved=currentModalOrder();
   if(saved&&Number(orderId?.value)===Number(saved.id)){
-    renderToothPriceBreakdown({
-      saved:true,
-      lines:(saved.items||[]).map(item=>({...item,matched:true})),
-      list_price:saved.listPrice,final_price:saved.finalPrice,
-      discount:saved.discount,element_count:saved.elements,matched_all:true
-    });
+    priceHint.textContent="Încarc prețurile salvate din baza de date...";
+    priceHint.classList.remove("error-text");
+    loadSavedWorkOrderPriceLines(saved,requestId);
     return;
   }
   const items=workOrderToothItems().filter(item=>item.work_type);
@@ -7788,10 +7833,10 @@ async function supabaseAdminMutation(entity,action,data={}){
   }
   if(entity==="work_type"){
     if(action==="create"){
-      const {error}=await supabaseClient.from("lab_work_types").insert({lab_organization_id:labId,id:await nextWorkTypeId(),tip_lucrare:String(data.Tip_Lucrare||"").trim(),active:Boolean(data.Active)});if(error)throw new Error(error.message);return;
+      const {error}=await supabaseClient.from("lab_work_types").insert({lab_organization_id:labId,id:await nextWorkTypeId(),tip_lucrare:String(data.Tip_Lucrare||"").trim(),active:Boolean(data.Active),billing_mode:normalizeBillingMode(data.Billing_Mode)});if(error)throw new Error(error.message);return;
     }
     if(action==="update"){
-      const {error}=await supabaseClient.from("lab_work_types").update({tip_lucrare:String(data.Tip_Lucrare||"").trim(),active:Boolean(data.Active),updated_at:new Date().toISOString()}).eq("lab_organization_id",labId).eq("id",Number(data.ID));if(error)throw new Error(error.message);return;
+      const {error}=await supabaseClient.from("lab_work_types").update({tip_lucrare:String(data.Tip_Lucrare||"").trim(),active:Boolean(data.Active),billing_mode:normalizeBillingMode(data.Billing_Mode),updated_at:new Date().toISOString()}).eq("lab_organization_id",labId).eq("id",Number(data.ID));if(error)throw new Error(error.message);return;
     }
     if(action==="delete"){
       const {error}=await supabaseClient.from("lab_work_types").delete().eq("lab_organization_id",labId).eq("id",Number(data.ID));if(error)throw new Error(error.message);return;
@@ -7962,11 +8007,12 @@ function adminCsvDataset(kind){
   if(kind==="types"){
     return {
       name:"work_types.csv",
-      headers:["ID","Tip_Lucrare","Active"],
+      headers:["ID","Tip_Lucrare","Active","Billing_Mode"],
       rows:adminConfigData.workTypes.map(r=>[
         r.ID??"",
         r.Tip_Lucrare??"",
-        Boolean(r.Active)
+        Boolean(r.Active),
+        normalizeBillingMode(r.Billing_Mode)
       ])
     };
   }
@@ -7987,6 +8033,15 @@ function adminCsvDataset(kind){
   }
 
   throw new Error(`Secțiune CSV necunoscută: ${kind}`);
+}
+
+function parseWorkTypeCsvRows(parsed){
+  return parsed.map(r=>({
+    id:String(csvValue(r,["ID"])).trim(),
+    tip_lucrare:String(csvValue(r,["Tip_Lucrare","Tip Lucrare"])).trim(),
+    active:String(csvValue(r,["Active"])||"true").trim(),
+    billing_mode:normalizeBillingMode(csvValue(r,["Billing_Mode","Billing Mode"]))
+  }));
 }
 
 function downloadAdminCsv(kind){
@@ -8067,11 +8122,7 @@ async function uploadAdminCsv(kind,file){
       }
 
     }else if(kind==="types"){
-      rows=parsed.map(r=>({
-        id:String(csvValue(r,["ID"])).trim(),
-        tip_lucrare:String(csvValue(r,["Tip_Lucrare","Tip Lucrare"])).trim(),
-        active:String(csvValue(r,["Active"])||"true").trim()
-      }));
+      rows=parseWorkTypeCsvRows(parsed);
 
       if(rows.some(r=>!r.tip_lucrare)){
         throw new Error("Pentru tipuri de lucrări, Tip_Lucrare este obligatoriu.");

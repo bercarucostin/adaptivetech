@@ -986,9 +986,13 @@ CREATE TABLE IF NOT EXISTS "public"."lab_work_types" (
     "id" bigint NOT NULL,
     "tip_lucrare" text NOT NULL,
     "active" boolean NOT NULL DEFAULT true,
+    "billing_mode" text NOT NULL DEFAULT 'per_tooth',
     "created_at" timestamptz NOT NULL DEFAULT now(),
     "updated_at" timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "public"."lab_work_types"
+    ADD COLUMN IF NOT EXISTS billing_mode text NOT NULL DEFAULT 'per_tooth';
 
 ALTER TABLE "public"."lab_work_types" ENABLE ROW LEVEL SECURITY;
 
@@ -996,6 +1000,19 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lab_work_types_lab_organization_id_fkey' AND conrelid = 'public.lab_work_types'::regclass) THEN
         ALTER TABLE "public"."lab_work_types" ADD CONSTRAINT "lab_work_types_lab_organization_id_fkey" FOREIGN KEY (lab_organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'lab_work_types_billing_mode_check'
+          AND conrelid = 'public.lab_work_types'::regclass
+    ) THEN
+        ALTER TABLE public.lab_work_types
+            ADD CONSTRAINT lab_work_types_billing_mode_check
+            CHECK (billing_mode IN ('per_tooth','per_arch','per_piece'));
     END IF;
 END $$;
 
@@ -1407,6 +1424,68 @@ CREATE INDEX IF NOT EXISTS lab_work_order_items_type_idx
     ON public.lab_work_order_items(lab_organization_id, lower(work_type));
 -- END db/schema/10_tables/24_work_order_items.sql
 
+-- BEGIN db/schema/10_tables/24a_work_order_price_lines.sql
+-- Frozen sale-price authority, one row for each canonical billing unit.
+CREATE TABLE IF NOT EXISTS public.lab_work_order_price_lines (
+    lab_organization_id uuid NOT NULL,
+    work_order_id bigint NOT NULL,
+    work_type text NOT NULL,
+    billing_mode text NOT NULL DEFAULT 'per_tooth',
+    billing_scope text NOT NULL,
+    contract text NOT NULL DEFAULT 'General',
+    unit_price numeric(14,2),
+    quantity numeric(14,3) NOT NULL DEFAULT 1,
+    line_total numeric(14,2),
+    price_source text,
+    price_fixed_at timestamptz,
+    price_migrated boolean NOT NULL DEFAULT false,
+    created_by_user_id text,
+    updated_by_user_id text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (lab_organization_id, work_order_id, work_type, billing_scope),
+    FOREIGN KEY (lab_organization_id, work_order_id)
+        REFERENCES public.lab_work_orders(lab_organization_id, id) ON DELETE CASCADE,
+    CONSTRAINT lab_work_order_price_lines_billing_mode_check
+        CHECK (billing_mode IN ('per_tooth','per_arch','per_piece')),
+    CONSTRAINT lab_work_order_price_lines_scope_check CHECK (
+        (billing_mode='per_tooth' AND billing_scope ~ '^tooth:[1-4][1-8]$') OR
+        (billing_mode='per_arch' AND billing_scope IN ('arch:upper','arch:lower')) OR
+        (billing_mode='per_piece' AND billing_scope='piece')
+    ),
+    CHECK (trim(work_type) <> ''),
+    CHECK (quantity > 0),
+    CHECK (unit_price IS NULL OR unit_price >= 0),
+    CHECK (line_total IS NULL OR line_total >= 0)
+);
+
+ALTER TABLE public.lab_work_order_price_lines ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS lab_work_order_price_lines_order_idx
+    ON public.lab_work_order_price_lines(lab_organization_id,work_order_id);
+CREATE INDEX IF NOT EXISTS lab_work_order_price_lines_type_idx
+    ON public.lab_work_order_price_lines(lab_organization_id,lower(work_type));
+
+-- Existing Work Orders already contain frozen per-tooth amounts. Copy those
+-- saved values one-to-one; historical migration never consults a catalog.
+INSERT INTO public.lab_work_order_price_lines (
+    lab_organization_id,work_order_id,work_type,billing_mode,billing_scope,
+    contract,unit_price,quantity,line_total,price_source,price_fixed_at,
+    price_migrated,created_by_user_id,updated_by_user_id,created_at,updated_at
+)
+SELECT i.lab_organization_id,i.work_order_id,i.work_type,'per_tooth',
+       'tooth:' || i.tooth_number::text,i.contract,i.unit_price,i.quantity,
+       i.line_total,coalesce(i.price_source,'migration_items'),
+       coalesce(i.price_fixed_at,i.updated_at,i.created_at,now()),true,
+       i.created_by_user_id,i.updated_by_user_id,i.created_at,i.updated_at
+FROM public.lab_work_order_items i
+WHERE (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
+   OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
+  AND i.tooth_number / 10 BETWEEN 1 AND 4
+  AND i.tooth_number % 10 BETWEEN 1 AND 8
+ON CONFLICT DO NOTHING;
+-- END db/schema/10_tables/24a_work_order_price_lines.sql
+
 -- BEGIN db/schema/10_tables/25_work_order_stage_assignments.sql
 CREATE TABLE IF NOT EXISTS public.lab_work_order_stage_assignments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1447,15 +1526,36 @@ CREATE INDEX IF NOT EXISTS lab_work_order_stage_assignments_name_idx
 CREATE TABLE IF NOT EXISTS public.lab_work_order_assignment_cost_lines (
     assignment_id uuid NOT NULL REFERENCES public.lab_work_order_stage_assignments(id),
     work_type text NOT NULL,
+    billing_mode text NOT NULL DEFAULT 'per_tooth',
     quantity numeric(14,3) NOT NULL,
     unit_cost numeric(14,2),
     amount numeric(14,2),
     cost_source text NOT NULL,
     PRIMARY KEY (assignment_id, work_type),
+    CONSTRAINT lab_work_order_assignment_cost_lines_billing_mode_check
+        CHECK (billing_mode IN ('per_tooth','per_arch','per_piece')),
     CHECK (quantity > 0),
     CHECK (unit_cost IS NULL OR unit_cost >= 0),
     CHECK (amount IS NULL OR amount >= 0)
 );
+
+-- Historical cost lines already contain frozen per-tooth amounts. Adding the
+-- default labels them without consulting current work-type or cost catalogs.
+ALTER TABLE public.lab_work_order_assignment_cost_lines
+    ADD COLUMN IF NOT EXISTS billing_mode text NOT NULL DEFAULT 'per_tooth';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname='lab_work_order_assignment_cost_lines_billing_mode_check'
+          AND conrelid='public.lab_work_order_assignment_cost_lines'::regclass
+    ) THEN
+        ALTER TABLE public.lab_work_order_assignment_cost_lines
+            ADD CONSTRAINT lab_work_order_assignment_cost_lines_billing_mode_check
+            CHECK (billing_mode IN ('per_tooth','per_arch','per_piece'));
+    END IF;
+END $$;
 
 ALTER TABLE public.lab_work_order_assignment_cost_lines ENABLE ROW LEVEL SECURITY;
 
@@ -1467,13 +1567,33 @@ CREATE TABLE IF NOT EXISTS public.lab_work_order_assignment_adjustments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     assignment_id uuid NOT NULL REFERENCES public.lab_work_order_stage_assignments(id),
     work_type text NOT NULL,
+    billing_mode text NOT NULL DEFAULT 'per_tooth',
     quantity_delta numeric(14,3) NOT NULL CHECK(quantity_delta <> 0),
     unit_cost numeric(14,2) CHECK(unit_cost IS NULL OR unit_cost >= 0),
     amount numeric(14,2),
     cost_source text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    created_by_user_id uuid
+    created_by_user_id uuid,
+    CONSTRAINT lab_work_order_assignment_adjustments_billing_mode_check
+        CHECK (billing_mode IN ('per_tooth','per_arch','per_piece'))
 );
+
+-- The same additive upgrade preserves signed historical amounts verbatim.
+ALTER TABLE public.lab_work_order_assignment_adjustments
+    ADD COLUMN IF NOT EXISTS billing_mode text NOT NULL DEFAULT 'per_tooth';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname='lab_work_order_assignment_adjustments_billing_mode_check'
+          AND conrelid='public.lab_work_order_assignment_adjustments'::regclass
+    ) THEN
+        ALTER TABLE public.lab_work_order_assignment_adjustments
+            ADD CONSTRAINT lab_work_order_assignment_adjustments_billing_mode_check
+            CHECK (billing_mode IN ('per_tooth','per_arch','per_piece'));
+    END IF;
+END $$;
 ALTER TABLE public.lab_work_order_assignment_adjustments ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS assignment_adjustments_assignment_idx ON public.lab_work_order_assignment_adjustments(assignment_id);
 REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM public,authenticated;
@@ -1664,26 +1784,49 @@ GRANT EXECUTE ON FUNCTION public.adjust_material_quantity(uuid,bigint,text,numer
 -- BEGIN db/schema/20_functions/adjust_work_order_scope_costs.sql
 CREATE OR REPLACE FUNCTION public.adjust_work_order_scope_costs(p_lab uuid,p_order bigint,p_before jsonb,p_after jsonb)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE a public.lab_work_order_stage_assignments%rowtype; d record; v_cost numeric; v_source text; v_existing boolean;
+DECLARE a public.lab_work_order_stage_assignments%rowtype; d record; v_cost numeric; v_source text; v_existing boolean; v_adjusted boolean;
 BEGIN
     IF p_before IS NOT DISTINCT FROM p_after THEN RETURN; END IF;
     FOR a IN SELECT * FROM public.lab_work_order_stage_assignments
         WHERE lab_organization_id=p_lab AND work_order_id=p_order AND ended_at IS NULL FOR UPDATE
     LOOP
+        v_adjusted:=false;
         FOR d IN
-            WITH before_scope AS (SELECT x->>'work_type' work_type,(x->>'quantity')::numeric quantity FROM jsonb_array_elements(p_before) x),
-            after_scope AS (SELECT x->>'work_type' work_type,(x->>'quantity')::numeric quantity FROM jsonb_array_elements(p_after) x)
-            SELECT coalesce(n.work_type,o.work_type) work_type,coalesce(n.quantity,0)-coalesce(o.quantity,0) delta
-            FROM before_scope o FULL JOIN after_scope n USING(work_type)
+            WITH before_scope AS (
+                SELECT min(trim(x->>'work_type')) work_type,
+                       regexp_replace(lower(trim(x->>'work_type')), '[[:space:]]+', ' ', 'g') work_type_key,
+                       x->>'billing_mode' billing_mode,
+                       sum((x->>'quantity')::numeric) quantity
+                FROM jsonb_array_elements(coalesce(p_before,'[]'::jsonb)) x
+                GROUP BY regexp_replace(lower(trim(x->>'work_type')), '[[:space:]]+', ' ', 'g'),x->>'billing_mode'
+            ), after_scope AS (
+                SELECT min(trim(x->>'work_type')) work_type,
+                       regexp_replace(lower(trim(x->>'work_type')), '[[:space:]]+', ' ', 'g') work_type_key,
+                       x->>'billing_mode' billing_mode,
+                       sum((x->>'quantity')::numeric) quantity
+                FROM jsonb_array_elements(coalesce(p_after,'[]'::jsonb)) x
+                GROUP BY regexp_replace(lower(trim(x->>'work_type')), '[[:space:]]+', ' ', 'g'),x->>'billing_mode'
+            )
+            SELECT coalesce(n.work_type,o.work_type) work_type,
+                   coalesce(n.billing_mode,o.billing_mode) billing_mode,
+                   coalesce(n.quantity,0)-coalesce(o.quantity,0) delta
+            FROM before_scope o FULL JOIN after_scope n USING(work_type_key,billing_mode)
             WHERE coalesce(n.quantity,0)<>coalesce(o.quantity,0)
         LOOP
             -- Existing work types retain their original frozen cost, including missing costs.
             SELECT l.unit_cost,l.cost_source INTO v_cost,v_source FROM public.lab_work_order_assignment_cost_lines l
-            WHERE l.assignment_id=a.id AND lower(trim(l.work_type))=lower(trim(d.work_type));
+            WHERE l.assignment_id=a.id
+              AND regexp_replace(lower(trim(l.work_type)), '[[:space:]]+', ' ', 'g')
+                  =regexp_replace(lower(trim(d.work_type)), '[[:space:]]+', ' ', 'g')
+              AND l.billing_mode=d.billing_mode;
             v_existing:=FOUND;
             IF NOT v_existing THEN
                 SELECT l.unit_cost,l.cost_source INTO v_cost,v_source FROM public.lab_work_order_assignment_adjustments l
-                WHERE l.assignment_id=a.id AND lower(trim(l.work_type))=lower(trim(d.work_type)) ORDER BY l.created_at,l.id LIMIT 1;
+                WHERE l.assignment_id=a.id
+                  AND regexp_replace(lower(trim(l.work_type)), '[[:space:]]+', ' ', 'g')
+                      =regexp_replace(lower(trim(d.work_type)), '[[:space:]]+', ' ', 'g')
+                  AND l.billing_mode=d.billing_mode
+                ORDER BY l.created_at,l.id LIMIT 1;
                 v_existing:=FOUND;
             END IF;
             IF NOT v_existing THEN
@@ -1696,12 +1839,15 @@ BEGIN
                 RAISE EXCEPTION 'Missing technician cost configuration: % / % / %',
                     a.technician_name,d.work_type,a.stage_key;
             END IF;
-            INSERT INTO public.lab_work_order_assignment_adjustments(assignment_id,work_type,quantity_delta,unit_cost,amount,cost_source,created_by_user_id)
-            VALUES(a.id,d.work_type,d.delta,v_cost,round(v_cost*d.delta,2),coalesce(v_source,'missing'),auth.uid());
+            INSERT INTO public.lab_work_order_assignment_adjustments(assignment_id,work_type,billing_mode,quantity_delta,unit_cost,amount,cost_source,created_by_user_id)
+            VALUES(a.id,d.work_type,d.billing_mode,d.delta,v_cost,round(v_cost*d.delta,2),coalesce(v_source,'missing'),auth.uid());
+            v_adjusted:=true;
         END LOOP;
-        INSERT INTO public.work_order_financial_audit(lab_organization_id,work_order_id,entity_type,entity_id,action,before_value,after_value,changed_by_user_id)
-        VALUES(p_lab,p_order,'stage_assignment',a.id::text,'scope_adjustment',p_before,
-            jsonb_build_object('scope',p_after,'agreed_amount',public.assignment_agreed_amount(a.id)),auth.uid());
+        IF v_adjusted THEN
+            INSERT INTO public.work_order_financial_audit(lab_organization_id,work_order_id,entity_type,entity_id,action,before_value,after_value,changed_by_user_id)
+            VALUES(p_lab,p_order,'stage_assignment',a.id::text,'scope_adjustment',p_before,
+                jsonb_build_object('scope',p_after,'agreed_amount',public.assignment_agreed_amount(a.id)),auth.uid());
+        END IF;
     END LOOP;
 END; $$;
 REVOKE ALL ON FUNCTION public.adjust_work_order_scope_costs(uuid,bigint,jsonb,jsonb) FROM public,authenticated;
@@ -1734,6 +1880,7 @@ declare
     v_price numeric;
     v_cost numeric;
     v_active boolean;
+    v_billing_mode text;
     v_next_work_type bigint;
     v_next_cost_row integer;
 begin
@@ -1824,8 +1971,12 @@ begin
         for v_row in select * from jsonb_array_elements(p_rows)
         loop
             v_work_type := trim(coalesce(v_row->>'tip_lucrare',''));
+            v_billing_mode := coalesce(nullif(lower(trim(v_row->>'billing_mode')),''),'per_tooth');
             if v_work_type = '' then
                 raise exception 'Each work type row requires Tip_Lucrare';
+            end if;
+            if v_billing_mode not in ('per_tooth','per_arch','per_piece') then
+                raise exception 'Invalid Billing_Mode: %', coalesce(v_row->>'billing_mode','');
             end if;
 
             if nullif(trim(coalesce(v_row->>'id','')),'') is not null then
@@ -1854,6 +2005,7 @@ begin
 
         for v_row in select * from jsonb_array_elements(p_rows)
         loop
+            v_billing_mode := coalesce(nullif(lower(trim(v_row->>'billing_mode')),''),'per_tooth');
             if nullif(trim(coalesce(v_row->>'id','')),'') is null then
                 v_id_big := v_next_work_type;
                 v_next_work_type := v_next_work_type + 1;
@@ -1872,6 +2024,7 @@ begin
                 id,
                 tip_lucrare,
                 active,
+                billing_mode,
                 updated_at
             )
             values (
@@ -1879,12 +2032,14 @@ begin
                 v_id_big,
                 trim(v_row->>'tip_lucrare'),
                 v_active,
+                v_billing_mode,
                 now()
             )
             on conflict (lab_organization_id,id)
             do update set
                 tip_lucrare = excluded.tip_lucrare,
                 active = excluded.active,
+                billing_mode = excluded.billing_mode,
                 updated_at = now();
 
             v_count := v_count + 1;
@@ -2163,20 +2318,28 @@ CREATE OR REPLACE FUNCTION public.ai_admin_config_operation(
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE
     v_lab uuid:=public.get_flowrise_lab_id(); v_entity text:=lower(trim(p_entity)); v_op text:=lower(trim(p_operation));
-    v_count integer:=0; v_id bigint;
+    v_count integer:=0; v_id bigint; v_billing_mode text;
 BEGIN
     IF lower(coalesce(public.current_org_role(v_lab),''))<>'admin' THEN RAISE EXCEPTION 'Admin access required'; END IF;
     IF v_entity<>'work_type' THEN RAISE EXCEPTION 'Unsupported configuration entity'; END IF;
+    IF p_fields?'billing_mode' OR v_op='create' THEN
+        v_billing_mode:=coalesce(nullif(lower(trim(p_fields->>'billing_mode')),''),'per_tooth');
+        IF v_billing_mode NOT IN ('per_tooth','per_arch','per_piece') THEN
+            RAISE EXCEPTION 'Unknown billing mode: %',coalesce(p_fields->>'billing_mode','');
+        END IF;
+    END IF;
     IF v_op='create' THEN
         IF trim(coalesce(p_fields->>'work_type',''))='' THEN RAISE EXCEPTION 'Work type is required'; END IF;
         PERFORM pg_advisory_xact_lock(hashtext(v_lab::text||':work_type'));
         SELECT coalesce(max(id),0)+1 INTO v_id FROM public.lab_work_types WHERE lab_organization_id=v_lab;
-        INSERT INTO public.lab_work_types(lab_organization_id,id,tip_lucrare,active,updated_at)
-        VALUES(v_lab,v_id,trim(p_fields->>'work_type'),coalesce((p_fields->>'active')::boolean,true),now()); v_count:=1;
+        INSERT INTO public.lab_work_types(lab_organization_id,id,tip_lucrare,active,billing_mode,updated_at)
+        VALUES(v_lab,v_id,trim(p_fields->>'work_type'),coalesce((p_fields->>'active')::boolean,true),v_billing_mode,now()); v_count:=1;
     ELSIF v_op='update' THEN
         UPDATE public.lab_work_types SET
             tip_lucrare=coalesce(nullif(trim(p_fields->>'work_type'),''),tip_lucrare),
-            active=case when p_fields?'active' then (p_fields->>'active')::boolean else active end,updated_at=now()
+            active=case when p_fields?'active' then (p_fields->>'active')::boolean else active end,
+            billing_mode=case when p_fields?'billing_mode' then v_billing_mode else billing_mode end,
+            updated_at=now()
         WHERE lab_organization_id=v_lab AND id=(p_target->>'id')::bigint; GET DIAGNOSTICS v_count=ROW_COUNT;
     ELSIF v_op='delete' THEN
         DELETE FROM public.lab_work_types WHERE lab_organization_id=v_lab AND id=(p_target->>'id')::bigint; GET DIAGNOSTICS v_count=ROW_COUNT;
@@ -2358,7 +2521,7 @@ BEGIN
       when 'work_order_price' then array['unit_price','discount','reason']
       when 'contract_price' then array['id','contract','work_type','price','source_contract','target_contract','conflict_mode']
       when 'technician_cost' then array['technician','work_type','stage','cost','source_technician','target_technician','conflict_mode']
-      when 'work_type' then array['work_type','active']
+      when 'work_type' then array['work_type','active','billing_mode']
       when 'material' then array['value','expected_quantity']
       when 'calendar_event' then array['title','event_type','description','status','start_date','end_date','start_time','calendar_scope'] else null end;
     IF v_allowed IS NULL OR EXISTS (SELECT 1 FROM jsonb_object_keys(coalesce(p_envelope->'fields','{}'::jsonb)) k WHERE NOT k=ANY(v_allowed)) THEN RAISE EXCEPTION 'Unsupported field for AI entity'; END IF;
@@ -2815,12 +2978,16 @@ BEGIN
       when 'work_order_price' then array['unit_price','discount','reason']
       when 'contract_price' then array['id','contract','work_type','price','source_contract','target_contract','conflict_mode']
       when 'technician_cost' then array['technician','work_type','stage','cost','source_technician','target_technician','conflict_mode']
-      when 'work_type' then array['work_type','active']
+      when 'work_type' then array['work_type','active','billing_mode']
       when 'material' then array['value','expected_quantity']
       when 'calendar_event' then array['title','event_type','description','status','start_date','end_date','start_time','calendar_scope'] else null end;
     IF v_allowed IS NULL OR EXISTS (
         SELECT 1 FROM jsonb_object_keys(coalesce(p_envelope->'fields','{}'::jsonb)) k WHERE NOT k=ANY(v_allowed)
     ) THEN RAISE EXCEPTION 'Unsupported field for AI entity'; END IF;
+    IF v_entity='work_type' AND coalesce(p_envelope->'fields','{}'::jsonb)?'billing_mode'
+       AND lower(trim(coalesce(p_envelope#>>'{fields,billing_mode}',''))) NOT IN ('per_tooth','per_arch','per_piece') THEN
+        RAISE EXCEPTION 'Unknown billing mode: %',coalesce(p_envelope#>>'{fields,billing_mode}','');
+    END IF;
     v_allowed_target:=case v_entity
       when 'work_order' then array['id','ids']
       when 'work_order_price' then array['id']
@@ -2936,7 +3103,7 @@ begin
         end if;
     end if;
 
-    if v_role not in ('admin','manager') then
+    if coalesce(v_role,'') not in ('admin','manager') then
         raise exception 'AI dataset access denied';
     end if;
 
@@ -3074,6 +3241,18 @@ begin
                 wo.*,
                 wo.contract as matched_price_contract,
                 scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
+                coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'work_type',line.work_type,'billing_mode',line.billing_mode,
+                        'billing_scope',line.billing_scope,'quantity',line.quantity,
+                        'contract',line.contract,'unit_price',line.unit_price,
+                        'subtotal',line.line_total,'price_source',line.price_source,
+                        'price_fixed_at',line.price_fixed_at,'price_migrated',line.price_migrated
+                    ) order by line.work_type,line.billing_scope)
+                    from public.lab_work_order_price_lines line
+                    where line.lab_organization_id=wo.lab_organization_id
+                      and line.work_order_id=wo.id
+                ),'[]'::jsonb) as price_lines,
                 wo.snapshot_list_price as list_price,
                 wo.snapshot_final_price as final_price,
                 (wo.snapshot_list_price is not null) as price_matched,
@@ -3129,7 +3308,8 @@ begin
         select count(*) into v_total from public.lab_work_types where lab_organization_id=v_lab;
         select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) into v_rows
         from (
-            select * from public.lab_work_types
+            select id,tip_lucrare,active,billing_mode,created_at,updated_at
+            from public.lab_work_types
             where lab_organization_id=v_lab
             order by tip_lucrare,id
             limit v_limit offset v_offset
@@ -3576,7 +3756,8 @@ begin
         select coalesce(
             jsonb_agg(
                 jsonb_build_object(
-                    'Tip_Lucrare',wt.tip_lucrare
+                    'Tip_Lucrare',wt.tip_lucrare,
+                    'billing_mode',wt.billing_mode
                 )
                 order by wt.tip_lucrare
             ),
@@ -3683,9 +3864,11 @@ REVOKE ALL ON FUNCTION public.work_order_stage_payment_status(uuid,bigint,text) 
 -- END db/schema/20_functions/assignment_agreed_amount.sql
 
 -- BEGIN db/schema/20_functions/backfill_work_order_financial_history.sql
--- Repairs current assignments from the current catalog. This is intentionally
--- limited to incomplete snapshots without payments or adjustments; valid frozen
--- history is never recalculated.
+-- Populates current assignments with no saved base lines from the current catalog.
+-- Partial or otherwise inconsistent saved snapshots are reported as unresolved;
+-- valid frozen history is never recalculated. The table upgrade labels existing lines
+-- and adjustments per_tooth without this routine consulting catalog billing modes
+-- or rewriting their saved quantities and amounts.
 CREATE OR REPLACE FUNCTION public.backfill_work_order_financial_history(p_lab uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE
@@ -3696,18 +3879,42 @@ DECLARE
     v_before_repair_audits integer;
     v_after_repair_audits integer;
     v_prices integer := 0;
+    v_price_lines integer := 0;
     v_assignments integer := 0;
     v_repaired integer := 0;
     v_missing jsonb := '[]'::jsonb;
     v_unresolved jsonb := '[]'::jsonb;
 BEGIN
     IF lower(coalesce(public.current_org_role(p_lab),''))<>'admin' THEN RAISE EXCEPTION 'Admin access required'; END IF;
+
+    INSERT INTO public.lab_work_order_price_lines (
+        lab_organization_id,work_order_id,work_type,billing_mode,billing_scope,
+        contract,unit_price,quantity,line_total,price_source,price_fixed_at,
+        price_migrated,created_by_user_id,updated_by_user_id,created_at,updated_at
+    )
+    SELECT i.lab_organization_id,i.work_order_id,i.work_type,'per_tooth',
+           'tooth:' || i.tooth_number::text,i.contract,i.unit_price,i.quantity,
+           i.line_total,coalesce(i.price_source,'migration_items'),
+           coalesce(i.price_fixed_at,i.updated_at,i.created_at,now()),true,
+           i.created_by_user_id,i.updated_by_user_id,i.created_at,i.updated_at
+    FROM public.lab_work_order_items i
+    WHERE i.lab_organization_id=p_lab
+      AND (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
+           OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
+      AND i.tooth_number / 10 BETWEEN 1 AND 4
+      AND i.tooth_number % 10 BETWEEN 1 AND 8
+    ON CONFLICT DO NOTHING;
+    GET DIAGNOSTICS v_price_lines=ROW_COUNT;
+
     UPDATE public.lab_work_orders wo SET
         snapshot_list_price=totals.list_price,
         snapshot_final_price=round(totals.list_price*(1-wo.discount/100),2),
-        price_source='migration_items',price_fixed_at=now(),price_migrated=true
-    FROM (SELECT work_order_id,CASE WHEN bool_and(line_total IS NOT NULL) THEN sum(line_total) END list_price
-        FROM public.lab_work_order_items WHERE lab_organization_id=p_lab GROUP BY work_order_id) totals
+        price_source='migration_items',price_fixed_at=totals.fixed_at,price_migrated=true
+    FROM (SELECT work_order_id,
+                 CASE WHEN bool_and(line_total IS NOT NULL) THEN sum(line_total) END list_price,
+                 coalesce(max(price_fixed_at),now()) fixed_at
+        FROM public.lab_work_order_price_lines
+        WHERE lab_organization_id=p_lab GROUP BY work_order_id) totals
     WHERE wo.lab_organization_id=p_lab AND wo.id=totals.work_order_id AND wo.price_fixed_at IS NULL
       AND wo.snapshot_list_price IS NULL AND wo.snapshot_final_price IS NULL;
     GET DIAGNOSTICS v_prices=ROW_COUNT;
@@ -3775,7 +3982,7 @@ BEGIN
     END LOOP;
 
     RETURN jsonb_build_object(
-        'prices',v_prices,'assignments',v_assignments,
+        'prices',v_prices,'price_lines',v_price_lines,'assignments',v_assignments,
         'repaired_assignments',v_repaired,'missing_costs',v_missing,
         'unresolved_assignments',v_unresolved,
         'migration_balances',0
@@ -5168,6 +5375,9 @@ begin
         select 1 from public.work_order_financial_audit a
         where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
     ) or exists (
+        select 1 from public.lab_work_order_price_lines line
+        where line.lab_organization_id=p_lab_organization_id and line.work_order_id=p_work_order_id
+    ) or exists (
         select 1 from public.lab_work_order_items i
         where i.lab_organization_id=p_lab_organization_id and i.work_order_id=p_work_order_id
     ) or v_order.price_fixed_at is not null then
@@ -5226,6 +5436,9 @@ begin
         select 1 from public.work_order_financial_audit a
         where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
     ) or exists (
+        select 1 from public.lab_work_order_price_lines line
+        where line.lab_organization_id=p_lab_organization_id and line.work_order_id=p_work_order_id
+    ) or exists (
         select 1 from public.lab_work_order_items i
         where i.lab_organization_id=p_lab_organization_id and i.work_order_id=p_work_order_id
     ) or exists (
@@ -5261,6 +5474,70 @@ $function$
 -- Return type: boolean
 -- Identity arguments: p_lab_organization_id uuid, p_work_order_id bigint
 -- END db/schema/20_functions/delete_management_work_order.sql
+
+-- BEGIN db/schema/20_functions/derive_billing_units.sql
+CREATE OR REPLACE FUNCTION public.derive_billing_units(p_items jsonb,p_modes jsonb)
+RETURNS TABLE(work_type text,billing_mode text,billing_scope text,tooth_number integer)
+LANGUAGE plpgsql STABLE
+SET search_path=public
+AS $$
+DECLARE
+    v_bad text;
+BEGIN
+    IF jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array'
+       OR jsonb_typeof(coalesce(p_modes,'[]'::jsonb)) <> 'array' THEN
+        RAISE EXCEPTION 'Items and billing modes must be JSON arrays';
+    END IF;
+
+    SELECT trim(item->>'work_type') INTO v_bad
+    FROM jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
+    WHERE trim(coalesce(item->>'work_type',''))=''
+       OR coalesce((item->>'tooth_number')::integer,0) / 10 NOT BETWEEN 1 AND 4
+       OR coalesce((item->>'tooth_number')::integer,0) % 10 NOT BETWEEN 1 AND 8
+    LIMIT 1;
+    IF FOUND THEN RAISE EXCEPTION 'Invalid billing item'; END IF;
+
+    SELECT trim(item->>'work_type') INTO v_bad
+    FROM jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
+    LEFT JOIN LATERAL (
+        SELECT mode.value
+        FROM jsonb_array_elements(coalesce(p_modes,'[]'::jsonb)) WITH ORDINALITY mode(value,ordinality)
+        WHERE lower(trim(mode.value->>'work_type'))=lower(trim(item->>'work_type'))
+        ORDER BY mode.ordinality
+        LIMIT 1
+    ) matched ON true
+    WHERE matched.value IS NULL
+       OR coalesce(matched.value->>'billing_mode','') NOT IN ('per_tooth','per_arch','per_piece')
+    LIMIT 1;
+    IF FOUND THEN RAISE EXCEPTION 'Unknown billing mode for work type: %',v_bad; END IF;
+
+    RETURN QUERY
+    WITH resolved AS (
+        SELECT trim(matched.value->>'work_type') AS resolved_type,
+               matched.value->>'billing_mode' AS resolved_mode,
+               (item->>'tooth_number')::integer AS resolved_tooth
+        FROM jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
+        CROSS JOIN LATERAL (
+            SELECT mode.value
+            FROM jsonb_array_elements(coalesce(p_modes,'[]'::jsonb)) WITH ORDINALITY mode(value,ordinality)
+            WHERE lower(trim(mode.value->>'work_type'))=lower(trim(item->>'work_type'))
+            ORDER BY mode.ordinality
+            LIMIT 1
+        ) matched
+    )
+    SELECT DISTINCT r.resolved_type,r.resolved_mode,
+           CASE r.resolved_mode
+               WHEN 'per_tooth' THEN 'tooth:' || r.resolved_tooth::text
+               WHEN 'per_arch' THEN CASE WHEN r.resolved_tooth/10 IN (1,2) THEN 'arch:upper' ELSE 'arch:lower' END
+               WHEN 'per_piece' THEN 'piece'
+           END,
+           CASE WHEN r.resolved_mode='per_tooth' THEN r.resolved_tooth ELSE NULL END
+    FROM resolved r;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.derive_billing_units(jsonb,jsonb) FROM public,anon,authenticated;
+-- END db/schema/20_functions/derive_billing_units.sql
 
 -- BEGIN db/schema/20_functions/doctor_matches_partner.sql
 -- Flowrise Supabase function: public.doctor_matches_partner(p_partner_name text)
@@ -5420,104 +5697,110 @@ GRANT EXECUTE ON FUNCTION public.estimate_doctor_work_order_price(uuid,jsonb) TO
 -- END db/schema/20_functions/estimate_doctor_work_order_price.sql
 
 -- BEGIN db/schema/20_functions/estimate_work_order_items.sql
--- Flowrise Supabase function: public.estimate_work_order_items
--- Sourced from SUPABASE V18.16 Per-Tooth Multi-Price.sql.
--- Includes the complete function definition and available ACL statements.
-
-create or replace function public.estimate_work_order_items(
+CREATE OR REPLACE FUNCTION public.estimate_work_order_items(
     p_lab_organization_id uuid,
     p_partner_name text,
     p_requested_contract text,
     p_items jsonb,
-    p_discount numeric default 0
+    p_discount numeric DEFAULT 0
 )
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path=public
+AS $$
+DECLARE
     v_role text := public.effective_lab_role(p_lab_organization_id);
     v_partner text := nullif(trim(coalesce(p_partner_name,'')),'');
     v_requested text := coalesce(nullif(trim(coalesce(p_requested_contract,'')),''),'General');
     v_discount numeric := greatest(0,least(100,coalesce(p_discount,0)));
+    v_modes jsonb;
     v_lines jsonb := '[]'::jsonb;
-    v_count integer := 0;
+    v_element_count integer := 0;
     v_list numeric := 0;
     v_matched_all boolean := false;
-begin
-    if v_role not in ('admin','manager','doctor') then
-        raise exception 'Price estimate access denied';
-    end if;
-    if jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' then
-        raise exception 'Items must be a JSON array';
-    end if;
+BEGIN
+    IF coalesce(v_role,'') NOT IN ('admin','manager','doctor') THEN
+        RAISE EXCEPTION 'Price estimate access denied';
+    END IF;
+    IF jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' THEN
+        RAISE EXCEPTION 'Items must be a JSON array';
+    END IF;
 
-    if v_role='doctor' then
-        select nullif(trim(p.legacy_partner_name),'') into v_partner
-        from public.profiles p
-        where p.id=auth.uid() and p.active=true;
-        if v_partner is null then raise exception 'Doctor partner mapping is missing'; end if;
-        v_requested := v_partner;
-        v_discount := 0;
-    elsif v_partner is null then
-        raise exception 'Partner name is required';
-    end if;
+    IF v_role='doctor' THEN
+        SELECT nullif(trim(p.legacy_partner_name),'') INTO v_partner
+        FROM public.profiles p
+        WHERE p.id=auth.uid() AND p.active=true;
+        IF v_partner IS NULL THEN RAISE EXCEPTION 'Doctor partner mapping is missing'; END IF;
+        v_requested:=v_partner;
+        v_discount:=0;
+    ELSIF v_partner IS NULL THEN
+        RAISE EXCEPTION 'Partner name is required';
+    END IF;
 
-    with item_input as (
-        select trim(item->>'work_type') as work_type, count(*)::integer as quantity
-        from jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
-        where trim(coalesce(item->>'work_type','')) <> ''
-        group by trim(item->>'work_type')
-    ), resolved as (
-        select i.work_type,i.quantity,
-               coalesce(price.contract,'General') as contract,
-               coalesce(price.pret,0)::numeric as unit_price,
-               (price.contract is not null) as matched
-        from item_input i
-        left join lateral (
-            select cp.contract,cp.pret
-            from public.lab_contract_work_prices cp
-            where cp.lab_organization_id=p_lab_organization_id
-              and lower(trim(cp.tip_lucrare))=lower(i.work_type)
-              and lower(trim(cp.contract)) in (
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'work_type',types.work_type,'billing_mode',types.billing_mode
+    ) ORDER BY types.work_type),'[]'::jsonb)
+    INTO v_modes
+    FROM (
+        SELECT DISTINCT ON (lower(trim(wt.tip_lucrare)))
+               wt.tip_lucrare AS work_type,wt.billing_mode
+        FROM jsonb_array_elements(coalesce(p_items,'[]'::jsonb)) item
+        JOIN public.lab_work_types wt
+          ON wt.lab_organization_id=p_lab_organization_id AND wt.active=true
+         AND lower(trim(wt.tip_lucrare))=lower(trim(item->>'work_type'))
+        ORDER BY lower(trim(wt.tip_lucrare)),wt.id
+    ) types;
+
+    v_element_count:=jsonb_array_length(coalesce(p_items,'[]'::jsonb));
+
+    WITH units AS (
+        SELECT * FROM public.derive_billing_units(p_items,v_modes)
+    ), resolved AS (
+        SELECT unit.work_type,unit.billing_mode,unit.billing_scope,1::numeric AS quantity,
+               coalesce(price.contract,'General') AS contract,
+               coalesce(price.pret,0)::numeric AS unit_price,
+               price.contract IS NOT NULL AS matched
+        FROM units unit
+        LEFT JOIN LATERAL (
+            SELECT cp.contract,cp.pret
+            FROM public.lab_contract_work_prices cp
+            WHERE cp.lab_organization_id=p_lab_organization_id
+              AND lower(trim(cp.tip_lucrare))=lower(trim(unit.work_type))
+              AND lower(trim(cp.contract)) IN (
                   lower(coalesce(v_partner,'')),lower(v_requested),'general'
               )
-            order by case
-                when lower(trim(cp.contract))=lower(coalesce(v_partner,'')) then 0
-                when lower(trim(cp.contract))=lower(v_requested) then 1
-                else 2
-            end, cp.id
-            limit 1
-        ) price on true
+            ORDER BY CASE
+                WHEN lower(trim(cp.contract))=lower(coalesce(v_partner,'')) THEN 0
+                WHEN lower(trim(cp.contract))=lower(v_requested) THEN 1
+                ELSE 2
+            END,cp.id
+            LIMIT 1
+        ) price ON true
     )
-    select
-        coalesce(jsonb_agg(jsonb_build_object(
-            'work_type',work_type,'quantity',quantity,'contract',contract,
-            'unit_price',unit_price,'subtotal',round(unit_price*quantity,2),
-            'matched',matched
-        ) order by work_type),'[]'::jsonb),
-        coalesce(sum(quantity),0)::integer,
-        coalesce(sum(round(unit_price*quantity,2)),0),
-        coalesce(bool_and(matched),false)
-    into v_lines,v_count,v_list,v_matched_all
-    from resolved;
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+               'work_type',work_type,'billing_mode',billing_mode,
+               'billing_scope',billing_scope,'quantity',quantity,
+               'contract',contract,'unit_price',unit_price,
+               'subtotal',round(unit_price*quantity,2),'matched',matched
+           ) ORDER BY work_type,billing_scope),'[]'::jsonb),
+           coalesce(sum(round(unit_price*quantity,2)),0),
+           coalesce(bool_and(matched),false)
+    INTO v_lines,v_list,v_matched_all
+    FROM resolved;
 
-    return jsonb_build_object(
-        'lines',v_lines,
-        'element_count',v_count,
-        'list_price',round(v_list,2),
-        'discount',v_discount,
+    RETURN jsonb_build_object(
+        'lines',v_lines,'element_count',v_element_count,
+        'billing_unit_count',coalesce((SELECT sum((line->>'quantity')::numeric)
+            FROM jsonb_array_elements(v_lines) line),0),
+        'list_price',round(v_list,2),'discount',v_discount,
         'final_price',round(v_list*(1-v_discount/100),2),
-        'matched_all',v_matched_all,
-        'partner_name',v_partner
+        'matched_all',v_matched_all,'partner_name',v_partner
     );
-end;
+END;
 $$;
 
-revoke all on function public.estimate_work_order_items(uuid,text,text,jsonb,numeric) from public;
-grant execute on function public.estimate_work_order_items(uuid,text,text,jsonb,numeric) to authenticated;
+REVOKE ALL ON FUNCTION public.estimate_work_order_items(uuid,text,text,jsonb,numeric) FROM public;
+GRANT EXECUTE ON FUNCTION public.estimate_work_order_items(uuid,text,text,jsonb,numeric) TO authenticated;
 -- END db/schema/20_functions/estimate_work_order_items.sql
 
 -- BEGIN db/schema/20_functions/get_ai_bootstrap.sql
@@ -5587,7 +5870,7 @@ begin
             jsonb_build_object('dataset','work_orders','description','All operational Work Orders with persisted unit_price, list_price and final_price. These historic amounts do not change with the current tariff catalog.'),
             jsonb_build_object('dataset','financial_history','description','Persisted technician assignments, agreed costs, payments, reversals and migration provenance per Work Order.'),
             jsonb_build_object('dataset','patient_cases','description','All dental prescription / patient case rows.'),
-            jsonb_build_object('dataset','work_types','description','Configured work types.'),
+            jsonb_build_object('dataset','work_types','description','Configured work types with billing mode metadata.'),
             jsonb_build_object('dataset','contract_prices','description','Authoritative legacy Contract + work-type client price list. Use with work_orders for management financial summaries; do not substitute relationship_prices.'),
             jsonb_build_object('dataset','technician_costs','description','Technician cost configuration for all technicians.'),
             jsonb_build_object('dataset','calendar_events','description','Laboratory calendar events.'),
@@ -5627,7 +5910,7 @@ begin
             ),
             jsonb_build_object(
                 'dataset','work_types',
-                'description','Active work type names only. No client price, contract or partner commercial information.'
+                'description','Active work type names and billing modes only. No client price, contract or partner commercial information.'
             ),
             jsonb_build_object(
                 'dataset','materials_inventory',
@@ -6407,7 +6690,18 @@ BEGIN
         'Sale_Price',case when v_role in ('admin','manager') then jsonb_build_object(
             'List_Price',wo.snapshot_list_price,
             'Final_Price',wo.snapshot_final_price,'Discount',wo.discount,
-            'Source',wo.price_source,'Fixed_At',wo.price_fixed_at,'Migrated',wo.price_migrated
+            'Source',wo.price_source,'Fixed_At',wo.price_fixed_at,'Migrated',wo.price_migrated,
+            'Price_Lines',coalesce((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'Work_Type',line.work_type,'Billing_Mode',line.billing_mode,
+                    'Billing_Scope',line.billing_scope,'Contract',line.contract,
+                    'Unit_Price',line.unit_price,'Quantity',line.quantity,
+                    'Line_Total',line.line_total,'Source',line.price_source,
+                    'Fixed_At',line.price_fixed_at,'Migrated',line.price_migrated
+                ) ORDER BY line.work_type,line.billing_scope)
+                FROM public.lab_work_order_price_lines line
+                WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id
+            ),'[]'::jsonb)
         ) else null end,
         'Assignments',coalesce((
             SELECT jsonb_agg(jsonb_build_object(
@@ -6416,8 +6710,17 @@ BEGIN
                 'Cost_Source',a.cost_source,'Fixed_At',a.fixed_at,'Started_At',a.started_at,
                 'Ended_At',a.ended_at,'Migrated',a.migrated,
                 'Original_Agreed_Amount',a.agreed_amount,
-                'Adjustments',coalesce((select jsonb_agg(to_jsonb(d) order by d.created_at,d.id) from public.lab_work_order_assignment_adjustments d where d.assignment_id=a.id),'[]'::jsonb),
-                'Cost_Lines',coalesce((select jsonb_agg(to_jsonb(l) order by l.work_type)
+                'Adjustments',coalesce((select jsonb_agg(jsonb_build_object(
+                    'id',d.id,'assignment_id',d.assignment_id,'work_type',d.work_type,
+                    'billing_mode',d.billing_mode,'quantity_delta',d.quantity_delta,
+                    'unit_cost',d.unit_cost,'amount',d.amount,'cost_source',d.cost_source,
+                    'created_at',d.created_at,'created_by_user_id',d.created_by_user_id
+                ) order by d.created_at,d.id) from public.lab_work_order_assignment_adjustments d where d.assignment_id=a.id),'[]'::jsonb),
+                'Cost_Lines',coalesce((select jsonb_agg(jsonb_build_object(
+                    'assignment_id',l.assignment_id,'work_type',l.work_type,
+                    'billing_mode',l.billing_mode,'quantity',l.quantity,
+                    'unit_cost',l.unit_cost,'amount',l.amount,'cost_source',l.cost_source
+                ) order by l.work_type,l.billing_mode)
                     from public.lab_work_order_assignment_cost_lines l where l.assignment_id=a.id),'[]'::jsonb),
                 'Payments',coalesce((select jsonb_agg(jsonb_build_object(
                     'ID',p.id,'Amount',p.amount,'Currency',p.currency,'Paid_On',p.paid_on,
@@ -6440,6 +6743,61 @@ $$;
 REVOKE ALL ON FUNCTION public.get_work_order_financial_history(uuid,bigint) FROM public;
 GRANT EXECUTE ON FUNCTION public.get_work_order_financial_history(uuid,bigint) TO authenticated;
 -- END db/schema/20_functions/get_work_order_financial_history.sql
+
+-- BEGIN db/schema/20_functions/get_work_order_price_lines.sql
+CREATE OR REPLACE FUNCTION public.get_work_order_price_lines(p_lab uuid,p_order bigint)
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path=public
+AS $$
+DECLARE
+    v_role text := public.effective_lab_role(p_lab);
+    v_result jsonb;
+BEGIN
+    IF coalesce(v_role,'') NOT IN ('admin','manager','doctor') THEN
+        RAISE EXCEPTION 'Price line access denied';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM public.lab_work_orders wo
+        WHERE wo.lab_organization_id=p_lab AND wo.id=p_order
+    ) THEN RAISE EXCEPTION 'Work Order not found'; END IF;
+    IF v_role='doctor' AND NOT public.can_access_work_order(p_lab,p_order) THEN
+        RAISE EXCEPTION 'Price line access denied';
+    END IF;
+
+    SELECT jsonb_build_object(
+        'lines',coalesce((
+            SELECT jsonb_agg(jsonb_build_object(
+                'work_type',line.work_type,'billing_mode',line.billing_mode,
+                'billing_scope',line.billing_scope,'quantity',line.quantity,
+                'contract',line.contract,'unit_price',line.unit_price,
+                'subtotal',line.line_total,'matched',line.unit_price IS NOT NULL,
+                'price_source',line.price_source,'price_fixed_at',line.price_fixed_at,
+                'price_migrated',line.price_migrated
+            ) ORDER BY line.work_type,line.billing_scope)
+            FROM public.lab_work_order_price_lines line
+            WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_order
+        ),'[]'::jsonb),
+        'element_count',coalesce((
+            SELECT count(*) FROM public.lab_work_order_items item
+            WHERE item.lab_organization_id=p_lab AND item.work_order_id=p_order
+        ),0),
+        'billing_unit_count',coalesce((
+            SELECT sum(line.quantity) FROM public.lab_work_order_price_lines line
+            WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_order
+        ),0),
+        'list_price',wo.snapshot_list_price,'discount',wo.discount,
+        'final_price',wo.snapshot_final_price,'partner_name',wo.nume_partener
+    ) INTO v_result
+    FROM public.lab_work_orders wo
+    WHERE wo.lab_organization_id=p_lab AND wo.id=p_order;
+    RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_work_order_price_lines(uuid,bigint) FROM public,anon;
+GRANT EXECUTE ON FUNCTION public.get_work_order_price_lines(uuid,bigint) TO authenticated;
+-- END db/schema/20_functions/get_work_order_price_lines.sql
 
 -- BEGIN db/schema/20_functions/get_work_order_reference_data.sql
 -- Flowrise Supabase function: public.get_work_order_reference_data(p_lab_organization_id uuid)
@@ -6467,7 +6825,8 @@ begin
             jsonb_build_object(
                 'id', wt.id,
                 'tip_lucrare', wt.tip_lucrare,
-                'active', wt.active
+                'active', wt.active,
+                'billing_mode', wt.billing_mode
             )
             order by wt.tip_lucrare, wt.id
         ),
@@ -7058,233 +7417,312 @@ GRANT EXECUTE ON FUNCTION public.record_technician_payment(uuid,numeric,date,tex
 -- END db/schema/20_functions/record_technician_payment.sql
 
 -- BEGIN db/schema/20_functions/replace_work_order_items.sql
--- Saves per-tooth price snapshots. Unchanged tooth/type pairs retain their
--- original price even when the contract catalog changes.
-create or replace function public.replace_work_order_items(
+-- Saves clinical tooth scope while retaining frozen price units for unchanged
+-- work types and billing scopes.
+CREATE OR REPLACE FUNCTION public.replace_work_order_items(
     p_lab_organization_id uuid,
     p_work_order_id bigint,
     p_items jsonb,
-    p_requested_contract text default 'General'
+    p_requested_contract text DEFAULT 'General'
 )
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=public
+AS $$
+DECLARE
     v_role text := public.effective_lab_role(p_lab_organization_id);
     v_order public.lab_work_orders%rowtype;
+    v_canonical_items jsonb;
+    v_modes jsonb;
     v_first_contract text;
-    v_count numeric;
+    v_element_count numeric;
     v_scope_before jsonb;
     v_scope_after jsonb;
     v_list numeric;
     v_final numeric;
-    v_lines jsonb;
-    v_before_lines jsonb;
+    v_after_price_lines jsonb;
+    v_before_price_lines jsonb;
     v_matched_all boolean;
     v_order_price_source text;
     v_order_price_fixed_at timestamptz;
-begin
-    if v_role not in ('admin','manager','doctor','technician') then
-        raise exception 'Work Order item update denied';
-    end if;
-    if jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' then
-        raise exception 'Items must be a JSON array';
-    end if;
+BEGIN
+    IF v_role NOT IN ('admin','manager','doctor','technician') THEN
+        RAISE EXCEPTION 'Work Order item update denied';
+    END IF;
+    IF jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' THEN
+        RAISE EXCEPTION 'Items must be a JSON array';
+    END IF;
 
-    select * into v_order
-    from public.lab_work_orders
-    where lab_organization_id=p_lab_organization_id and id=p_work_order_id
-    for update;
-    if not found then raise exception 'Work Order not found'; end if;
-    if v_role='technician' then
+    SELECT * INTO v_order
+    FROM public.lab_work_orders
+    WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id
+    FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
+    IF v_role='technician' THEN
         p_requested_contract:=coalesce(nullif(trim(v_order.contract),''),'General');
-    end if;
+    END IF;
 
-    select coalesce(jsonb_agg(jsonb_build_object(
-        'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
-        'contract',contract,'unit_price',unit_price,'subtotal',line_total,
-        'matched',unit_price is not null,'price_source',price_source
-    ) order by tooth_number),'[]'::jsonb)
-    into v_before_lines
-    from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
+    IF v_role='doctor' THEN
+        IF NOT public.doctor_matches_partner(v_order.nume_partener) THEN RAISE EXCEPTION 'Work Order access denied'; END IF;
+        IF v_order.locked THEN RAISE EXCEPTION 'Work Order is locked'; END IF;
+        IF lower(trim(coalesce(v_order.status,''))) <> 'not started' THEN
+            RAISE EXCEPTION 'Doctor can edit only Not Started Work Orders';
+        END IF;
+    ELSIF v_role='technician' THEN
+        IF NOT public.can_access_work_order(p_lab_organization_id,p_work_order_id) THEN RAISE EXCEPTION 'Work Order access denied'; END IF;
+        IF v_order.locked THEN RAISE EXCEPTION 'Work Order is locked'; END IF;
+    ELSIF NOT public.is_lab_management(p_lab_organization_id) THEN
+        RAISE EXCEPTION 'Management access denied';
+    END IF;
 
-    if v_role='doctor' then
-        if not public.doctor_matches_partner(v_order.nume_partener) then raise exception 'Work Order access denied'; end if;
-        if v_order.locked then raise exception 'Work Order is locked'; end if;
-        if lower(trim(coalesce(v_order.status,''))) <> 'not started' then
-            raise exception 'Doctor can edit only Not Started Work Orders';
-        end if;
-    elsif v_role='technician' then
-        if not public.can_access_work_order(p_lab_organization_id,p_work_order_id) then raise exception 'Work Order access denied'; end if;
-        if v_order.locked then raise exception 'Work Order is locked'; end if;
-    elsif not public.is_lab_management(p_lab_organization_id) then
-        raise exception 'Management access denied';
-    end if;
-
-    select count(*) into v_count from jsonb_array_elements(coalesce(p_items,'[]'::jsonb));
-    if coalesce(v_count,0)=0 then raise exception 'At least one configured tooth is required'; end if;
-    if exists (
-        select 1
-        from jsonb_array_elements(p_items) item
-        where trim(coalesce(item->>'work_type','')) = ''
-           or coalesce((item->>'tooth_number')::integer,0) / 10 not between 1 and 4
-           or coalesce((item->>'tooth_number')::integer,0) % 10 not between 1 and 8
-           or not exists (
-               select 1 from public.lab_work_types wt
-               where wt.lab_organization_id=p_lab_organization_id and wt.active=true
-                 and lower(trim(wt.tip_lucrare))=lower(trim(item->>'work_type'))
+    v_element_count:=jsonb_array_length(coalesce(p_items,'[]'::jsonb));
+    IF v_element_count=0 THEN RAISE EXCEPTION 'At least one configured tooth is required'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p_items) item
+        WHERE trim(coalesce(item->>'work_type',''))=''
+           OR coalesce((item->>'tooth_number')::integer,0)/10 NOT BETWEEN 1 AND 4
+           OR coalesce((item->>'tooth_number')::integer,0)%10 NOT BETWEEN 1 AND 8
+           OR NOT EXISTS (
+               SELECT 1 FROM public.lab_work_types wt
+               WHERE wt.lab_organization_id=p_lab_organization_id AND wt.active=true
+                 AND lower(trim(wt.tip_lucrare))=lower(trim(item->>'work_type'))
            )
-    ) then raise exception 'Every tooth requires a valid active Work Type'; end if;
-    if exists (
-        select 1 from jsonb_array_elements(p_items) item
-        group by (item->>'tooth_number')::integer having count(*)>1
-    ) then raise exception 'Duplicate tooth number'; end if;
+    ) THEN RAISE EXCEPTION 'Every tooth requires a valid active Work Type'; END IF;
+    IF EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p_items) item
+        GROUP BY (item->>'tooth_number')::integer HAVING count(*)>1
+    ) THEN RAISE EXCEPTION 'Duplicate tooth number'; END IF;
 
-    select coalesce(jsonb_agg(jsonb_build_object('work_type',work_type,'quantity',quantity) order by work_type),'[]'::jsonb)
-    into v_scope_before from (select work_type,sum(quantity) quantity from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id group by work_type) scope;
+    SELECT jsonb_agg(jsonb_build_object(
+               'tooth_number',(item->>'tooth_number')::integer,
+               'work_type',canonical.tip_lucrare
+           ) ORDER BY (item->>'tooth_number')::integer)
+    INTO v_canonical_items
+    FROM jsonb_array_elements(p_items) item
+    CROSS JOIN LATERAL (
+        SELECT wt.tip_lucrare
+        FROM public.lab_work_types wt
+        WHERE wt.lab_organization_id=p_lab_organization_id AND wt.active=true
+          AND lower(trim(wt.tip_lucrare))=lower(trim(item->>'work_type'))
+        ORDER BY wt.id
+        LIMIT 1
+    ) canonical;
 
-    with incoming as (
-        select (item->>'tooth_number')::integer as tooth_number,
-               trim(item->>'work_type') as work_type
-        from jsonb_array_elements(p_items) item
-    ), resolved as (
-        select i.tooth_number,coalesce(old.work_type,i.work_type) as work_type,
-               coalesce(old.quantity,1) as quantity,
-               case when old.tooth_number is not null then old.line_total else round(price.pret,2) end as line_total,
-               case when old.tooth_number is not null then old.contract
-                    else coalesce(price.contract,'General') end as contract,
-               case when old.tooth_number is not null then old.unit_price
-                    else price.pret end as unit_price,
-               case when old.tooth_number is not null then old.price_source
-                    when price.pret is null then 'missing' else 'catalog' end as price_source,
-               case when old.tooth_number is not null then old.price_fixed_at else now() end as price_fixed_at,
-               case when old.tooth_number is not null then old.price_migrated else false end as price_migrated
-        from incoming i
-        left join public.lab_work_order_items old
-          on old.lab_organization_id=p_lab_organization_id
-         and old.work_order_id=p_work_order_id
-         and old.tooth_number=i.tooth_number
-         and lower(trim(old.work_type))=lower(i.work_type)
-        left join lateral (
-            select cp.contract,cp.pret
-            from public.lab_contract_work_prices cp
-            where cp.lab_organization_id=p_lab_organization_id
-              and lower(trim(cp.tip_lucrare))=lower(i.work_type)
-              and lower(trim(cp.contract)) in (
-                  lower(trim(v_order.nume_partener)),
-                  lower(coalesce(nullif(trim(p_requested_contract),''),'General')),
-                  'general'
-              )
-            order by case
-                when lower(trim(cp.contract))=lower(trim(v_order.nume_partener)) then 0
-                when lower(trim(cp.contract))=lower(coalesce(nullif(trim(p_requested_contract),''),'General')) then 1
-                else 2
-            end, cp.id
-            limit 1
-        ) price on true
+    -- Snapshot both saved price state and billable scope before any mutation.
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'work_type',line.work_type,'billing_mode',line.billing_mode,
+        'billing_scope',line.billing_scope,'quantity',line.quantity,
+        'contract',line.contract,'unit_price',line.unit_price,
+        'subtotal',line.line_total,'matched',line.unit_price IS NOT NULL,
+        'price_source',line.price_source
+    ) ORDER BY line.work_type,line.billing_scope),'[]'::jsonb)
+    INTO v_before_price_lines
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab_organization_id AND line.work_order_id=p_work_order_id;
+
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'work_type',scope.work_type,'billing_mode',scope.billing_mode,'quantity',scope.quantity
+    ) ORDER BY scope.work_type,scope.billing_mode),'[]'::jsonb)
+    INTO v_scope_before
+    FROM public.work_order_billing_scope(p_lab_organization_id,p_work_order_id) scope;
+
+    -- A saved type keeps its frozen spelling and mode. A type entering this
+    -- Work Order for the first time takes the current catalog mode.
+    WITH requested AS (
+        SELECT DISTINCT item->>'work_type' AS work_type
+        FROM jsonb_array_elements(v_canonical_items) item
     )
-    insert into public.lab_work_order_items (
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'work_type',coalesce(frozen.work_type,requested.work_type),
+        'billing_mode',coalesce(frozen.billing_mode,current_type.billing_mode)
+    ) ORDER BY requested.work_type),'[]'::jsonb)
+    INTO v_modes
+    FROM requested
+    JOIN LATERAL (
+        SELECT wt.billing_mode
+        FROM public.lab_work_types wt
+        WHERE wt.lab_organization_id=p_lab_organization_id AND wt.active=true
+          AND lower(trim(wt.tip_lucrare))=lower(trim(requested.work_type))
+        ORDER BY wt.id LIMIT 1
+    ) current_type ON true
+    LEFT JOIN LATERAL (
+        SELECT line.work_type,line.billing_mode
+        FROM public.lab_work_order_price_lines line
+        WHERE line.lab_organization_id=p_lab_organization_id
+          AND line.work_order_id=p_work_order_id
+          AND lower(trim(line.work_type))=lower(trim(requested.work_type))
+        ORDER BY line.billing_scope LIMIT 1
+    ) frozen ON true;
+
+    -- Existing unit identities remain untouched. New units of an existing
+    -- type reuse a frozen tariff; only a newly introduced type reads catalog data.
+    WITH desired AS (
+        SELECT * FROM public.derive_billing_units(v_canonical_items,v_modes)
+    )
+    INSERT INTO public.lab_work_order_price_lines (
+        lab_organization_id,work_order_id,work_type,billing_mode,billing_scope,
+        contract,unit_price,quantity,line_total,price_source,price_fixed_at,
+        price_migrated,created_by_user_id,updated_by_user_id
+    )
+    SELECT p_lab_organization_id,p_work_order_id,
+           coalesce(existing_unit.work_type,desired.work_type),
+           desired.billing_mode,desired.billing_scope,
+           CASE WHEN frozen.work_type IS NOT NULL THEN frozen.contract ELSE coalesce(price.contract,'General') END,
+           CASE WHEN frozen.work_type IS NOT NULL THEN frozen.unit_price ELSE price.pret END,
+           1,
+           CASE WHEN frozen.work_type IS NOT NULL THEN round(frozen.unit_price,2) ELSE round(price.pret,2) END,
+           CASE WHEN frozen.work_type IS NOT NULL THEN frozen.price_source
+                WHEN price.pret IS NULL THEN 'missing' ELSE 'catalog' END,
+           CASE WHEN frozen.work_type IS NOT NULL THEN frozen.price_fixed_at ELSE now() END,
+           CASE WHEN frozen.work_type IS NOT NULL THEN frozen.price_migrated ELSE false END,
+           public.current_legacy_user_id(),public.current_legacy_user_id()
+    FROM desired
+    LEFT JOIN LATERAL (
+        SELECT line.work_type,line.billing_scope
+        FROM public.lab_work_order_price_lines line
+        WHERE line.lab_organization_id=p_lab_organization_id
+          AND line.work_order_id=p_work_order_id
+          AND lower(trim(line.work_type))=lower(trim(desired.work_type))
+    ) existing_unit ON existing_unit.billing_scope=desired.billing_scope
+    LEFT JOIN LATERAL (
+        SELECT line.* FROM public.lab_work_order_price_lines line
+        WHERE line.lab_organization_id=p_lab_organization_id
+          AND line.work_order_id=p_work_order_id
+          AND lower(trim(line.work_type))=lower(trim(desired.work_type))
+        ORDER BY line.billing_scope LIMIT 1
+    ) frozen ON true
+    LEFT JOIN LATERAL (
+        SELECT cp.contract,cp.pret
+        FROM public.lab_contract_work_prices cp
+        WHERE cp.lab_organization_id=p_lab_organization_id
+          AND lower(trim(cp.tip_lucrare))=lower(trim(desired.work_type))
+          AND lower(trim(cp.contract)) IN (
+              lower(trim(v_order.nume_partener)),
+              lower(coalesce(nullif(trim(p_requested_contract),''),'General')),
+              'general'
+          )
+        ORDER BY CASE
+            WHEN lower(trim(cp.contract))=lower(trim(v_order.nume_partener)) THEN 0
+            WHEN lower(trim(cp.contract))=lower(coalesce(nullif(trim(p_requested_contract),''),'General')) THEN 1
+            ELSE 2
+        END,cp.id LIMIT 1
+    ) price ON frozen.work_type IS NULL
+    ON CONFLICT (lab_organization_id,work_order_id,work_type,billing_scope) DO NOTHING;
+
+    DELETE FROM public.lab_work_order_price_lines existing
+    WHERE existing.lab_organization_id=p_lab_organization_id
+      AND existing.work_order_id=p_work_order_id
+      AND NOT EXISTS (
+          SELECT 1 FROM public.derive_billing_units(v_canonical_items,v_modes) desired
+          WHERE lower(trim(desired.work_type))=lower(trim(existing.work_type))
+            AND desired.billing_scope=existing.billing_scope
+      );
+
+    INSERT INTO public.lab_work_order_items (
         lab_organization_id,work_order_id,tooth_number,work_type,contract,
         unit_price,quantity,line_total,price_source,price_fixed_at,price_migrated,
         created_by_user_id,updated_by_user_id,updated_at
     )
-    select p_lab_organization_id,p_work_order_id,tooth_number,work_type,contract,
-           unit_price,quantity,line_total,
-           price_source,price_fixed_at,price_migrated,
+    SELECT p_lab_organization_id,p_work_order_id,
+           (item->>'tooth_number')::integer,item->>'work_type','General',
+           NULL,1,NULL,NULL,NULL,false,
            public.current_legacy_user_id(),public.current_legacy_user_id(),now()
-    from resolved
-    on conflict (lab_organization_id,work_order_id,tooth_number)
-    do update set
-        work_type=excluded.work_type,contract=excluded.contract,
-        unit_price=excluded.unit_price,quantity=excluded.quantity,
-        line_total=excluded.line_total,price_source=excluded.price_source,
-        price_fixed_at=excluded.price_fixed_at,price_migrated=excluded.price_migrated,
-        updated_by_user_id=excluded.updated_by_user_id,updated_at=now();
+    FROM jsonb_array_elements(v_canonical_items) item
+    ON CONFLICT (lab_organization_id,work_order_id,tooth_number)
+    DO UPDATE SET work_type=excluded.work_type,contract='General',unit_price=NULL,
+        quantity=1,line_total=NULL,price_source=NULL,price_fixed_at=NULL,
+        price_migrated=false,updated_by_user_id=excluded.updated_by_user_id,updated_at=now();
 
-    delete from public.lab_work_order_items existing
-    where existing.lab_organization_id=p_lab_organization_id
-      and existing.work_order_id=p_work_order_id
-      and not exists (
-          select 1 from jsonb_array_elements(p_items) item
-          where (item->>'tooth_number')::integer=existing.tooth_number
+    DELETE FROM public.lab_work_order_items existing
+    WHERE existing.lab_organization_id=p_lab_organization_id
+      AND existing.work_order_id=p_work_order_id
+      AND NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements(v_canonical_items) item
+          WHERE (item->>'tooth_number')::integer=existing.tooth_number
       );
 
-    select contract into v_first_contract
-    from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id
-    order by tooth_number limit 1;
+    SELECT line.contract INTO v_first_contract
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab_organization_id AND line.work_order_id=p_work_order_id
+    ORDER BY line.work_type,line.billing_scope LIMIT 1;
 
-    select sum(quantity),
-           case when bool_and(line_total is not null) then round(sum(line_total),2) else null end,
-           coalesce(bool_and(unit_price is not null),false),
+    SELECT CASE WHEN bool_and(line.line_total IS NOT NULL) THEN round(sum(line.line_total),2) END,
+           coalesce(bool_and(line.unit_price IS NOT NULL),false),
            coalesce(jsonb_agg(jsonb_build_object(
-               'tooth_number',tooth_number,'work_type',work_type,'quantity',quantity,
-               'contract',contract,'unit_price',unit_price,'subtotal',line_total,
-               'matched',unit_price is not null,'price_source',price_source
-           ) order by tooth_number),'[]'::jsonb),
-           case when bool_and(price_source='admin_override') then 'admin_override'
-                else 'item_snapshots' end,
-           max(price_fixed_at)
-      into v_count,v_list,v_matched_all,v_lines,v_order_price_source,v_order_price_fixed_at
-    from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id;
+               'work_type',line.work_type,'billing_mode',line.billing_mode,
+               'billing_scope',line.billing_scope,'quantity',line.quantity,
+               'contract',line.contract,'unit_price',line.unit_price,
+               'subtotal',line.line_total,'matched',line.unit_price IS NOT NULL,
+               'price_source',line.price_source
+           ) ORDER BY line.work_type,line.billing_scope),'[]'::jsonb),
+           CASE WHEN bool_and(line.price_source='admin_override') THEN 'admin_override' ELSE 'price_lines' END,
+           max(line.price_fixed_at)
+    INTO v_list,v_matched_all,v_after_price_lines,v_order_price_source,v_order_price_fixed_at
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab_organization_id AND line.work_order_id=p_work_order_id;
 
-    v_final := case when v_list is null then null
-        else round(v_list*(1-(case when v_role='doctor' then 0 else v_order.discount end)/100),2) end;
+    v_final:=CASE WHEN v_list IS NULL THEN NULL
+        ELSE round(v_list*(1-(CASE WHEN v_role='doctor' THEN 0 ELSE v_order.discount END)/100),2) END;
 
-    update public.lab_work_orders
-    set contract=coalesce(v_first_contract,'General'),
-        discount=case when v_role='doctor' then 0 else discount end,
+    UPDATE public.lab_work_orders
+    SET contract=coalesce(v_first_contract,'General'),
+        discount=CASE WHEN v_role='doctor' THEN 0 ELSE discount END,
         snapshot_list_price=v_list,snapshot_final_price=v_final,
-        price_source=v_order_price_source,price_fixed_at=coalesce(v_order_price_fixed_at,now()),price_migrated=false,
+        price_source=v_order_price_source,
+        price_fixed_at=coalesce(v_order_price_fixed_at,now()),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
-    where lab_organization_id=p_lab_organization_id and id=p_work_order_id;
+    WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;
 
-    if (v_order.snapshot_list_price,v_order.snapshot_final_price,v_before_lines)
-       is distinct from (v_list,v_final,v_lines) then
-        insert into public.work_order_financial_audit (
+    IF (v_order.snapshot_list_price,v_order.snapshot_final_price,v_before_price_lines)
+       IS DISTINCT FROM (v_list,v_final,v_after_price_lines) THEN
+        INSERT INTO public.work_order_financial_audit (
             lab_organization_id,work_order_id,entity_type,entity_id,action,
             before_value,after_value,changed_by_user_id
-        ) values (
+        ) VALUES (
             p_lab_organization_id,p_work_order_id,'work_order_price',p_work_order_id::text,
             'item_change',
-            jsonb_build_object(
-                'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price,
-                'quantity',(select sum((item->>'quantity')::numeric) from jsonb_array_elements(v_before_lines) item),
-                'items',v_before_lines
-            ),
-            jsonb_build_object(
-                'list_price',v_list,'final_price',v_final,'quantity',v_count,'items',v_lines
-            ),auth.uid()
+            jsonb_build_object('list_price',v_order.snapshot_list_price,
+                'final_price',v_order.snapshot_final_price,'price_lines',v_before_price_lines),
+            jsonb_build_object('list_price',v_list,'final_price',v_final,
+                'price_lines',v_after_price_lines),auth.uid()
         );
-    end if;
+    END IF;
 
-    select coalesce(jsonb_agg(jsonb_build_object('work_type',work_type,'quantity',quantity) order by work_type),'[]'::jsonb)
-    into v_scope_after from (select work_type,sum(quantity) quantity from public.lab_work_order_items
-    where lab_organization_id=p_lab_organization_id and work_order_id=p_work_order_id group by work_type) scope;
-    if v_scope_before is distinct from v_scope_after then
-        perform public.adjust_work_order_scope_costs(p_lab_organization_id,p_work_order_id,v_scope_before,v_scope_after);
-        insert into public.work_order_financial_audit(lab_organization_id,work_order_id,entity_type,entity_id,action,before_value,after_value,changed_by_user_id)
-        values(p_lab_organization_id,p_work_order_id,'work_order_scope',p_work_order_id::text,'scope_change',v_scope_before,v_scope_after,auth.uid());
-    end if;
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'work_type',scope.work_type,'billing_mode',scope.billing_mode,'quantity',scope.quantity
+    ) ORDER BY scope.work_type,scope.billing_mode),'[]'::jsonb)
+    INTO v_scope_after
+    FROM public.work_order_billing_scope(p_lab_organization_id,p_work_order_id) scope;
+    IF v_scope_before IS DISTINCT FROM v_scope_after THEN
+        PERFORM public.adjust_work_order_scope_costs(
+            p_lab_organization_id,p_work_order_id,v_scope_before,v_scope_after
+        );
+        INSERT INTO public.work_order_financial_audit(
+            lab_organization_id,work_order_id,entity_type,entity_id,action,
+            before_value,after_value,changed_by_user_id
+        ) VALUES (
+            p_lab_organization_id,p_work_order_id,'work_order_scope',p_work_order_id::text,
+            'scope_change',v_scope_before,v_scope_after,auth.uid()
+        );
+    END IF;
 
-    if v_role='technician' then
-        return (select to_jsonb(scope) from public.work_order_item_scope(p_lab_organization_id,p_work_order_id,false) scope);
-    end if;
-    return jsonb_build_object(
-        'lines',v_lines,'element_count',v_count,'list_price',v_list,
-        'discount',case when v_role='doctor' then 0 else v_order.discount end,
+    IF v_role='technician' THEN
+        RETURN (SELECT to_jsonb(scope)
+            FROM public.work_order_item_scope(p_lab_organization_id,p_work_order_id,false) scope);
+    END IF;
+    RETURN jsonb_build_object(
+        'lines',v_after_price_lines,'element_count',v_element_count,
+        'billing_unit_count',coalesce((SELECT sum((line->>'quantity')::numeric)
+            FROM jsonb_array_elements(v_after_price_lines) line),0),
+        'list_price',v_list,
+        'discount',CASE WHEN v_role='doctor' THEN 0 ELSE v_order.discount END,
         'final_price',v_final,'matched_all',v_matched_all,
         'partner_name',v_order.nume_partener
     );
-end;
+END;
 $$;
 
-revoke all on function public.replace_work_order_items(uuid,bigint,jsonb,text) from public,anon,authenticated;
+REVOKE ALL ON FUNCTION public.replace_work_order_items(uuid,bigint,jsonb,text) FROM public,anon,authenticated;
 -- END db/schema/20_functions/replace_work_order_items.sql
 
 -- BEGIN db/schema/20_functions/resolve_effective_work_order_contract.sql
@@ -7420,8 +7858,12 @@ $$;
 
 REVOKE ALL ON FUNCTION public.resolve_technician_unit_cost(uuid,text,text,text) FROM public,authenticated;
 
--- One row per selected work type. Quantity is the number of configured teeth
--- carrying that type; amount is the frozen technician cost for the stage.
+-- The return shape gains billing_mode, so replace the prior five-column
+-- function before recreating it.
+DROP FUNCTION IF EXISTS public.resolve_work_order_technician_costs(uuid,bigint,text,text);
+
+-- One row per saved work type and billing mode. Quantity comes from the same
+-- frozen billing scope used by partner prices.
 CREATE OR REPLACE FUNCTION public.resolve_work_order_technician_costs(
     p_lab uuid,
     p_work_order_id bigint,
@@ -7430,6 +7872,7 @@ CREATE OR REPLACE FUNCTION public.resolve_work_order_technician_costs(
 )
 RETURNS TABLE (
     work_type text,
+    billing_mode text,
     quantity numeric,
     unit_cost numeric,
     amount numeric,
@@ -7440,29 +7883,19 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    WITH normalized_scope AS (
-        SELECT i.work_type,i.quantity,
-               regexp_replace(lower(trim(i.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key
-        FROM public.lab_work_order_items i
-        WHERE i.lab_organization_id = p_lab
-          AND i.work_order_id = p_work_order_id
-    ), scope AS (
-        SELECT min(work_type) AS work_type,work_type_key,sum(quantity)::numeric AS quantity
-        FROM normalized_scope
-        GROUP BY work_type_key
-    )
     SELECT scope.work_type,
+           scope.billing_mode,
            scope.quantity,
            tc.cost AS unit_cost,
            CASE WHEN tc.cost IS NULL THEN NULL ELSE round(tc.cost * scope.quantity, 2) END AS amount,
            CASE WHEN tc.cost IS NULL THEN 'missing' ELSE 'catalog' END AS cost_source
-    FROM scope
+    FROM public.work_order_billing_scope(p_lab,p_work_order_id) scope
     LEFT JOIN LATERAL (
         SELECT public.resolve_technician_unit_cost(
             p_lab,p_technician_name,scope.work_type,p_stage
         ) AS cost
     ) tc ON true
-    ORDER BY scope.work_type
+    ORDER BY scope.work_type,scope.billing_mode
 $$;
 
 REVOKE ALL ON FUNCTION public.resolve_work_order_technician_costs(uuid,bigint,text,text) FROM public,authenticated;
@@ -7808,98 +8241,93 @@ CREATE OR REPLACE FUNCTION public.set_work_order_price_snapshot(
     p_reason text
 )
 RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=public
 AS $$
 DECLARE
     v_order public.lab_work_orders%rowtype;
     v_before jsonb;
     v_after jsonb;
-    v_before_items jsonb;
-    v_after_items jsonb;
+    v_before_price_lines jsonb;
+    v_after_price_lines jsonb;
+    v_unit_price numeric;
     v_list numeric;
     v_final numeric;
 BEGIN
-    IF lower(coalesce(public.current_org_role(p_lab), '')) <> 'admin' THEN
+    IF lower(coalesce(public.current_org_role(p_lab),'')) <> 'admin' THEN
         RAISE EXCEPTION 'Admin access required';
     END IF;
-    IF p_unit_price IS NULL OR p_unit_price < 0 THEN
+    IF p_unit_price IS NULL OR p_unit_price<0 THEN
         RAISE EXCEPTION 'Unit price must be zero or greater';
     END IF;
-    IF p_discount IS NULL OR p_discount < 0 OR p_discount > 100 THEN
+    IF p_discount IS NULL OR p_discount<0 OR p_discount>100 THEN
         RAISE EXCEPTION 'Discount must be between 0 and 100';
     END IF;
-    IF trim(coalesce(p_reason, '')) = '' THEN
+    IF trim(coalesce(p_reason,''))='' THEN
         RAISE EXCEPTION 'Price change reason is required';
     END IF;
+    v_unit_price:=round(p_unit_price,2);
 
-    SELECT * INTO v_order
-    FROM public.lab_work_orders
-    WHERE lab_organization_id = p_lab AND id = p_work_order_id
-    FOR UPDATE;
+    SELECT * INTO v_order FROM public.lab_work_orders
+    WHERE lab_organization_id=p_lab AND id=p_work_order_id FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
 
-    v_before := jsonb_build_object(
-        'list_price', v_order.snapshot_list_price,
-        'final_price', v_order.snapshot_final_price,
-        'discount', v_order.discount,
-        'source', v_order.price_source
-    );
     SELECT coalesce(jsonb_agg(jsonb_build_object(
-        'tooth_number',tooth_number,'work_type',work_type,'unit_price',unit_price,
-        'quantity',quantity,'line_total',line_total,'source',price_source
-    ) ORDER BY tooth_number),'[]'::jsonb)
-    INTO v_before_items
-    FROM public.lab_work_order_items
-    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
-    SELECT round(p_unit_price*sum(quantity),2) INTO v_list FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
-    IF v_list IS NULL THEN RAISE EXCEPTION 'Work Order requires items'; END IF;
-    v_final := round(v_list * (1 - p_discount / 100), 2);
+        'work_type',line.work_type,'billing_mode',line.billing_mode,
+        'billing_scope',line.billing_scope,'quantity',line.quantity,
+        'unit_price',line.unit_price,'subtotal',line.line_total,
+        'source',line.price_source
+    ) ORDER BY line.work_type,line.billing_scope),'[]'::jsonb)
+    INTO v_before_price_lines
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id;
 
-    UPDATE public.lab_work_order_items
-    SET unit_price=round(p_unit_price,2),
-        line_total=round(p_unit_price*quantity,2),
+    UPDATE public.lab_work_order_price_lines
+    SET unit_price=v_unit_price,
+        line_total=round(v_unit_price*quantity,2),
         price_source='admin_override',price_fixed_at=now(),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
     WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
 
+    SELECT round(sum(line.line_total),2) INTO v_list
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id;
+    IF v_list IS NULL THEN RAISE EXCEPTION 'Work Order requires price lines'; END IF;
+    v_final:=round(v_list*(1-p_discount/100),2);
+
     UPDATE public.lab_work_orders
-    SET snapshot_list_price = v_list,
-        snapshot_final_price = v_final,
-        discount = p_discount,
-        price_source = 'admin_override',
-        price_fixed_at = now(),
-        price_migrated = false,
-        updated_by_user_id = public.current_legacy_user_id(),
-        updated_at = now()
-    WHERE lab_organization_id = p_lab AND id = p_work_order_id;
+    SET snapshot_list_price=v_list,snapshot_final_price=v_final,
+        discount=p_discount,price_source='admin_override',price_fixed_at=now(),
+        price_migrated=false,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
+    WHERE lab_organization_id=p_lab AND id=p_work_order_id;
 
-    v_after := jsonb_build_object(
-        'unit_price', round(p_unit_price, 2),
-        'list_price', v_list,
-        'final_price', v_final,
-        'discount', p_discount,
-        'source', 'admin_override',
-        'reason', trim(p_reason)
-    );
     SELECT coalesce(jsonb_agg(jsonb_build_object(
-        'tooth_number',tooth_number,'work_type',work_type,'unit_price',unit_price,
-        'quantity',quantity,'line_total',line_total,'source',price_source
-    ) ORDER BY tooth_number),'[]'::jsonb)
-    INTO v_after_items
-    FROM public.lab_work_order_items
-    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
-    v_before:=v_before||jsonb_build_object('items',v_before_items);
-    v_after:=v_after||jsonb_build_object('items',v_after_items);
-    INSERT INTO public.work_order_financial_audit (
-        lab_organization_id, work_order_id, entity_type, entity_id, action,
-        before_value, after_value, changed_by_user_id
-    ) VALUES (
-        p_lab, p_work_order_id, 'work_order_price', p_work_order_id::text,
-        'override', v_before, v_after, auth.uid()
-    );
+        'work_type',line.work_type,'billing_mode',line.billing_mode,
+        'billing_scope',line.billing_scope,'quantity',line.quantity,
+        'unit_price',line.unit_price,'subtotal',line.line_total,
+        'source',line.price_source
+    ) ORDER BY line.work_type,line.billing_scope),'[]'::jsonb)
+    INTO v_after_price_lines
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id;
 
+    v_before:=jsonb_build_object(
+        'list_price',v_order.snapshot_list_price,'final_price',v_order.snapshot_final_price,
+        'discount',v_order.discount,'source',v_order.price_source,
+        'price_lines',v_before_price_lines
+    );
+    v_after:=jsonb_build_object(
+        'unit_price',v_unit_price,'list_price',v_list,'final_price',v_final,
+        'discount',p_discount,'source','admin_override','reason',trim(p_reason),
+        'price_lines',v_after_price_lines
+    );
+    INSERT INTO public.work_order_financial_audit(
+        lab_organization_id,work_order_id,entity_type,entity_id,action,
+        before_value,after_value,changed_by_user_id
+    ) VALUES (
+        p_lab,p_work_order_id,'work_order_price',p_work_order_id::text,
+        'override',v_before,v_after,auth.uid()
+    );
     RETURN v_after;
 END;
 $$;
@@ -7977,6 +8405,7 @@ DECLARE
     v_saved_amount numeric;
     v_saved_unit_cost numeric;
     v_saved_quantity numeric;
+    v_base_line_count integer := 0;
     v_has_financial_activity boolean := false;
 BEGIN
     IF public.effective_lab_role(p_lab) NOT IN ('admin', 'manager', 'technician') THEN
@@ -8004,21 +8433,24 @@ BEGIN
         WITH effective_saved AS (
             SELECT min(saved_scope.work_type) AS work_type,
                    saved_scope.work_type_key,
+                   saved_scope.billing_mode,
                    sum(saved_scope.quantity)::numeric AS quantity
             FROM (
                 SELECT saved.work_type,
                        regexp_replace(lower(trim(saved.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       saved.billing_mode,
                        saved.quantity
                 FROM public.lab_work_order_assignment_cost_lines saved
                 WHERE saved.assignment_id=v_current.id
                 UNION ALL
                 SELECT delta.work_type,
                        regexp_replace(lower(trim(delta.work_type)), '[[:space:]]+', ' ', 'g') AS work_type_key,
+                       delta.billing_mode,
                        delta.quantity_delta AS quantity
                 FROM public.lab_work_order_assignment_adjustments delta
                 WHERE delta.assignment_id=v_current.id
             ) saved_scope
-            GROUP BY work_type_key
+            GROUP BY work_type_key,billing_mode
             HAVING sum(saved_scope.quantity)<>0
         )
         SELECT EXISTS (SELECT 1 FROM public.lab_work_order_assignment_cost_lines base
@@ -8035,6 +8467,7 @@ BEGIN
                    ) expected
                    LEFT JOIN effective_saved saved
                      ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                    AND saved.billing_mode=expected.billing_mode
                    WHERE saved.work_type_key IS NULL
                       OR saved.quantity IS DISTINCT FROM expected.quantity
                )
@@ -8045,6 +8478,7 @@ BEGIN
                        p_lab,p_work_order_id,v_stage,v_name
                    ) expected
                      ON saved.work_type_key=regexp_replace(lower(trim(expected.work_type)), '[[:space:]]+', ' ', 'g')
+                    AND saved.billing_mode=expected.billing_mode
                    WHERE expected.work_type IS NULL
                )
                AND NOT EXISTS (
@@ -8086,15 +8520,18 @@ BEGIN
             RETURN v_current.id;
         END IF;
 
-        SELECT EXISTS (SELECT 1 FROM public.technician_payments p WHERE p.assignment_id=v_current.id)
-            OR EXISTS (SELECT 1 FROM public.lab_work_order_assignment_adjustments d WHERE d.assignment_id=v_current.id)
-          INTO v_has_financial_activity;
-        IF v_has_financial_activity THEN
-            RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired after financial activity for assignment %',v_current.id;
+        SELECT (SELECT count(*)::integer
+                FROM public.lab_work_order_assignment_cost_lines base
+                WHERE base.assignment_id=v_current.id),
+               EXISTS (SELECT 1 FROM public.technician_payments p WHERE p.assignment_id=v_current.id)
+               OR EXISTS (SELECT 1 FROM public.lab_work_order_assignment_adjustments d WHERE d.assignment_id=v_current.id)
+          INTO v_base_line_count,v_has_financial_activity;
+        IF v_base_line_count>0 OR v_has_financial_activity THEN
+            RAISE EXCEPTION 'Incomplete technician cost snapshot cannot be repaired for assignment %',v_current.id;
         END IF;
 
-        -- repair_incomplete: legacy/current assignments without a usable per-type
-        -- snapshot are rebuilt in place. Valid frozen snapshots never reach here.
+        -- Only an assignment with no saved base cost can be populated from the
+        -- current catalog. Any partial snapshot is frozen history and fails above.
         v_repair_incomplete := true;
         v_assignment_id := v_current.id;
     END IF;
@@ -8136,8 +8573,6 @@ BEGIN
     END IF;
 
     IF v_repair_incomplete THEN
-        DELETE FROM public.lab_work_order_assignment_cost_lines
-        WHERE assignment_id=v_assignment_id;
         UPDATE public.lab_work_order_stage_assignments
         SET technician_user_id=coalesce(technician_user_id,v_user_id)
         WHERE id=v_assignment_id;
@@ -8147,14 +8582,17 @@ BEGIN
             technician_name, quantity, cost_source, created_by_user_id
         ) VALUES (
             p_lab, p_work_order_id, v_stage, v_user_id, v_name,
-            (SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id), 'catalog', auth.uid()
+            (SELECT sum(quantity) FROM public.resolve_work_order_technician_costs(
+                p_lab,p_work_order_id,v_stage,v_name
+            )), 'catalog', auth.uid()
         ) RETURNING id INTO v_assignment_id;
     END IF;
 
     INSERT INTO public.lab_work_order_assignment_cost_lines (
-        assignment_id, work_type, quantity, unit_cost, amount, cost_source
+        assignment_id, work_type, billing_mode, quantity, unit_cost, amount, cost_source
     )
-    SELECT v_assignment_id,costs.work_type,costs.quantity,costs.unit_cost,costs.amount,costs.cost_source
+    SELECT v_assignment_id,costs.work_type,costs.billing_mode,costs.quantity,
+           costs.unit_cost,costs.amount,costs.cost_source
     FROM public.resolve_work_order_technician_costs(
         p_lab,p_work_order_id,v_stage,v_name
     ) costs;
@@ -8751,16 +9189,31 @@ BEGIN
 END; $$;
 -- END db/schema/20_functions/upsert_patient_case.sql
 
+-- BEGIN db/schema/20_functions/work_order_billing_scope.sql
+CREATE OR REPLACE FUNCTION public.work_order_billing_scope(p_lab uuid,p_order bigint)
+RETURNS TABLE(work_type text,billing_mode text,quantity numeric)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path=public
+AS $$
+    SELECT min(trim(line.work_type)),line.billing_mode,sum(line.quantity)::numeric
+    FROM public.lab_work_order_price_lines line
+    WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_order
+    GROUP BY lower(trim(line.work_type)),line.billing_mode
+    ORDER BY min(trim(line.work_type)),line.billing_mode
+$$;
+
+REVOKE ALL ON FUNCTION public.work_order_billing_scope(uuid,bigint) FROM public,anon,authenticated;
+-- END db/schema/20_functions/work_order_billing_scope.sql
+
 -- BEGIN db/schema/20_functions/work_order_item_scope.sql
--- Internal read model; callers decide whether sale-price snapshots may be exposed.
+-- Internal clinical read model. The compatibility flag is retained for callers,
+-- but commercial values are available only through get_work_order_price_lines().
 CREATE OR REPLACE FUNCTION public.work_order_item_scope(p_lab uuid,p_order bigint,p_include_prices boolean DEFAULT false)
 RETURNS TABLE(items jsonb,work_types text[],work_type_summary text,element_count numeric)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
     SELECT coalesce((SELECT jsonb_agg(
         jsonb_build_object('tooth_number',i.tooth_number,'work_type',i.work_type,'quantity',i.quantity)
-        || CASE WHEN p_include_prices THEN jsonb_build_object('contract',i.contract,'unit_price',i.unit_price,
-            'line_total',i.line_total,'price_source',i.price_source,'price_fixed_at',i.price_fixed_at,'price_migrated',i.price_migrated)
-            ELSE '{}'::jsonb END ORDER BY i.tooth_number)
+        ORDER BY i.tooth_number)
         FROM public.lab_work_order_items i WHERE i.lab_organization_id=p_lab AND i.work_order_id=p_order),'[]'::jsonb),
         coalesce((SELECT array_agg(t.work_type ORDER BY t.first_tooth,t.work_type) FROM
             (SELECT work_type,min(tooth_number) first_tooth FROM public.lab_work_order_items
@@ -8768,7 +9221,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
         (SELECT string_agg(t.work_type,' / ' ORDER BY t.first_tooth,t.work_type) FROM
             (SELECT work_type,min(tooth_number) first_tooth FROM public.lab_work_order_items
              WHERE lab_organization_id=p_lab AND work_order_id=p_order GROUP BY work_type) t),
-        coalesce((SELECT sum(quantity) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_order),0)
+        coalesce((SELECT count(*) FROM public.lab_work_order_items WHERE lab_organization_id=p_lab AND work_order_id=p_order),0)
 $$;
 REVOKE ALL ON FUNCTION public.work_order_item_scope(uuid,bigint,boolean) FROM public,authenticated;
 -- END db/schema/20_functions/work_order_item_scope.sql
@@ -9159,6 +9612,22 @@ USING (public.is_lab_management(lab_organization_id)
         AND public.can_access_work_order(lab_organization_id,work_order_id)));
 -- END db/schema/30_policies/24_work_order_items.sql
 
+-- BEGIN db/schema/30_policies/24a_work_order_price_lines.sql
+DROP POLICY IF EXISTS "lab_work_order_price_lines_read" ON public.lab_work_order_price_lines;
+CREATE POLICY "lab_work_order_price_lines_read" ON public.lab_work_order_price_lines
+FOR SELECT TO authenticated
+USING (public.is_lab_management(lab_organization_id)
+    OR (public.is_connected_doctor_for_lab(lab_organization_id)
+        AND public.can_access_work_order(lab_organization_id,work_order_id)));
+
+DROP POLICY IF EXISTS "lab_work_order_price_lines_commercial_read" ON public.lab_work_order_price_lines;
+CREATE POLICY "lab_work_order_price_lines_commercial_read" ON public.lab_work_order_price_lines
+AS RESTRICTIVE FOR SELECT TO authenticated
+USING (public.is_lab_management(lab_organization_id)
+    OR (public.is_connected_doctor_for_lab(lab_organization_id)
+        AND public.can_access_work_order(lab_organization_id,work_order_id)));
+-- END db/schema/30_policies/24a_work_order_price_lines.sql
+
 -- BEGIN db/schema/30_policies/25_work_order_stage_assignments.sql
 DROP POLICY IF EXISTS "stage_assignments_management_read" ON public.lab_work_order_stage_assignments;
 CREATE POLICY "stage_assignments_management_read" ON public.lab_work_order_stage_assignments
@@ -9363,6 +9832,7 @@ revoke insert, update, delete on table public.work_order_financial_audit from au
 revoke insert, update, delete on table public.ai_operation_previews from authenticated;
 revoke insert, update, delete on table public.ai_operation_requests from authenticated;
 revoke insert, update, delete on table public.lab_work_order_items from anon, authenticated;
+revoke insert, update, delete on table public.lab_work_order_price_lines from anon, authenticated;
 revoke insert, update, delete on table public.lab_work_orders from anon, authenticated;
 revoke insert (
     lab_organization_id,work_order_id,tooth_number,work_type,contract,unit_price,
@@ -9414,6 +9884,8 @@ REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM anon,authenticat
 -- Authenticated commercial reads are bounded by restrictive role/row policies.
 REVOKE SELECT ON public.lab_work_order_items FROM public, anon;
 GRANT SELECT ON public.lab_work_order_items TO authenticated;
+REVOKE SELECT ON public.lab_work_order_price_lines FROM public, anon;
+GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 -- END db/schema/40_grants.sql
 
 

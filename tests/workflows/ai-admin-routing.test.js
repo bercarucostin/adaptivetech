@@ -64,3 +64,17 @@ test('prompt requires an explicit settlement choice for reassignment',()=>{
   assert.match(code,/Settlement_Model/);
   assert.match(code,/keep_outstanding or pay_outstanding/);
 });
+
+test('Admin work-type prompt documents the billing-mode enum and default',()=>{
+  const code=node('AI - Build Final Prompt').parameters.jsCode;
+  assert.match(code,/fields \{work_type,active\?,billing_mode\?\}/);
+  assert.match(code,/per_tooth\|per_arch\|per_piece/);
+  assert.match(code,/defaults? to per_tooth/i);
+});
+
+test('final parser normalizes valid work-type modes and rejects unknown values',()=>{
+  const code=node('AI - Parse Final').parameters.jsCode;
+  assert.match(code,/billing_mode/);
+  assert.match(code,/new Set\(\["per_tooth","per_arch","per_piece"\]\)/);
+  assert.match(code,/Modul de facturare trebuie să fie per_tooth, per_arch sau per_piece/);
+});

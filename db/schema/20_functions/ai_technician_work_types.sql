@@ -19,7 +19,8 @@ begin
         select coalesce(
             jsonb_agg(
                 jsonb_build_object(
-                    'Tip_Lucrare',wt.tip_lucrare
+                    'Tip_Lucrare',wt.tip_lucrare,
+                    'billing_mode',wt.billing_mode
                 )
                 order by wt.tip_lucrare
             ),

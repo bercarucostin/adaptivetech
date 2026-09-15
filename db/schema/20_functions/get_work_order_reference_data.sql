@@ -23,7 +23,8 @@ begin
             jsonb_build_object(
                 'id', wt.id,
                 'tip_lucrare', wt.tip_lucrare,
-                'active', wt.active
+                'active', wt.active,
+                'billing_mode', wt.billing_mode
             )
             order by wt.tip_lucrare, wt.id
         ),

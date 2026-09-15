@@ -953,7 +953,7 @@ body.dashboard-production-maximized .dashboard-production-toolbar{position:stick
   background:#100f0d;
 }
 .admin-cost-add{grid-template-columns:1fr 1.2fr 1fr .8fr auto}
-.admin-worktype-add{grid-template-columns:1.5fr auto auto}
+.admin-worktype-add{grid-template-columns:1.5fr 1fr auto auto}
 .admin-add-grid label{
   display:grid;
   gap:5px;

@@ -64,7 +64,7 @@ begin
             jsonb_build_object('dataset','work_orders','description','All operational Work Orders with persisted unit_price, list_price and final_price. These historic amounts do not change with the current tariff catalog.'),
             jsonb_build_object('dataset','financial_history','description','Persisted technician assignments, agreed costs, payments, reversals and migration provenance per Work Order.'),
             jsonb_build_object('dataset','patient_cases','description','All dental prescription / patient case rows.'),
-            jsonb_build_object('dataset','work_types','description','Configured work types.'),
+            jsonb_build_object('dataset','work_types','description','Configured work types with billing mode metadata.'),
             jsonb_build_object('dataset','contract_prices','description','Authoritative legacy Contract + work-type client price list. Use with work_orders for management financial summaries; do not substitute relationship_prices.'),
             jsonb_build_object('dataset','technician_costs','description','Technician cost configuration for all technicians.'),
             jsonb_build_object('dataset','calendar_events','description','Laboratory calendar events.'),
@@ -104,7 +104,7 @@ begin
             ),
             jsonb_build_object(
                 'dataset','work_types',
-                'description','Active work type names only. No client price, contract or partner commercial information.'
+                'description','Active work type names and billing modes only. No client price, contract or partner commercial information.'
             ),
             jsonb_build_object(
                 'dataset','materials_inventory',

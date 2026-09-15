@@ -168,21 +168,27 @@ test('not-applicable stages retain historical frozen technician costs',()=>{
   assert.equal(mapped.totalTechCost,41);
 });
 
-test('saved prices render per-tooth snapshots and frozen aggregate totals',()=>{
+test('saved prices render billing units, frozen aggregate totals, and a separate clinical count',()=>{
   const box={innerHTML:''},list={value:null},final={value:null};
   const hint={textContent:'',classList:{add(){},remove(){}}};
-  const renderer=Function('$','num','money','escapeHtml','isManagement','listPrice','finalPrice','priceHint','setFormContractValue',
-    `return (${namedFunction('renderToothPriceBreakdown')})`)(()=>box,Number,v=>String(v),String,()=>true,list,final,hint,()=>{});
-  renderer({saved:true,lines:[{tooth_number:11,work_type:'Crown',quantity:1,unit_price:100,line_total:100,contract:'Frozen',matched:true},
-    {tooth_number:21,work_type:'Bridge',quantity:1,unit_price:250,line_total:250,contract:'Frozen',matched:true}],
-    list_price:350,final_price:315,discount:10,element_count:2,matched_all:true});
-  for(const value of ['11','21','Crown','Bridge','100','250','350','315'])assert.ok(box.innerHTML.includes(value),`Missing ${value}`);
+  const labels={per_tooth:'Per dinte',per_arch:'Per arcadă',per_piece:'Per piesă'};
+  const normalizeMode=value=>String(value||'per_tooth');
+  const renderer=Function('$','num','money','escapeHtml','isManagement','listPrice','finalPrice','priceHint','setFormContractValue','normalizeBillingMode','billingModeLabel','billingScopeLabel',
+    `return (${namedFunction('renderToothPriceBreakdown')})`)(()=>box,Number,v=>String(v),String,()=>true,list,final,hint,()=>{},normalizeMode,value=>labels[normalizeMode(value)],scope=>({'arch:upper':'Arcada superioară','arch:lower':'Arcada inferioară',piece:'Piesă'}[scope]||`Dinte ${String(scope).slice(6)}`));
+  renderer({saved:true,lines:[
+    {work_type:'Crown',billing_mode:'per_arch',billing_scope:'arch:upper',quantity:1,unit_price:100,subtotal:100,contract:'Frozen',matched:true},
+    {work_type:'Bridge',billing_mode:'per_piece',billing_scope:'piece',quantity:1,unit_price:250,subtotal:250,contract:'Frozen',matched:true}
+  ],list_price:350,final_price:315,discount:10,element_count:5,billing_unit_count:2,matched_all:true});
+  for(const value of ['Crown','Bridge','Per arcadă','Per piesă','Arcada superioară','Piesă','Tarif','100','250','350','315'])assert.ok(box.innerHTML.includes(value),`Missing ${value}`);
+  assert.match(hint.textContent,/5 dinți selectați/);
+  assert.match(hint.textContent,/2 unități facturabile/);
   assert.equal(final.value,315);
-  renderer({saved:true,lines:[{tooth_number:11,work_type:'Crown',unit_price:100,line_total:100,matched:true}],list_price:100,final_price:85,discount:0});
+  renderer({saved:true,lines:[{work_type:'Crown',billing_mode:'per_tooth',billing_scope:'tooth:11',quantity:1,unit_price:100,subtotal:100,matched:true}],list_price:100,final_price:85,discount:0,element_count:1,billing_unit_count:1});
+  assert.match(box.innerHTML,/Per dinte/);
   assert.ok(box.innerHTML.includes('Total înainte de discount'),'Saved list total must be visible even without a discount');
   const recalc=source.slice(source.indexOf('recalcFormPrice=function(){'),source.indexOf('fetchPatientCase=async function'));
-  assert.match(recalc,/renderToothPriceBreakdown\(\{[\s\S]*saved\.items/);
-  assert.doesNotMatch(recalc.slice(0,recalc.indexOf('const items=')),/box\.innerHTML=""/);
+  assert.match(recalc,/loadSavedWorkOrderPriceLines/);
+  assert.doesNotMatch(recalc,/saved\.items/);
 });
 
 function managementPaymentPayload({id=42,loaded=['Paid','Paid','Paid'],selected=loaded,items=[{tooth_number:11,work_type:'Crown'}]}={}){
