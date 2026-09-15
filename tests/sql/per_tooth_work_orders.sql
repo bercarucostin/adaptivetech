@@ -79,7 +79,7 @@ begin
     perform set_config('request.jwt.claim.sub',v_tech::text,true);
     insert into public.lab_contract_work_prices(lab_organization_id,id,contract,tip_lucrare,pret) values(v_lab,'test-forbidden-contract','Forbidden','Crown',1);
     perform public.replace_work_order_items(v_lab,v_id,v_changed,'Forbidden');
-    if (select unit_price from public.lab_work_order_items where lab_organization_id=v_lab and work_order_id=v_id and tooth_number=12)<>999 then raise exception 'Technician influenced the commercial contract'; end if;
+    if (select unit_price from public.lab_work_order_price_lines where lab_organization_id=v_lab and work_order_id=v_id and billing_scope='tooth:12')<>100 then raise exception 'Technician influenced the frozen commercial contract'; end if;
     if public.assignment_agreed_amount(v_assignment)<>40 then raise exception 'Signed adjustment must use frozen type costs'; end if;
     if (select agreed_amount from public.lab_work_order_stage_assignments where id=v_assignment)<>70 then raise exception 'Original assignment was rewritten'; end if;
     if (select sum(amount) from public.technician_payments where assignment_id=v_assignment)<>70 then raise exception 'Settled payment was rewritten'; end if;

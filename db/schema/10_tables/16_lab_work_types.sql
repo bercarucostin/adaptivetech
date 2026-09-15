@@ -11,9 +11,13 @@ CREATE TABLE IF NOT EXISTS "public"."lab_work_types" (
     "id" bigint NOT NULL,
     "tip_lucrare" text NOT NULL,
     "active" boolean NOT NULL DEFAULT true,
+    "billing_mode" text NOT NULL DEFAULT 'per_tooth',
     "created_at" timestamptz NOT NULL DEFAULT now(),
     "updated_at" timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE "public"."lab_work_types"
+    ADD COLUMN IF NOT EXISTS billing_mode text NOT NULL DEFAULT 'per_tooth';
 
 ALTER TABLE "public"."lab_work_types" ENABLE ROW LEVEL SECURITY;
 
@@ -21,6 +25,19 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lab_work_types_lab_organization_id_fkey' AND conrelid = 'public.lab_work_types'::regclass) THEN
         ALTER TABLE "public"."lab_work_types" ADD CONSTRAINT "lab_work_types_lab_organization_id_fkey" FOREIGN KEY (lab_organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'lab_work_types_billing_mode_check'
+          AND conrelid = 'public.lab_work_types'::regclass
+    ) THEN
+        ALTER TABLE public.lab_work_types
+            ADD CONSTRAINT lab_work_types_billing_mode_check
+            CHECK (billing_mode IN ('per_tooth','per_arch','per_piece'));
     END IF;
 END $$;
 

@@ -11,18 +11,40 @@ DECLARE
     v_before_repair_audits integer;
     v_after_repair_audits integer;
     v_prices integer := 0;
+    v_price_lines integer := 0;
     v_assignments integer := 0;
     v_repaired integer := 0;
     v_missing jsonb := '[]'::jsonb;
     v_unresolved jsonb := '[]'::jsonb;
 BEGIN
     IF lower(coalesce(public.current_org_role(p_lab),''))<>'admin' THEN RAISE EXCEPTION 'Admin access required'; END IF;
+
+    INSERT INTO public.lab_work_order_price_lines (
+        lab_organization_id,work_order_id,work_type,billing_mode,billing_scope,
+        contract,unit_price,quantity,line_total,price_source,price_fixed_at,
+        price_migrated,created_by_user_id,updated_by_user_id,created_at,updated_at
+    )
+    SELECT i.lab_organization_id,i.work_order_id,i.work_type,'per_tooth',
+           'tooth:' || i.tooth_number::text,i.contract,i.unit_price,i.quantity,
+           i.line_total,coalesce(i.price_source,'migration_items'),
+           coalesce(i.price_fixed_at,i.updated_at,i.created_at,now()),true,
+           i.created_by_user_id,i.updated_by_user_id,i.created_at,i.updated_at
+    FROM public.lab_work_order_items i
+    WHERE i.lab_organization_id=p_lab
+      AND (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
+           OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
+    ON CONFLICT DO NOTHING;
+    GET DIAGNOSTICS v_price_lines=ROW_COUNT;
+
     UPDATE public.lab_work_orders wo SET
         snapshot_list_price=totals.list_price,
         snapshot_final_price=round(totals.list_price*(1-wo.discount/100),2),
-        price_source='migration_items',price_fixed_at=now(),price_migrated=true
-    FROM (SELECT work_order_id,CASE WHEN bool_and(line_total IS NOT NULL) THEN sum(line_total) END list_price
-        FROM public.lab_work_order_items WHERE lab_organization_id=p_lab GROUP BY work_order_id) totals
+        price_source='migration_items',price_fixed_at=totals.fixed_at,price_migrated=true
+    FROM (SELECT work_order_id,
+                 CASE WHEN bool_and(line_total IS NOT NULL) THEN sum(line_total) END list_price,
+                 coalesce(max(price_fixed_at),now()) fixed_at
+        FROM public.lab_work_order_price_lines
+        WHERE lab_organization_id=p_lab GROUP BY work_order_id) totals
     WHERE wo.lab_organization_id=p_lab AND wo.id=totals.work_order_id AND wo.price_fixed_at IS NULL
       AND wo.snapshot_list_price IS NULL AND wo.snapshot_final_price IS NULL;
     GET DIAGNOSTICS v_prices=ROW_COUNT;
@@ -90,7 +112,7 @@ BEGIN
     END LOOP;
 
     RETURN jsonb_build_object(
-        'prices',v_prices,'assignments',v_assignments,
+        'prices',v_prices,'price_lines',v_price_lines,'assignments',v_assignments,
         'repaired_assignments',v_repaired,'missing_costs',v_missing,
         'unresolved_assignments',v_unresolved,
         'migration_balances',0

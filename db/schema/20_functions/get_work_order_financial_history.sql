@@ -33,7 +33,18 @@ BEGIN
         'Sale_Price',case when v_role in ('admin','manager') then jsonb_build_object(
             'List_Price',wo.snapshot_list_price,
             'Final_Price',wo.snapshot_final_price,'Discount',wo.discount,
-            'Source',wo.price_source,'Fixed_At',wo.price_fixed_at,'Migrated',wo.price_migrated
+            'Source',wo.price_source,'Fixed_At',wo.price_fixed_at,'Migrated',wo.price_migrated,
+            'Price_Lines',coalesce((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'Work_Type',line.work_type,'Billing_Mode',line.billing_mode,
+                    'Billing_Scope',line.billing_scope,'Contract',line.contract,
+                    'Unit_Price',line.unit_price,'Quantity',line.quantity,
+                    'Line_Total',line.line_total,'Source',line.price_source,
+                    'Fixed_At',line.price_fixed_at,'Migrated',line.price_migrated
+                ) ORDER BY line.work_type,line.billing_scope)
+                FROM public.lab_work_order_price_lines line
+                WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id
+            ),'[]'::jsonb)
         ) else null end,
         'Assignments',coalesce((
             SELECT jsonb_agg(jsonb_build_object(

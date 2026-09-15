@@ -31,12 +31,16 @@ class ReviewRegressions(unittest.TestCase):
         self.assertIn('public.technician_payments',sql)
         self.assertIn('cost_rule.paid_amount>=cost_rule.agreed_amount',sql)
         self.assertNotIn('s.payment_status',sql)
-    def test_price_audit_item_shapes_match(self):
+    def test_price_audit_line_shapes_match(self):
         sql=read('20_functions/replace_work_order_items.sql')
-        before=sql[sql.index('select coalesce(jsonb_agg'):sql.index('into v_before_lines')]
-        after=sql[sql.index('select sum(quantity)'):sql.index('into v_count,v_list')]
+        before_start=sql.index('SELECT coalesce(jsonb_agg(jsonb_build_object(')
+        before_end=sql.index('INTO v_before_price_lines')
+        after_start=sql.index('coalesce(jsonb_agg(jsonb_build_object(',before_end)
+        after_end=sql.index('INTO v_list,v_matched_all,v_after_price_lines')
+        before=sql[before_start:before_end]
+        after=sql[after_start:after_end]
         keys=lambda text:set(re.findall(r"'([a-z_]+)'\s*,",text))
-        self.assertEqual(keys(before),keys(after)-{'admin_override'})
+        self.assertEqual(keys(before),keys(after))
     def test_technician_ai_can_update_through_atomic_writer(self):
         sql=read('20_functions/ai_mutate_work_order_role_safe.sql')
         self.assertIn("v_action='update'",sql)

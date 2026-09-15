@@ -28,6 +28,9 @@ begin
         select 1 from public.work_order_financial_audit a
         where a.lab_organization_id=p_lab_organization_id and a.work_order_id=p_work_order_id
     ) or exists (
+        select 1 from public.lab_work_order_price_lines line
+        where line.lab_organization_id=p_lab_organization_id and line.work_order_id=p_work_order_id
+    ) or exists (
         select 1 from public.lab_work_order_items i
         where i.lab_organization_id=p_lab_organization_id and i.work_order_id=p_work_order_id
     ) or exists (

@@ -29,6 +29,11 @@ select lab_organization_id, work_order_id, tooth_number, work_type, contract,
        unit_price, quantity, line_total, price_source, price_fixed_at, price_migrated
 from public.lab_work_order_items limit 0;
 
+select lab_organization_id, work_order_id, work_type, billing_mode, billing_scope,
+       contract, unit_price, quantity, line_total, price_source, price_fixed_at,
+       price_migrated, created_by_user_id, updated_by_user_id, created_at, updated_at
+from public.lab_work_order_price_lines limit 0;
+
 select id, lab_organization_id, work_order_id, stage_key, technician_user_id,
        technician_name, unit_cost, quantity, agreed_amount, cost_source,
        fixed_at, started_at, ended_at, migrated
@@ -64,7 +69,7 @@ begin
         raise exception 'Authenticated Admin cannot invoke the guarded financial backfill';
     end if;
     select pg_get_functiondef('public.delete_management_work_order(uuid,bigint)'::regprocedure) into v_definition;
-    if v_definition not ilike '%price_fixed_at is not null%' or v_definition not ilike '%lab_work_order_items%' then
+    if v_definition not ilike '%price_fixed_at is not null%' or v_definition not ilike '%lab_work_order_price_lines%' then
         raise exception 'Deleting a priced Work Order must preserve its financial snapshots';
     end if;
     if has_table_privilege('authenticated','public.lab_work_orders','INSERT,UPDATE,DELETE')
@@ -76,6 +81,11 @@ begin
        or has_any_column_privilege('authenticated','public.lab_work_order_items','INSERT')
        or has_any_column_privilege('authenticated','public.lab_work_order_items','UPDATE') then
         raise exception 'Authenticated callers can rewrite per-tooth snapshots';
+    end if;
+    if has_table_privilege('authenticated','public.lab_work_order_price_lines','INSERT,UPDATE,DELETE')
+       or has_any_column_privilege('authenticated','public.lab_work_order_price_lines','INSERT')
+       or has_any_column_privilege('authenticated','public.lab_work_order_price_lines','UPDATE') then
+        raise exception 'Authenticated callers can rewrite frozen price lines';
     end if;
     if to_regprocedure('public.update_management_work_order_v188(uuid,bigint,date,text,text,text,text,numeric,timestamp with time zone,text,text,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean,text,text,text,jsonb,text,jsonb)') is null then
         raise exception 'Management V188 update RPC is missing';

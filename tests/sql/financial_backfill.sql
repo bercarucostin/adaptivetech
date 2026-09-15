@@ -13,8 +13,13 @@ begin
     if v_definition ilike '%resolve_work_order_price_snapshot%' or v_definition ilike '%insert into public.technician_payments%' then
         raise exception 'Backfill cannot infer historical money from current catalogs or rewrite payments';
     end if;
-    if v_definition not ilike '%lab_work_order_items%' then
-        raise exception 'Saved per-tooth prices must take precedence';
+    if v_definition not ilike '%lab_work_order_items%'
+       or v_definition not ilike '%lab_work_order_price_lines%'
+       or v_definition not ilike '%on conflict do nothing%' then
+        raise exception 'Saved per-tooth prices must idempotently populate frozen price lines';
+    end if;
+    if v_definition ilike '%lab_contract_work_prices%' then
+        raise exception 'Historical price-line backfill cannot consult current catalogs';
     end if;
 end $$;
 

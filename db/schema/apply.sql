@@ -45,6 +45,7 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/22_role_permissions.sql
 \i db/schema/10_tables/23_work_order_files.sql
 \i db/schema/10_tables/24_work_order_items.sql
+\i db/schema/10_tables/24a_work_order_price_lines.sql
 \i db/schema/10_tables/25_work_order_stage_assignments.sql
 \i db/schema/10_tables/26_technician_payments.sql
 \i db/schema/10_tables/27_work_order_financial_audit.sql
@@ -102,6 +103,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/current_technician_name.sql
 \i db/schema/20_functions/delete_doctor_work_order.sql
 \i db/schema/20_functions/delete_management_work_order.sql
+\i db/schema/20_functions/derive_billing_units.sql
 \i db/schema/20_functions/doctor_matches_partner.sql
 \i db/schema/20_functions/effective_lab_role.sql
 \i db/schema/20_functions/enforce_calendar_event_edit_rules.sql
@@ -119,6 +121,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/get_my_work_orders_v188.sql
 \i db/schema/20_functions/get_patient_case.sql
 \i db/schema/20_functions/get_work_order_financial_history.sql
+\i db/schema/20_functions/get_work_order_price_lines.sql
 \i db/schema/20_functions/get_work_order_reference_data.sql
 \i db/schema/20_functions/has_org_role.sql
 \i db/schema/20_functions/has_role_permission.sql
@@ -154,6 +157,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/update_material_quantity.sql
 \i db/schema/20_functions/update_my_stage_status.sql
 \i db/schema/20_functions/upsert_patient_case.sql
+\i db/schema/20_functions/work_order_billing_scope.sql
 \i db/schema/20_functions/work_order_item_scope.sql
 
 \echo == 30 policies, triggers, function-dependent constraints ==
@@ -181,6 +185,7 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/22_role_permissions.sql
 \i db/schema/30_policies/23_work_order_files.sql
 \i db/schema/30_policies/24_work_order_items.sql
+\i db/schema/30_policies/24a_work_order_price_lines.sql
 \i db/schema/30_policies/25_work_order_stage_assignments.sql
 \i db/schema/30_policies/26_technician_payments.sql
 \i db/schema/30_policies/27_work_order_financial_audit.sql

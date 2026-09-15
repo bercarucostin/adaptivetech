@@ -109,6 +109,7 @@ revoke insert, update, delete on table public.work_order_financial_audit from au
 revoke insert, update, delete on table public.ai_operation_previews from authenticated;
 revoke insert, update, delete on table public.ai_operation_requests from authenticated;
 revoke insert, update, delete on table public.lab_work_order_items from anon, authenticated;
+revoke insert, update, delete on table public.lab_work_order_price_lines from anon, authenticated;
 revoke insert, update, delete on table public.lab_work_orders from anon, authenticated;
 revoke insert (
     lab_organization_id,work_order_id,tooth_number,work_type,contract,unit_price,
@@ -160,3 +161,5 @@ REVOKE ALL ON public.lab_work_order_assignment_adjustments FROM anon,authenticat
 -- Authenticated commercial reads are bounded by restrictive role/row policies.
 REVOKE SELECT ON public.lab_work_order_items FROM public, anon;
 GRANT SELECT ON public.lab_work_order_items TO authenticated;
+REVOKE SELECT ON public.lab_work_order_price_lines FROM public, anon;
+GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
