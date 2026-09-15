@@ -23,6 +23,10 @@ begin
     if v_definition ilike '%update public.lab_work_order_items%' then
         raise exception 'Clinical items cannot be the price authority';
     end if;
+    if v_definition ilike '%p_unit_price*sum%'
+       or v_definition not ilike '%sum(line.line_total)%' then
+        raise exception 'Override aggregate must equal persisted rounded price lines';
+    end if;
 end $$;
 
 select 1 / case when exists (

@@ -59,7 +59,7 @@ begin
         end if;
     end if;
 
-    if v_role not in ('admin','manager') then
+    if coalesce(v_role,'') not in ('admin','manager') then
         raise exception 'AI dataset access denied';
     end if;
 
@@ -197,6 +197,18 @@ begin
                 wo.*,
                 wo.contract as matched_price_contract,
                 scope.items,scope.work_types,scope.work_type_summary,scope.element_count,
+                coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'work_type',line.work_type,'billing_mode',line.billing_mode,
+                        'billing_scope',line.billing_scope,'quantity',line.quantity,
+                        'contract',line.contract,'unit_price',line.unit_price,
+                        'subtotal',line.line_total,'price_source',line.price_source,
+                        'price_fixed_at',line.price_fixed_at,'price_migrated',line.price_migrated
+                    ) order by line.work_type,line.billing_scope)
+                    from public.lab_work_order_price_lines line
+                    where line.lab_organization_id=wo.lab_organization_id
+                      and line.work_order_id=wo.id
+                ),'[]'::jsonb) as price_lines,
                 wo.snapshot_list_price as list_price,
                 wo.snapshot_final_price as final_price,
                 (wo.snapshot_list_price is not null) as price_matched,

@@ -15,6 +15,7 @@ DECLARE
     v_after jsonb;
     v_before_price_lines jsonb;
     v_after_price_lines jsonb;
+    v_unit_price numeric;
     v_list numeric;
     v_final numeric;
 BEGIN
@@ -30,6 +31,7 @@ BEGIN
     IF trim(coalesce(p_reason,''))='' THEN
         RAISE EXCEPTION 'Price change reason is required';
     END IF;
+    v_unit_price:=round(p_unit_price,2);
 
     SELECT * INTO v_order FROM public.lab_work_orders
     WHERE lab_organization_id=p_lab AND id=p_work_order_id FOR UPDATE;
@@ -45,18 +47,18 @@ BEGIN
     FROM public.lab_work_order_price_lines line
     WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id;
 
-    SELECT round(p_unit_price*sum(line.quantity),2) INTO v_list
+    UPDATE public.lab_work_order_price_lines
+    SET unit_price=v_unit_price,
+        line_total=round(v_unit_price*quantity,2),
+        price_source='admin_override',price_fixed_at=now(),price_migrated=false,
+        updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
+    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
+
+    SELECT round(sum(line.line_total),2) INTO v_list
     FROM public.lab_work_order_price_lines line
     WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_work_order_id;
     IF v_list IS NULL THEN RAISE EXCEPTION 'Work Order requires price lines'; END IF;
     v_final:=round(v_list*(1-p_discount/100),2);
-
-    UPDATE public.lab_work_order_price_lines
-    SET unit_price=round(p_unit_price,2),
-        line_total=round(p_unit_price*quantity,2),
-        price_source='admin_override',price_fixed_at=now(),price_migrated=false,
-        updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
-    WHERE lab_organization_id=p_lab AND work_order_id=p_work_order_id;
 
     UPDATE public.lab_work_orders
     SET snapshot_list_price=v_list,snapshot_final_price=v_final,
@@ -80,7 +82,7 @@ BEGIN
         'price_lines',v_before_price_lines
     );
     v_after:=jsonb_build_object(
-        'unit_price',round(p_unit_price,2),'list_price',v_list,'final_price',v_final,
+        'unit_price',v_unit_price,'list_price',v_list,'final_price',v_final,
         'discount',p_discount,'source','admin_override','reason',trim(p_reason),
         'price_lines',v_after_price_lines
     );

@@ -145,7 +145,8 @@ BEGIN
         contract,unit_price,quantity,line_total,price_source,price_fixed_at,
         price_migrated,created_by_user_id,updated_by_user_id
     )
-    SELECT p_lab_organization_id,p_work_order_id,desired.work_type,
+    SELECT p_lab_organization_id,p_work_order_id,
+           coalesce(existing_unit.work_type,desired.work_type),
            desired.billing_mode,desired.billing_scope,
            CASE WHEN frozen.work_type IS NOT NULL THEN frozen.contract ELSE coalesce(price.contract,'General') END,
            CASE WHEN frozen.work_type IS NOT NULL THEN frozen.unit_price ELSE price.pret END,
@@ -157,6 +158,13 @@ BEGIN
            CASE WHEN frozen.work_type IS NOT NULL THEN frozen.price_migrated ELSE false END,
            public.current_legacy_user_id(),public.current_legacy_user_id()
     FROM desired
+    LEFT JOIN LATERAL (
+        SELECT line.work_type,line.billing_scope
+        FROM public.lab_work_order_price_lines line
+        WHERE line.lab_organization_id=p_lab_organization_id
+          AND line.work_order_id=p_work_order_id
+          AND lower(trim(line.work_type))=lower(trim(desired.work_type))
+    ) existing_unit ON existing_unit.billing_scope=desired.billing_scope
     LEFT JOIN LATERAL (
         SELECT line.* FROM public.lab_work_order_price_lines line
         WHERE line.lab_organization_id=p_lab_organization_id

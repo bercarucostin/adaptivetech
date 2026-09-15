@@ -20,7 +20,7 @@ DECLARE
     v_list numeric := 0;
     v_matched_all boolean := false;
 BEGIN
-    IF v_role NOT IN ('admin','manager','doctor') THEN
+    IF coalesce(v_role,'') NOT IN ('admin','manager','doctor') THEN
         RAISE EXCEPTION 'Price estimate access denied';
     END IF;
     IF jsonb_typeof(coalesce(p_items,'[]'::jsonb)) <> 'array' THEN

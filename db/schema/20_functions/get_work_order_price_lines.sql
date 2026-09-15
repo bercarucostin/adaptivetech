@@ -7,7 +7,7 @@ DECLARE
     v_role text := public.effective_lab_role(p_lab);
     v_result jsonb;
 BEGIN
-    IF v_role NOT IN ('admin','manager','doctor') THEN
+    IF coalesce(v_role,'') NOT IN ('admin','manager','doctor') THEN
         RAISE EXCEPTION 'Price line access denied';
     END IF;
     IF NOT EXISTS (

@@ -21,6 +21,10 @@ begin
     if v_definition ilike '%lab_contract_work_prices%' then
         raise exception 'Historical price-line backfill cannot consult current catalogs';
     end if;
+    if v_definition not ilike '%i.tooth_number / 10 between 1 and 4%'
+       or v_definition not ilike '%i.tooth_number % 10 between 1 and 8%' then
+        raise exception 'Legacy price backfill must skip invalid FDI rows before cutover';
+    end if;
 end $$;
 
 rollback;

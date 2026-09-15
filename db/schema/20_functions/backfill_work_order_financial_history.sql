@@ -33,6 +33,8 @@ BEGIN
     WHERE i.lab_organization_id=p_lab
       AND (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
            OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
+      AND i.tooth_number / 10 BETWEEN 1 AND 4
+      AND i.tooth_number % 10 BETWEEN 1 AND 8
     ON CONFLICT DO NOTHING;
     GET DIAGNOSTICS v_price_lines=ROW_COUNT;
 

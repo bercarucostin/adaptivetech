@@ -52,6 +52,8 @@ SELECT i.lab_organization_id,i.work_order_id,i.work_type,'per_tooth',
        coalesce(i.price_fixed_at,i.updated_at,i.created_at,now()),true,
        i.created_by_user_id,i.updated_by_user_id,i.created_at,i.updated_at
 FROM public.lab_work_order_items i
-WHERE i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
-   OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL
+WHERE (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
+   OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
+  AND i.tooth_number / 10 BETWEEN 1 AND 4
+  AND i.tooth_number % 10 BETWEEN 1 AND 8
 ON CONFLICT DO NOTHING;

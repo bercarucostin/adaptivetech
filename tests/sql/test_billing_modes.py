@@ -68,6 +68,7 @@ class BillingModeContracts(unittest.TestCase):
 
     def test_estimation_and_replacement_use_billing_units(self):
         estimate = read("db/schema/20_functions/estimate_work_order_items.sql")
+        self.assertIn("coalesce(v_role,'') NOT IN", estimate)
         self.assertIn("public.derive_billing_units", estimate)
         self.assertIn("billing_mode", estimate)
         self.assertIn("billing_scope", estimate)
@@ -79,6 +80,8 @@ class BillingModeContracts(unittest.TestCase):
         self.assertIn("public.work_order_billing_scope", replace)
         self.assertIn("before_price_lines", replace)
         self.assertIn("after_price_lines", replace)
+        self.assertIn("existing_unit.billing_scope=desired.billing_scope", replace)
+        self.assertIn("coalesce(existing_unit.work_type,desired.work_type)", replace)
 
         clinical = read("db/schema/20_functions/work_order_item_scope.sql")
         self.assertIn("count(*)", clinical.lower())
@@ -99,6 +102,7 @@ class BillingModeContracts(unittest.TestCase):
         self.assertIn("public.lab_work_order_price_lines", reader)
         self.assertRegex(reader, r"admin.*manager.*doctor")
         self.assertIn("Price line access denied", reader)
+        self.assertIn("coalesce(v_role,'') NOT IN", reader)
         self.assertIn("GRANT EXECUTE", reader)
         self.assertIn("SELECT count(*) FROM public.lab_work_order_items", reader)
 
@@ -118,6 +122,9 @@ class BillingModeContracts(unittest.TestCase):
         override = read("db/schema/20_functions/set_work_order_price_snapshot.sql")
         self.assertIn("UPDATE public.lab_work_order_price_lines", override)
         self.assertNotIn("UPDATE public.lab_work_order_items", override)
+        self.assertIn("v_unit_price:=round(p_unit_price,2)", override)
+        self.assertRegex(override, r"SELECT round\(sum\(line\.line_total\),2\) INTO v_list")
+        self.assertNotRegex(override, r"p_unit_price\s*\*\s*sum")
 
         history = read("db/schema/20_functions/get_work_order_financial_history.sql")
         self.assertIn("Price_Lines", history)
@@ -133,6 +140,25 @@ class BillingModeContracts(unittest.TestCase):
         for function_name in ("delete_management_work_order", "delete_doctor_work_order"):
             source = read(f"db/schema/20_functions/{function_name}.sql")
             self.assertIn("public.lab_work_order_price_lines", source)
+
+    def test_management_ai_reads_saved_price_lines(self):
+        source = read("db/schema/20_functions/ai_read_dataset.sql")
+        self.assertIn("coalesce(v_role,'') not in ('admin','manager')", source)
+        work_orders = source[source.index("elsif v_dataset = 'work_orders'"):source.index("elsif v_dataset = 'financial_history'")]
+        self.assertIn("price_lines", work_orders)
+        self.assertIn("public.lab_work_order_price_lines", work_orders)
+
+        technician = source[source.index("if v_role = 'technician'"):source.index("if coalesce(v_role,'') not in ('admin','manager')")]
+        self.assertNotIn("public.lab_work_order_price_lines", technician)
+
+    def test_legacy_price_migration_filters_invalid_fdi_before_cutover(self):
+        for relative_path in (
+            "db/schema/10_tables/24a_work_order_price_lines.sql",
+            "db/schema/20_functions/backfill_work_order_financial_history.sql",
+        ):
+            source = read(relative_path)
+            self.assertRegex(source, r"i\.tooth_number\s*/\s*10\s+BETWEEN\s+1\s+AND\s+4")
+            self.assertRegex(source, r"i\.tooth_number\s*%\s*10\s+BETWEEN\s+1\s+AND\s+8")
 
     def test_apply_includes_every_billing_mode_object(self):
         apply = read("db/schema/apply.sql")
