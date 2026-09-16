@@ -49,6 +49,7 @@ increments, so parallel requests cannot outrun it.
 | `demo_hybrid_search.sql` | Session-scoped RRF search. `p_session_id` is required and scopes **both** branches |
 | `demo_email_canonical.sql` | The quota identity: a generated `email_canonical` column on three tables, so `you+1@gmail.com` and `y.o.u@gmail.com` cannot buy a second quota |
 | `demo_lead_ip_retention.sql` | Drops `demo_leads.last_ip`. The session-scoped copy in `demo_sessions.ip` stays; a second one kept until unsubscribe did not |
+| `site_contact.sql` | `contact_messages`: one row per contact-form submission, no IP, `handled_at` as the inbox. RLS on, zero policies, like the rest |
 | `demo_verify.sql` | Nine checks proving retention, cross-session isolation and the similarity signal. Paste into Supabase's SQL editor and read the `verdict` column |
 
 Apply in that order — `demo_email_canonical.sql` after `demo_schema.sql`, since it
@@ -72,6 +73,7 @@ exact.
 | `demo-chat.json` | Retrieval and the grounded answer |
 | `demo-cleanup.json` | Hourly purge. The workflow that makes the privacy policy true |
 | `demo-unsubscribe.json` | The signed link at the bottom of every code email |
+| `site-contact.json` | The homepage contact form at `/api/demo/contact`: Turnstile, validation, one row in `contact_messages`, one email to the team. Not a demo route, but on the same prefix so Caddy, the cache bypass and the rate limit already cover it |
 | `error-handling-demo.json` | Set as the error workflow on all of the above |
 | `demo-verify-session-test.json` | Harness. Seeds its own session, so there is nothing to paste by hand |
 

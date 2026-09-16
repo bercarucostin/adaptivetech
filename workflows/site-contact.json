@@ -1,0 +1,422 @@
+{
+  "name": "site-contact",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo/contact",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "55bdb109-d079-4fbf-acdc-6e82313abf7a",
+      "name": "Webhook",
+      "webhookId": "95a4fc49-1335-41e3-9cfe-265794751cad"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.TURNSTILE_SECRET, response: $json.body.turnstile_token, remoteip: $json.headers['cf-connecting-ip'] || '' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "76322b72-2fb6-4386-828e-f2948605f7fb",
+      "name": "Verify Turnstile",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cd89d642-f720-47b7-a73a-ce28be22da41",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "cf14bd90-68ad-4d4c-abf8-4b3e3e5afae4",
+      "name": "Turnstile OK?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Shape the submission and refuse anything that is not a message from a\n// person. Every limit here matches a CHECK constraint on contact_messages,\n// so a row that passes this cannot fail the insert on length.\nconst body = ($('Webhook').first().json || {}).body || {};\nconst str = (v, max) => (typeof v === 'string' ? v : '').replace(/\\r\\n?/g, '\\n').trim().slice(0, max);\n\nconst out = {\n  name: str(body.name, 120),\n  email: str(body.email, 254),\n  company: str(body.company, 160) || null,\n  message: str(body.message, 4000),\n  lang: body.lang === 'en' ? 'en' : 'ro',\n  page: str(body.page, 300) || null,\n};\n\nfunction reject(code) { return [{ json: { ok: false, code: code } }]; }\n\n// The honeypot is a field no person sees; anything in it is a script.\nif (str(body.website, 10)) return reject('INVALID');\nif (!out.name) return reject('NAME');\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(out.email)) return reject('EMAIL');\nif (out.message.length < 10) return reject('MESSAGE');\n\nreturn [{ json: Object.assign({ ok: true }, out) }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "bd69669e-74a2-4fe6-b371-e4962918548d",
+      "name": "Validate Input",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4bc328d4-174d-4803-b712-f443a5ea5c45",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        -96
+      ],
+      "id": "4e5e4459-d854-4bb6-98e0-6c07a9818c88",
+      "name": "Input OK?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO contact_messages (name, email, company, message, lang, page)\nVALUES ($1::text, $2::citext, $3::text, $4::text, $5::text, $6::text)\nRETURNING id",
+        "options": {
+          "queryReplacement": "={{ [$('Validate Input').first().json.name, $('Validate Input').first().json.email, $('Validate Input').first().json.company, $('Validate Input').first().json.message, $('Validate Input').first().json.lang, $('Validate Input').first().json.page] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        -192
+      ],
+      "id": "f4e3ef35-8e21-4fd3-9240-932b9a2e39c9",
+      "name": "Store Message",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "no-reply@adaptivetech.ro",
+        "toEmail": "contact@adaptivetech.ro",
+        "subject": "={{ '[Site] Mesaj de la ' + $('Validate Input').first().json.name + ($('Validate Input').first().json.company ? ' · ' + $('Validate Input').first().json.company : '') }}",
+        "emailFormat": "text",
+        "text": "={{ 'Nume: ' + $('Validate Input').first().json.name + '\\nEmail: ' + $('Validate Input').first().json.email + '\\nCompanie: ' + ($('Validate Input').first().json.company || '—') + '\\nLimba: ' + $('Validate Input').first().json.lang + '\\nPagina: ' + ($('Validate Input').first().json.page || '—') + '\\nID: ' + $('Store Message').first().json.id + '\\n\\n' + $('Validate Input').first().json.message }}",
+        "options": {
+          "replyTo": "={{ $('Validate Input').first().json.email }}"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1248,
+        -192
+      ],
+      "id": "0ffaeab0-30a2-4f87-beb9-ac2d7f8e2be5",
+      "name": "Notify Team",
+      "credentials": {
+        "smtp": {
+          "id": "BI2J0KgYoH5uWjln",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1456,
+        -192
+      ],
+      "id": "905bca70-52e4-4a1f-aa5f-78645e932d17",
+      "name": "Respond OK"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1456,
+        -48
+      ],
+      "id": "bf8bbc97-2bc0-419a-a46b-c6a7e088eae4",
+      "name": "Respond OK (unnotified)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, code: $json.code || 'INVALID' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1040,
+        48
+      ],
+      "id": "ab787790-7169-4076-8cfe-9aec04d68b67",
+      "name": "Respond Invalid"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, code: 'TURNSTILE' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        96
+      ],
+      "id": "f0606c63-9139-4e69-af0c-6e0c50d26854",
+      "name": "Respond Challenge Failed"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, code: 'UNAVAILABLE' }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1456,
+        240
+      ],
+      "id": "a67d6a79-cb0f-4e99-9fb6-894b031979b9",
+      "name": "Respond Unavailable"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The caller already has its response; this only fails the execution\n// so that settings.errorWorkflow is invoked. See raiseForAlertNode.\nconst item = $input.first().json || {};\n// The error item's shape varies by node type, so read it defensively\n// and fall back to naming the stage. The alert email links to this\n// execution, where the untruncated error already is.\nconst raw = item.error;\nconst detail = (raw && raw.message) || (typeof raw === 'string' ? raw : '') ||\n  'see the failed node in this execution';\nthrow new Error(\"site-contact could not store or forward a message\" + ': ' + detail);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        144
+      ],
+      "id": "b03ba8fe-a2cd-4553-a041-e9635a28f24b",
+      "name": "Raise For Alert"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Turnstile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Turnstile": {
+      "main": [
+        [
+          {
+            "node": "Turnstile OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turnstile OK?": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Challenge Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input OK?": {
+      "main": [
+        [
+          {
+            "node": "Store Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Message": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (unnotified)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Unavailable": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK (unnotified)": {
+      "main": [
+        [
+          {
+            "node": "Raise For Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "errorWorkflow": "GaXoZRqkR8ghodgY"
+  },
+  "tags": []
+}

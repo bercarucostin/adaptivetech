@@ -91,6 +91,30 @@
       "alwaysOutputData": true,
       "retryOnFail": true,
       "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM contact_messages WHERE created_at < now() - interval '24 months'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        0
+      ],
+      "id": "7b81acae-fd67-4a6b-8eb4-c434f4266473",
+      "name": "Purge Old Contact Messages",
+      "credentials": {
+        "postgres": {
+          "id": "1Ig8IigY7ugDJKhy",
+          "name": "Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "executeOnce": true
     }
   ],
   "pinData": {},
@@ -122,6 +146,17 @@
         [
           {
             "node": "Purge Old Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purge Old Messages": {
+      "main": [
+        [
+          {
+            "node": "Purge Old Contact Messages",
             "type": "main",
             "index": 0
           }

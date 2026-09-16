@@ -136,7 +136,6 @@ form label[for] {
 }
 .demo__check a:hover { border-bottom-color: var(--gold-ink); }
 
-.cf-turnstile { margin-bottom: 1.4rem; }
 
 /* Primary action — same gold/navy swap as the main site's .btn-gold,
    so the button that opened this page and the one that moves you through it
@@ -166,17 +165,6 @@ button[type="submit"]:disabled {
 #upload-form input[type="file"] { flex: 1 1 220px; margin-bottom: 0; padding: 0.6rem 0.8rem; }
 
 /* ─────────── ERROR / STATUS ─────────── */
-.demo__error {
-  margin-top: 1rem;
-  padding: 0.65rem 0.9rem;
-  background: var(--error-soft);
-  border-left: 3px solid var(--error);
-  border-radius: 8px;
-  color: var(--error);
-  font-size: 0.88rem;
-  line-height: 1.5;
-}
-
 .demo__progress {
   display: flex;
   align-items: center;

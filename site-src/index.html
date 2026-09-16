@@ -659,6 +659,7 @@
   .form-row textarea { resize: vertical; min-height: 108px; }
   .form-card .btn { width: 100%; justify-content: center; margin-top: 0.4rem; }
   .form-note { font-size: 0.78rem; color: var(--ink-mute); text-align: center; margin-top: 0.9rem; }
+  .form-note a { color: var(--gold-ink); text-decoration: underline; }
 
   @media (max-width: 900px) { .contact-grid { grid-template-columns: 1fr; } }
 
@@ -1462,13 +1463,26 @@
         </div>
         <div class="form-row">
           <label for="f-msg"><span data-ro>Ce ați dori să automatizați?</span><span data-en>What would you like to automate?</span></label>
-          <textarea id="f-msg" name="message"></textarea>
+          <textarea id="f-msg" name="message" required minlength="10"></textarea>
         </div>
-        <button type="submit" class="btn btn-navy">
-          <span data-ro>Trimiteți mesajul</span><span data-en>Send message</span>
+        <!-- Honeypot: no person sees it; a script that fills every field
+             fills it, and the route rejects the submission. -->
+        <div class="form-row" hidden aria-hidden="true"><label for="f-website">Website</label><input type="text" id="f-website" name="website" tabindex="-1" autocomplete="off" /></div>
+        <!-- The same challenge as the demo, loaded when this section is near
+             the viewport (see the script) rather than on every visit. -->
+        <div class="cf-turnstile" data-sitekey="0x4AAAAAAEp-iXrCUPjFsXhu" data-callback="onContactTurnstile"></div>
+        <button type="submit" class="btn btn-navy" id="contactSubmit">
+          <span class="when-idle"><span data-ro>Trimiteți mesajul</span><span data-en>Send message</span></span>
+          <span class="when-busy" hidden><span data-ro>Se trimite…</span><span data-en>Sending…</span></span>
           <span class="arr">→</span>
         </button>
-        <p class="form-note"><span data-ro>Răspundem în mai puțin de 24 de ore lucrătoare.</span><span data-en>We reply within 24 business hours.</span></p>
+        <p class="form-error" id="contact-error" role="alert" hidden></p>
+        <p class="form-note"><span data-ro>Răspundem în mai puțin de 24 de ore lucrătoare. Mesajul se păstrează 24 de luni — vezi <a href="{{PRIVACY}}">politica de confidențialitate</a>.</span><span data-en>We reply within 24 business hours. Your message is kept for 24 months — see the <a href="{{PRIVACY}}">privacy policy</a>.</span></p>
+        <!-- Shown in place of the fields once the message is stored. -->
+        <div id="contact-done" hidden>
+          <div class="eyebrow"><span data-ro>Mesaj trimis</span><span data-en>Message sent</span></div>
+          <p class="sec-sub"><span data-ro>Mulțumim. Vă răspundem la adresa lăsată în mai puțin de 24 de ore lucrătoare.</span><span data-en>Thank you. We will reply to the address you left within 24 business hours.</span></p>
+        </div>
       </form>
     </div>
   </div>
@@ -1720,19 +1734,96 @@
     }, { threshold: 0.3 }).observe(flow2);
   })();
 
-  /* ── Contact form → mailto ───────────────────────── */
-  document.getElementById('contactForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const subject = encodeURIComponent('[Site Adaptive] ' + f.name.value + (f.company.value ? ' · ' + f.company.value : ''));
-    const body = encodeURIComponent(
-      'Nume / Name: ' + f.name.value +
-      '\nEmail: ' + f.email.value +
-      '\nCompanie / Company: ' + f.company.value +
-      '\n\n' + f.message.value
-    );
-    window.location.href = 'mailto:contact@adaptivetech.ro?subject=' + subject + '&body=' + body;
-  });
+  /* ── Contact form → /api/demo/contact ─────────────
+     It used to open the visitor's mail client with a prefilled message,
+     which looked like a placeholder and lost every message from anyone
+     without one configured. The route stores the message and emails the
+     team; the page reports what happened. */
+  (function () {
+    const LANG = document.documentElement.lang === 'en' ? 'en' : 'ro';
+    const form = document.getElementById('contactForm');
+    const btn = document.getElementById('contactSubmit');
+    const errorEl = document.getElementById('contact-error');
+    const done = document.getElementById('contact-done');
+    const MAIL = '<a href="mailto:contact@adaptivetech.ro">contact@adaptivetech.ro</a>';
+    const T = {
+      ro: {
+        NAME: 'Spuneți-ne cum vă numim.',
+        EMAIL: 'Adresa de email nu pare completă.',
+        MESSAGE: 'Scrieți câteva cuvinte despre ce ați dori să automatizați (cel puțin 10 caractere).',
+        TURNSTILE: 'Verificarea de securitate nu a reușit. Reîncărcați pagina și încercați din nou.',
+        WAIT: 'O clipă — verificarea de securitate încă se încarcă.',
+        FAIL: 'Mesajul nu a putut fi trimis acum. Încercați din nou sau scrieți-ne direct la ' + MAIL + '.',
+      },
+      en: {
+        NAME: 'Tell us what to call you.',
+        EMAIL: 'That email address does not look complete.',
+        MESSAGE: 'Write a few words about what you would like to automate (at least 10 characters).',
+        TURNSTILE: 'The security check did not pass. Reload the page and try again.',
+        WAIT: 'One moment — the security check is still loading.',
+        FAIL: 'Your message could not be sent right now. Try again, or write to us directly at ' + MAIL + '.',
+      },
+    }[LANG];
+
+    let token = '';
+    window.onContactTurnstile = (t) => { token = t; };
+
+    // Load the challenge script only once the section is near the viewport;
+    // most visits never reach the form and need not pay for it.
+    new IntersectionObserver((entries, obs) => {
+      if (!entries[0].isIntersecting) return;
+      obs.disconnect();
+      const sc = document.createElement('script');
+      sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+      sc.async = true; sc.defer = true;
+      document.head.appendChild(sc);
+    }, { rootMargin: '600px 0px' }).observe(form);
+
+    const showError = (html) => { errorEl.innerHTML = html; errorEl.hidden = false; };
+    const busy = (on) => {
+      btn.disabled = on;
+      btn.querySelector('.when-idle').hidden = on;
+      btn.querySelector('.when-busy').hidden = !on;
+    };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.hidden = true;
+      if (!form.reportValidity()) return;
+      if (!token) { showError(T.WAIT); return; }
+
+      const body = {
+        name: form.name.value, email: form.email.value, company: form.company.value,
+        message: form.message.value, website: form.website.value,
+        lang: LANG, page: location.pathname + location.hash, turnstile_token: token,
+      };
+      busy(true);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const res = await fetch('/api/demo/contact', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body), signal: controller.signal,
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) { /* no body */ }
+        if (res.ok && data.ok) {
+          [...form.children].forEach((el) => { el.hidden = el !== done; });
+          done.hidden = false;
+          return;
+        }
+        showError(T[data.code] || T.FAIL);
+      } catch (_) {
+        showError(T.FAIL);
+      } finally {
+        clearTimeout(timer);
+        busy(false);
+        // A token is single-use; get a fresh one for a retry.
+        token = '';
+        try { window.turnstile && window.turnstile.reset(); } catch (_) { /* widget not ready */ }
+      }
+    });
+  })();
 
   /* The floating pill is a plain link to /demo/ -- no handler. */
 </script>

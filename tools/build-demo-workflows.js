@@ -2071,6 +2071,10 @@ const purgeMessagesSql =
   "DELETE FROM demo_messages WHERE created_at < now() - interval '30 days'\n" +
   'RETURNING id';
 
+// The privacy policy says contact-form messages are kept for 24 months.
+const purgeContactSql =
+  "DELETE FROM contact_messages WHERE created_at < now() - interval '24 months'";
+
 const cleanup = workflow(
   'demo-cleanup',
   [
@@ -2103,11 +2107,22 @@ const cleanup = workflow(
         retryOnFail: true,
         executeOnce: true,
       }),
+
+    node('Purge Old Contact Messages', 'n8n-nodes-base.postgres', 2.6,
+      { operation: 'executeQuery', query: purgeContactSql, options: {} },
+      [832, 0],
+      {
+        credentials: { postgres: PG_CRED },
+        alwaysOutputData: true,
+        retryOnFail: true,
+        executeOnce: true,
+      }),
   ],
   {
     'Every Hour': { main: [[{ node: 'Purge Expired Sessions', type: 'main', index: 0 }]] },
     'Purge Expired Sessions': { main: [[{ node: 'Purge Old Codes', type: 'main', index: 0 }]] },
     'Purge Old Codes': { main: [[{ node: 'Purge Old Messages', type: 'main', index: 0 }]] },
+    'Purge Old Messages': { main: [[{ node: 'Purge Old Contact Messages', type: 'main', index: 0 }]] },
   }
 );
 
@@ -2532,6 +2547,176 @@ const errorHandlingDemo = workflow(
 );
 
 // ---------------------------------------------------------------------------
+// site-contact
+//
+// The homepage contact form. It used to open the visitor's mail client with
+// a prefilled message, which looked like a placeholder and lost every
+// message from anyone without a configured mail client. Now: Turnstile,
+// validation, one row in contact_messages, one email to the team, and a
+// status the page can show.
+//
+// Routed at /api/demo/contact. The name is off by one word, but that prefix
+// is what Caddy proxies to n8n, what the edge cache bypasses and what the
+// rate limit covers; a second prefix would mean touching three rules at the
+// edge for one endpoint.
+//
+// Unlike request-code, rejections here are NOT indistinguishable from
+// success: a person who mistyped their address needs to know, and there is
+// no enumeration to protect against -- nothing is looked up.
+// ---------------------------------------------------------------------------
+const validateContactJs = `// Shape the submission and refuse anything that is not a message from a
+// person. Every limit here matches a CHECK constraint on contact_messages,
+// so a row that passes this cannot fail the insert on length.
+const body = ($('Webhook').first().json || {}).body || {};
+const str = (v, max) => (typeof v === 'string' ? v : '').replace(/\\r\\n?/g, '\\n').trim().slice(0, max);
+
+const out = {
+  name: str(body.name, 120),
+  email: str(body.email, 254),
+  company: str(body.company, 160) || null,
+  message: str(body.message, 4000),
+  lang: body.lang === 'en' ? 'en' : 'ro',
+  page: str(body.page, 300) || null,
+};
+
+function reject(code) { return [{ json: { ok: false, code: code } }]; }
+
+// The honeypot is a field no person sees; anything in it is a script.
+if (str(body.website, 10)) return reject('INVALID');
+if (!out.name) return reject('NAME');
+if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(out.email)) return reject('EMAIL');
+if (out.message.length < 10) return reject('MESSAGE');
+
+return [{ json: Object.assign({ ok: true }, out) }];
+`;
+
+const storeContactSql =
+  'INSERT INTO contact_messages (name, email, company, message, lang, page)\n' +
+  'VALUES ($1::text, $2::citext, $3::text, $4::text, $5::text, $6::text)\n' +
+  'RETURNING id';
+
+const siteContact = workflow(
+  'site-contact',
+  [
+    webhookNode('Webhook', 'POST', 'contact', [0, 0]),
+
+    node('Verify Turnstile', 'n8n-nodes-base.httpRequest', 4.2,
+      {
+        method: 'POST',
+        url: 'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        sendBody: true,
+        specifyBody: 'json',
+        jsonBody:
+          "={{ JSON.stringify({ secret: $env.TURNSTILE_SECRET, response: $json.body.turnstile_token, remoteip: $json.headers['cf-connecting-ip'] || '' }) }}",
+        options: { timeout: 10000 },
+      },
+      [208, 0],
+      { onError: 'continueErrorOutput' }),
+
+    ifBooleanNode('Turnstile OK?', '={{ $json.success }}', [416, 0]),
+
+    node('Validate Input', 'n8n-nodes-base.code', 2,
+      { jsCode: validateContactJs }, [624, -96],
+      { onError: 'continueErrorOutput' }),
+
+    ifBooleanNode('Input OK?', '={{ $json.ok }}', [832, -96]),
+
+    node('Store Message', 'n8n-nodes-base.postgres', 2.6,
+      {
+        operation: 'executeQuery',
+        query: storeContactSql,
+        options: {
+          queryReplacement:
+            "={{ [$('Validate Input').first().json.name, $('Validate Input').first().json.email, $('Validate Input').first().json.company, $('Validate Input').first().json.message, $('Validate Input').first().json.lang, $('Validate Input').first().json.page] }}",
+        },
+      },
+      [1040, -192],
+      { credentials: { postgres: PG_CRED }, alwaysOutputData: true, onError: 'continueErrorOutput' }),
+
+    // Reply-To is the visitor, so answering is one click in the mailbox.
+    node('Notify Team', 'n8n-nodes-base.emailSend', 2.1,
+      {
+        fromEmail: 'no-reply@adaptivetech.ro',
+        toEmail: 'contact@adaptivetech.ro',
+        subject: "={{ '[Site] Mesaj de la ' + $('Validate Input').first().json.name + ($('Validate Input').first().json.company ? ' · ' + $('Validate Input').first().json.company : '') }}",
+        emailFormat: 'text',
+        text:
+          "={{ 'Nume: ' + $('Validate Input').first().json.name + " +
+          "'\\nEmail: ' + $('Validate Input').first().json.email + " +
+          "'\\nCompanie: ' + ($('Validate Input').first().json.company || '—') + " +
+          "'\\nLimba: ' + $('Validate Input').first().json.lang + " +
+          "'\\nPagina: ' + ($('Validate Input').first().json.page || '—') + " +
+          "'\\nID: ' + $('Store Message').first().json.id + " +
+          "'\\n\\n' + $('Validate Input').first().json.message }}",
+        options: { replyTo: "={{ $('Validate Input').first().json.email }}" },
+      },
+      [1248, -192],
+      { credentials: { smtp: SMTP_CRED }, onError: 'continueErrorOutput' }),
+
+    respondNode('Respond OK',
+      '={{ JSON.stringify({ ok: true }) }}', 200, [1456, -192]),
+
+    // The row is stored; only the notification failed. The visitor is told
+    // the truth -- their message arrived -- and the team is paged to read it
+    // in the table until mail is back.
+    respondNode('Respond OK (unnotified)',
+      '={{ JSON.stringify({ ok: true }) }}', 200, [1456, -48]),
+
+    respondNode('Respond Invalid',
+      "={{ JSON.stringify({ ok: false, code: $json.code || 'INVALID' }) }}", 400, [1040, 48]),
+
+    respondNode('Respond Challenge Failed',
+      "={{ JSON.stringify({ ok: false, code: 'TURNSTILE' }) }}", 400, [624, 96]),
+
+    respondNode('Respond Unavailable',
+      "={{ JSON.stringify({ ok: false, code: 'UNAVAILABLE' }) }}", 500, [1456, 240]),
+
+    raiseForAlertNode('site-contact could not store or forward a message', [1664, 144]),
+  ],
+  {
+    Webhook: { main: [[{ node: 'Verify Turnstile', type: 'main', index: 0 }]] },
+    'Verify Turnstile': {
+      main: [
+        [{ node: 'Turnstile OK?', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Turnstile OK?': {
+      main: [
+        [{ node: 'Validate Input', type: 'main', index: 0 }],
+        [{ node: 'Respond Challenge Failed', type: 'main', index: 0 }],
+      ],
+    },
+    'Validate Input': {
+      main: [
+        [{ node: 'Input OK?', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Input OK?': {
+      main: [
+        [{ node: 'Store Message', type: 'main', index: 0 }],
+        [{ node: 'Respond Invalid', type: 'main', index: 0 }],
+      ],
+    },
+    'Store Message': {
+      main: [
+        [{ node: 'Notify Team', type: 'main', index: 0 }],
+        [{ node: 'Respond Unavailable', type: 'main', index: 0 }],
+      ],
+    },
+    'Notify Team': {
+      main: [
+        [{ node: 'Respond OK', type: 'main', index: 0 }],
+        [{ node: 'Respond OK (unnotified)', type: 'main', index: 0 }],
+      ],
+    },
+    'Respond Unavailable': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
+    'Respond OK (unnotified)': { main: [[{ node: 'Raise For Alert', type: 'main', index: 0 }]] },
+  }
+);
+
+// ---------------------------------------------------------------------------
 
 const built = [
   ['demo-verify-session.json', verifySession],
@@ -2545,6 +2730,7 @@ const built = [
   ['demo-unsubscribe.json', unsubscribe],
   ['demo-unsubscribe-confirm.json', unsubscribeConfirm],
   ['error-handling-demo.json', errorHandlingDemo],
+  ['site-contact.json', siteContact],
 ];
 
 for (const [file, wf] of built) {

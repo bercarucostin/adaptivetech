@@ -486,3 +486,20 @@ section { padding: clamp(4.5rem, 9vw, 7.5rem) 0; position: relative; }
 .dark-band .metric-num small { color: var(--gold); }
 .dark-band .metric-label { color: var(--on-navy-soft); }
 .dark-band .metric-note { color: var(--steel-ink); }
+
+/* ─────────── FORM FEEDBACK ───────────
+   Shared by the demo's four forms and the contact form: one error style,
+   one place for the Turnstile widget. Was .demo__error in demo.css; the
+   contact form needed the same thing and copying it is how styles drift. */
+.form-error {
+  margin-top: 1rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--error-soft);
+  border-left: 3px solid var(--error);
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.cf-turnstile { margin-bottom: 1.4rem; }
+

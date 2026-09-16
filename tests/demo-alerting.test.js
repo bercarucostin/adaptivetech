@@ -24,7 +24,9 @@ const ALERT = 'Raise For Alert';
 
 const demoWorkflows = () =>
   fs.readdirSync(DIR)
-    .filter((f) => f.startsWith('demo-'))
+    // site-contact is a webhook route on the same infrastructure, held to
+    // the same rules; it only lacks the prefix.
+    .filter((f) => f.startsWith('demo-') || f.startsWith('site-'))
     .map((f) => ({ file: f, wf: JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')) }));
 
 const nodeByName = (wf, name) => wf.nodes.find((n) => n.name === name);
@@ -58,6 +60,7 @@ test('the routes that can fail on infrastructure all raise', () => {
     'demo-upload.json',
     'demo-chat.json',
     'demo-unsubscribe-confirm.json',
+    'site-contact.json',
   ];
   for (const name of MUST_ALERT) {
     const wf = JSON.parse(fs.readFileSync(path.join(DIR, name), 'utf8'));
@@ -103,6 +106,9 @@ test('no business rejection reaches the alert', () => {
     // The GET only offers; it has no alert path and nothing to suppress.
     'demo-unsubscribe.json': ['Respond Confirm', 'Respond Invalid'],
     'demo-unsubscribe-confirm.json': ['Respond Done', 'Respond Invalid'],
+    // A failed challenge or a bad address is the form working; only a
+    // store or notify failure alerts, and both of those answer first.
+    'site-contact.json': ['Respond OK', 'Respond Invalid', 'Respond Challenge Failed'],
   };
   for (const [file, names] of Object.entries(QUIET)) {
     const wf = JSON.parse(fs.readFileSync(path.join(DIR, file), 'utf8'));
@@ -131,6 +137,7 @@ test('nothing that can throw on a webhook route is left unhandled', () => {
     'demo-request-code.json': [ALERT],
     'demo-verify-code.json': [ALERT],
     'demo-unsubscribe-confirm.json': [ALERT],
+    'site-contact.json': [ALERT],
   };
   for (const { file, wf } of demoWorkflows()) {
     const exempt = RESPONDED[file] || [ALERT];

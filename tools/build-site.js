@@ -223,12 +223,12 @@ const PAGES = [
     },
     text: {
       ro: {
-        '<textarea id="f-msg" name="message"></textarea>':
-          '<textarea id="f-msg" name="message" placeholder="Pe scurt: ce proces vă consumă cel mai mult timp?"></textarea>',
+        '<textarea id="f-msg" name="message" required minlength="10"></textarea>':
+          '<textarea id="f-msg" name="message" required minlength="10" placeholder="Pe scurt: ce proces vă consumă cel mai mult timp?"></textarea>',
       },
       en: Object.assign({
-        '<textarea id="f-msg" name="message"></textarea>':
-          '<textarea id="f-msg" name="message" placeholder="In short: which process eats up most of your time?"></textarea>',
+        '<textarea id="f-msg" name="message" required minlength="10"></textarea>':
+          '<textarea id="f-msg" name="message" required minlength="10" placeholder="In short: which process eats up most of your time?"></textarea>',
       }, EN_INDEX),
     },
   },
