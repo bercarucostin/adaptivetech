@@ -90,7 +90,8 @@ begin
     insert into public.lab_work_types(lab_organization_id,id,tip_lucrare,billing_mode)
     values(v_lab,1,'Crown','per_tooth');
     insert into public.lab_contract_work_prices(lab_organization_id,id,contract,tip_lucrare,pret)
-    values(v_lab,'billing-crown','General','Crown',10);
+    values(v_lab,'billing-crown','General','Crown',10),
+          (v_lab,'billing-crown-partner','Partner','Crown',25);
     insert into public.lab_work_orders(lab_organization_id,id,status,nume_pacient,nume_partener,discount)
     values(v_lab,1,'Not Started','Billing patient','Partner',0);
     insert into public.lab_work_order_items(
@@ -119,6 +120,27 @@ begin
     if not v_denied then raise exception 'Unrelated technician estimated target-lab prices'; end if;
 
     perform set_config('request.jwt.claim.sub',v_admin::text,true);
+    v_result:=public.estimate_work_order_items(v_lab,'','Partner',
+        '[{"tooth_number":11,"work_type":"Crown"}]'::jsonb,0);
+    if (v_result->>'list_price')::numeric<>10
+       or v_result->'lines'->0->>'contract'<>'General' then
+        raise exception 'Blank partner estimate must use General: %',v_result;
+    end if;
+
+    v_result:=public.estimate_work_order_items(v_lab,'Partner','General',
+        '[{"tooth_number":11,"work_type":"Crown"}]'::jsonb,0);
+    if (v_result->>'list_price')::numeric<>25
+       or v_result->'lines'->0->>'contract'<>'Partner' then
+        raise exception 'Known partner estimate must refresh to its contract: %',v_result;
+    end if;
+
+    v_result:=public.estimate_work_order_items(v_lab,'Unknown partner','Partner',
+        '[{"tooth_number":11,"work_type":"Crown"}]'::jsonb,0);
+    if (v_result->>'list_price')::numeric<>10
+       or v_result->'lines'->0->>'contract'<>'General' then
+        raise exception 'Unknown partner estimate must fall back to General: %',v_result;
+    end if;
+
     v_result:=public.replace_work_order_items(v_lab,1,
         '[{"tooth_number":11,"work_type":"Crown"},{"tooth_number":12,"work_type":"CROWN"}]'::jsonb,
         'General');

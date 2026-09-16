@@ -73,6 +73,11 @@ class BillingModeContracts(unittest.TestCase):
         self.assertIn("billing_mode", estimate)
         self.assertIn("billing_scope", estimate)
         self.assertIn("element_count", estimate)
+        self.assertNotIn("Partner name is required", estimate)
+        self.assertRegex(
+            estimate,
+            r"ELSIF v_partner IS NULL THEN\s+v_requested\s*:=\s*'General'",
+        )
 
         replace = read("db/schema/20_functions/replace_work_order_items.sql")
         self.assertIn("public.derive_billing_units", replace)

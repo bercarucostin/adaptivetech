@@ -35,7 +35,11 @@ BEGIN
         v_requested:=v_partner;
         v_discount:=0;
     ELSIF v_partner IS NULL THEN
-        RAISE EXCEPTION 'Partner name is required';
+        v_requested:='General';
+    ELSE
+        -- Management estimates follow the partner-named contract and fall
+        -- back to General when that contract has no price for the work type.
+        v_requested:=v_partner;
     END IF;
 
     SELECT coalesce(jsonb_agg(jsonb_build_object(
