@@ -30,6 +30,12 @@ ALTER TABLE public.lab_work_order_items
     ADD COLUMN IF NOT EXISTS price_fixed_at timestamptz,
     ADD COLUMN IF NOT EXISTS price_migrated boolean NOT NULL DEFAULT false;
 
+-- Legacy installations stored commercial values directly on clinical items.
+-- Price lines now own those values, so new clinical rows intentionally use NULL.
+ALTER TABLE public.lab_work_order_items
+    ALTER COLUMN unit_price DROP NOT NULL,
+    ALTER COLUMN line_total DROP NOT NULL;
+
 ALTER TABLE public.lab_work_order_items ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS lab_work_order_items_order_idx

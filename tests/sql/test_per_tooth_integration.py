@@ -6,6 +6,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def read(name): return (ROOT / name).read_text()
 def sql(name): return read('db/schema/20_functions/' + name + '.sql')
 class IntegrationRegressions(unittest.TestCase):
+    def test_existing_item_tables_relax_legacy_commercial_not_nulls(self):
+        table = read('db/schema/10_tables/24_work_order_items.sql').lower()
+        self.assertRegex(table, r'alter column\s+unit_price\s+drop not null')
+        self.assertRegex(table, r'alter column\s+line_total\s+drop not null')
+
     def test_technician_salary_is_resolved_from_canonical_billing_scope(self):
         self.assertTrue((ROOT / 'db/schema/20_functions/resolve_work_order_technician_costs.sql').is_file())
         resolver = sql('resolve_work_order_technician_costs')
