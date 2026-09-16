@@ -160,6 +160,17 @@ class BillingModeContracts(unittest.TestCase):
             self.assertRegex(source, r"i\.tooth_number\s*/\s*10\s+BETWEEN\s+1\s+AND\s+4")
             self.assertRegex(source, r"i\.tooth_number\s*%\s*10\s+BETWEEN\s+1\s+AND\s+8")
 
+    def test_legacy_price_migration_ignores_orphaned_items(self):
+        for relative_path in (
+            "db/schema/10_tables/24a_work_order_price_lines.sql",
+            "db/schema/20_functions/backfill_work_order_financial_history.sql",
+        ):
+            source = read(relative_path)
+            self.assertRegex(
+                source,
+                r"JOIN\s+public\.lab_work_orders\s+wo\s+ON\s+wo\.lab_organization_id\s*=\s*i\.lab_organization_id\s+AND\s+wo\.id\s*=\s*i\.work_order_id",
+            )
+
     def test_technician_history_freezes_billing_mode(self):
         source = read("db/schema/10_tables/25_work_order_stage_assignments.sql").lower()
         for table in (

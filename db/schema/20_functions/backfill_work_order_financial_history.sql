@@ -32,6 +32,9 @@ BEGIN
            coalesce(i.price_fixed_at,i.updated_at,i.created_at,now()),true,
            i.created_by_user_id,i.updated_by_user_id,i.created_at,i.updated_at
     FROM public.lab_work_order_items i
+    JOIN public.lab_work_orders wo
+      ON wo.lab_organization_id = i.lab_organization_id
+     AND wo.id = i.work_order_id
     WHERE i.lab_organization_id=p_lab
       AND (i.price_fixed_at IS NOT NULL OR i.price_source IS NOT NULL
            OR i.unit_price IS NOT NULL OR i.line_total IS NOT NULL)
