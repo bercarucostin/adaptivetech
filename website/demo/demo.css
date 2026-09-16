@@ -1,26 +1,14 @@
 /* ── Demo page — adaptivetech.ro ─────────────────────────────────────────
-   Tokens copied verbatim from website/index.html's :root. This file adds no
-   new brand colours; every non-token colour below is computed and commented
-   at the point of use, same convention as the main stylesheet.
+   Page-specific styles only. Tokens, the reset, the header, the footer and
+   the language toggle come from /assets/site.css, the same file every
+   other page links; this file must not redefine any of them.
    ------------------------------------------------------------------------ */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
 body {
-  font-family: var(--sans);
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--ink);
   background: var(--surface);
-  padding-bottom: var(--footer-h);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
-
-a { color: inherit; text-decoration: none; }
-button { font-family: inherit; cursor: pointer; border: none; background: none; }
 
 /* demo.js swaps states via the `hidden` IDL property, and .demo__panel--chat
    below sets its own `display: flex` — an author rule of equal specificity
@@ -31,47 +19,24 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 [hidden] { display: none !important; }
 
 /* ── Bilingual RO/EN ──────────────────────────────────────────────────────
-   Same mechanism as the main site: RO shows by default, [data-en] is
-   suppressed until html[lang="en"] flips it. demo.js sets
-   document.documentElement.lang; this is what makes that switch visible. */
+   The rest of the site is split into /  and /en/ at build time; this page
+   is the one exception, switching at runtime so a visitor mid-session is
+   never sent to another URL. RO shows by default, [data-en] is suppressed
+   until html[lang="en"] flips it -- and that covers the shared header and
+   footer too, which arrive with both languages. demo.js sets
+   document.documentElement.lang. */
 [data-en] { display: none; }
 html[lang="en"] [data-ro] { display: none; }
 html[lang="en"] [data-en] { display: inline; }
 
-/* The whole page stays on light surfaces (no navy sections here), so a
-   single focus-ring colour covers it — same rule the main site uses on
-   light: navy reads at 12.5:1 there. */
-:focus-visible {
-  outline: 2px solid var(--navy);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ─────────── TOP BAR ─────────── */
-.demo__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.1rem var(--pad);
-  border-bottom: 1px solid var(--line);
-  background: var(--header-bg);
-}
 /* ─────────── MAIN / PANELS ─────────── */
 .demo {
   flex: 1;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: clamp(2rem, 6vw, 4rem) var(--pad);
+  /* Top clearance is the fixed header plus the usual breathing room. */
+  padding: clamp(6.5rem, 10vw, 8rem) var(--pad) clamp(2rem, 6vw, 4rem);
   display: flex;
   align-items: stretch;
 }
@@ -336,7 +301,6 @@ button[type="submit"]:disabled {
 #chat-submit { flex-shrink: 0; padding: 0.75rem 1.3rem; }
 
 @media (max-width: 600px) {
-  .demo__bar { padding: 0.9rem var(--pad); }
     .demo__panel--chat { height: min(78vh, 720px); }
   .demo__msg { max-width: 92%; }
 }

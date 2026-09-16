@@ -121,6 +121,12 @@ function setLang(next) {
   $('lang-en').classList.toggle('active', next === 'en');
   try { localStorage.setItem(LANG_KEY, next); } catch (_) { /* private mode etc. */ }
 
+  // The shared footer links the privacy policy; point it at the version in
+  // the language now showing.
+  document.querySelectorAll('a[href$="privacy-policy.html"], a[href$="politica-de-confidentialitate.html"]').forEach((el) => {
+    el.href = next === 'en' ? '/en/privacy-policy.html' : '/politica-de-confidentialitate.html';
+  });
+
   document.querySelectorAll('[data-ro-placeholder]').forEach((el) => {
     el.placeholder = next === 'en' ? el.dataset.enPlaceholder : el.dataset.roPlaceholder;
   });

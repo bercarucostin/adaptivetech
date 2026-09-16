@@ -242,3 +242,20 @@ test('no page overrides a shared component with an element selector', () => {
     }
   }
 });
+
+test('the demo carries the shared header and footer, in both languages', () => {
+  // The demo was the one page not built from a master: it kept a private
+  // top bar and a pasted copy of the footer, and the case-study dropdown
+  // reached every page except it. It is built now, with both languages
+  // left in place because it switches at runtime.
+  const s = read('demo/index.html');
+  assert.ok(s.includes('id="navCasesMenu"'), 'the shared header is missing');
+  assert.strictEqual((s.match(/class="site-bar"/g) || []).length, 1, 'expected exactly one footer');
+  assert.ok(!s.includes('demo__bar'), 'the private top bar is back');
+  assert.ok(s.includes('data-ro') && s.includes('data-en'), 'both languages must be present');
+  assert.match(s, /<button type="button" id="lang-ro"/, 'the toggle must be buttons, not links to other URLs');
+  assert.ok(!s.includes('hreflang='), 'a single-URL page declares no hreflang');
+  assert.match(s, /href="\/demo\/demo\.css\?v=[a-f0-9]{8}"/, 'demo.css is not versioned');
+  const refs = s.match(/(?:href|src)="(?!https?:|\/|#|data:|mailto:)[^"]+"/g) || [];
+  assert.deepStrictEqual(refs, [], 'the demo has relative asset paths');
+});

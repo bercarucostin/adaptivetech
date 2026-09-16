@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo RAG — Adaptive Technologies</title>
+<meta name="description" content="Încarcă un document și pune-i întrebări. Un demo RAG care răspunde doar din ce scrie în documentul tău.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0C3054">
+<meta property="og:title" content="Demo RAG — Adaptive Technologies">
+<meta property="og:description" content="Încarcă un document și pune-i întrebări. Un demo RAG care răspunde doar din ce scrie în documentul tău.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://adaptivetech.ro/demo/">
+<meta property="og:image" content="https://adaptivetech.ro/assets/social/og-1200x630.png">
+<meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png">
+<meta property="og:locale" content="ro_RO">
+
+<!-- Fonts — same stack as the main site -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Favicon — same inline Adaptive "A" mark as the main site, no extra request -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+<link rel="stylesheet" href="/assets/site.css" />
+<link rel="stylesheet" href="/demo/demo.css">
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+
+<!--@header-->
+
+<main class="demo">
+
+  <section id="state-gate" class="demo__panel">
+    <h1>
+      <span data-ro>Încearcă un asistent RAG pe documentul tău</span>
+      <span data-en>Try a RAG assistant on your own document</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>Încarcă un document și pune-i întrebări. Răspunde doar din ce scrie în el
+        și îți arată secțiunea din care a citit.</span>
+      <span data-en>Upload a document and ask it questions. It answers only from what the
+        document says, and shows you the section it read.</span>
+    </p>
+    <form id="gate-form" novalidate>
+      <label for="email">
+        <span data-ro>Adresa ta de email</span>
+        <span data-en>Your email address</span>
+      </label>
+      <input id="email" name="email" type="email" required autocomplete="email"
+             data-ro-placeholder="nume@companie.ro" data-en-placeholder="name@company.com"
+             placeholder="nume@companie.ro">
+
+      <label class="demo__check">
+        <input id="consent" name="consent" type="checkbox" required>
+        <span>
+          <span data-ro>Sunt de acord să fiu contactat de Adaptive Technologies.
+            <a href="/politica-de-confidentialitate.html">Politica de confidențialitate</a>.</span>
+          <span data-en>I agree to be contacted by Adaptive Technologies.
+            <a href="/politica-de-confidentialitate.html">Privacy policy</a>.</span>
+        </span>
+      </label>
+
+      <!-- The real, public site key for the "adaptivetech.ro (Spin)" widget.
+           A site key belongs in client-side code — it is not a secret; its
+           pair, the secret key, lives only in TURNSTILE_SECRET on the n8n
+           container and is what demo-request-code verifies the token against.
+
+           The two are matched: swapping one without the other makes every
+           token fail siteverify with "invalid-input-response".
+
+           The widget renders only on a hostname listed in its Cloudflare
+           settings (currently adaptivetech.ro, www.adaptivetech.ro, localhost
+           and 127.0.0.1). On any other hostname the script fails at 400020
+           before onTurnstile is ever called, and the gate cannot be
+           submitted — so a new environment needs its hostname added there. -->
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAAEp-iXrCUPjFsXhu" data-callback="onTurnstile"></div>
+
+      <button type="submit" id="gate-submit">
+        <span data-ro>Trimite-mi codul</span>
+        <span data-en>Send me the code</span>
+      </button>
+      <p class="demo__error" id="gate-error" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="state-code" class="demo__panel" hidden>
+    <h1>
+      <span data-ro>Verifică-ți emailul</span>
+      <span data-en>Check your email</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>Ți-am trimis un cod din 6 cifre. Expiră în 10 minute.</span>
+      <span data-en>We sent you a 6-digit code. It expires in 10 minutes.</span>
+    </p>
+    <form id="code-form" novalidate>
+      <label for="code">
+        <span data-ro>Codul din email</span>
+        <span data-en>The code from the email</span>
+      </label>
+      <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}"
+             maxlength="6" autocomplete="one-time-code" required>
+      <button type="submit" id="code-submit">
+        <span data-ro>Continuă</span>
+        <span data-en>Continue</span>
+      </button>
+      <p class="demo__error" id="code-error" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <section id="state-upload" class="demo__panel" hidden>
+    <h1>
+      <span data-ro>Încarcă un document</span>
+      <span data-en>Upload a document</span>
+    </h1>
+    <p class="demo__lede">
+      <span data-ro>PDF, DOCX sau TXT. Maximum 10 MB, un singur fișier.</span>
+      <span data-en>PDF, DOCX, or TXT. Maximum 10 MB, one file.</span>
+    </p>
+    <form id="upload-form">
+      <input id="file" name="file" type="file" accept=".pdf,.docx,.txt" required>
+      <button type="submit" id="upload-submit">
+        <span data-ro>Încarcă</span>
+        <span data-en>Upload</span>
+      </button>
+    </form>
+    <div id="progress" class="demo__progress" hidden>
+      <span class="demo__spinner" aria-hidden="true"></span>
+      <p id="progress-text" role="status"></p>
+    </div>
+    <p class="demo__error" id="upload-error" role="alert" hidden></p>
+  </section>
+
+  <section id="state-chat" class="demo__panel demo__panel--chat" hidden>
+    <header class="demo__chathead">
+      <span id="chat-filename"></span>
+      <span id="chat-remaining" class="demo__remaining"></span>
+    </header>
+    <ol id="messages" class="demo__messages"></ol>
+    <form id="chat-form">
+      <input id="question" name="question" autocomplete="off" required
+             data-ro-placeholder="Întreabă ceva despre document…"
+             data-en-placeholder="Ask something about the document…"
+             placeholder="Întreabă ceva despre document…">
+      <button type="submit" id="chat-submit">
+        <span data-ro>Trimite</span>
+        <span data-en>Send</span>
+      </button>
+    </form>
+    <p class="demo__error" id="chat-error" role="alert" hidden></p>
+  </section>
+
+</main>
+
+<!--@footer-->
+
+<script src="/demo/demo.js"></script>
+<script>
+<!--@script-->
+</script>
+</body>
+</html>
