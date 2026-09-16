@@ -8742,6 +8742,14 @@ body.dashboard-production-maximized .kanban-col{
 .salary-payment-badge.is-paid{border-color:#70a982;background:#eaf7ee;color:#25683b}
 .salary-payment-badge.is-unpaid{border-color:#d69a91;background:#fff0ee;color:#a3372d}
 .salary-stage-amount{white-space:nowrap;color:#292824;font-size:11px}
+.technician-cost-details{margin-top:10px;max-width:100%}
+.technician-cost-details>summary{cursor:pointer;font-weight:600;white-space:normal}
+.technician-cost-details>summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+.technician-cost-content{margin-top:8px;max-width:720px;white-space:normal}
+.technician-cost-assignment+.technician-cost-assignment{margin-top:16px}
+.technician-cost-table caption{text-align:left;font-weight:600;padding:8px 0}
+.technician-cost-table small,.admin-cost-add label>small,.admin-config-table td>small{display:block;margin-top:4px}
+.technician-cost-table tfoot{font-weight:600}
 
 @media(max-width:860px){
   .salary-stage-stack{min-width:0}

@@ -20,8 +20,14 @@ begin
         raise exception 'Assignment synchronization must snapshot all work-type cost lines';
     end if;
     if v_definition not ilike '%costs.billing_mode%'
-       or v_definition not ilike '%work_order_billing_scope%' then
+       or v_definition not ilike '%resolve_work_order_technician_costs%' then
         raise exception 'Assignment synchronization must snapshot canonical billing modes and quantities';
+    end if;
+
+    select pg_get_functiondef('public.resolve_work_order_technician_costs(uuid,bigint,text,text)'::regprocedure)
+      into v_definition;
+    if v_definition not ilike '%work_order_billing_scope%' then
+        raise exception 'Technician cost resolution must use saved billing scope';
     end if;
 
     select pg_get_functiondef('public.record_technician_payment(uuid,numeric,date,text)'::regprocedure)

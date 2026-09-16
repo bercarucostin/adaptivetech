@@ -125,6 +125,9 @@ test('read-model technician costs use frozen assignment amounts without catalog 
     element_count:1,
     snapshot_list_price:250,
     snapshot_final_price:225,
+    tehnician_model:'Denis',
+    tehnician1_modelare:'Gabi',
+    tehnician2_cer_fin:'Robert',
     cost_model:11,
     cost_modelare:13,
     cost_cer_fin:17
@@ -161,6 +164,7 @@ test('missing technician costs remain missing instead of becoming zero',()=>{
 test('not-applicable stages retain historical frozen technician costs',()=>{
   const mapped=mappedOrder({id:15,items:[{tooth_number:11,work_type:'Crown'}],
     model_not_applicable:true,modelare_not_applicable:true,cer_fin_not_applicable:true,
+    tehnician_model:'Denis',tehnician1_modelare:'Gabi',tehnician2_cer_fin:'Robert',
     cost_model:11,cost_modelare:13,cost_cer_fin:17});
   assert.equal(mapped.costModel,11);
   assert.equal(mapped.costModeling,13);

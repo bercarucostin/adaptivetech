@@ -305,6 +305,9 @@ function abortActiveRequests(){
 }
 
 function resetRuntimeState(){
+  clearTimeout(toothPriceEstimateTimer);
+  toothPriceEstimateTimer=null;
+  toothPriceEstimateRequest++;
   orders=[];
   priceRules=[];
   contracts=[];
@@ -2238,15 +2241,87 @@ function sumSelectedTechnicianCosts(rows,technician){
   return values.some(value=>value===null)?null:values.reduce((sum,value)=>sum+value,0);
 }
 
+function technicianCostDisclosureHtml(o,technician){
+  if(!isManagement()&&!isTechnician())return "";
+  if(!o?.id||!technician)return "";
+  if(isTechnician()&&normalize(technician)!==normalize(auth?.user?.Technician_Name))return "";
+  return `<details class="technician-cost-details" data-order-id="${Number(o.id)}" data-technician="${escapeHtml(technician)}" ontoggle="loadSavedTechnicianCostBreakdown(this)">
+    <summary>Bază cost salvat · #${Number(o.id)}</summary>
+    <div class="technician-cost-content" role="status" aria-live="polite"></div>
+  </details>`;
+}
+
+function technicianCostBreakdownHtml(history,technician){
+  const assignments=(Array.isArray(history?.Assignments)?history.Assignments:[])
+    .filter(a=>normalize(a.Technician)===normalize(technician));
+  if(!assignments.length)return '<p>Nu există costuri salvate pentru acest tehnician.</p>';
+  return assignments.map(assignment=>{
+    const base=Array.isArray(assignment.Cost_Lines)?assignment.Cost_Lines:[];
+    const adjustments=Array.isArray(assignment.Adjustments)?assignment.Adjustments:[];
+    const rows=[...base.map(line=>({...line,kind:"Bază",units:num(line.quantity)})),
+      ...adjustments.map(line=>({...line,kind:"Ajustare",units:num(line.quantity_delta)}))];
+    const totals=new Map();
+    for(const row of rows){
+      const key=JSON.stringify([String(row.work_type).trim().toLowerCase(),row.billing_mode]);
+      const total=totals.get(key)||{workType:row.work_type,mode:row.billing_mode,quantity:0,amount:0};
+      total.quantity+=row.units;
+      total.amount+=num(row.amount);
+      totals.set(key,total);
+    }
+    const signed=(value,adjustment)=>`${adjustment&&value>0?"+":""}${value}`;
+    return `<div class="technician-cost-assignment">
+      <div class="table-wrap"><table class="technician-cost-table">
+        <caption>${escapeHtml(assignment.Technician)} · ${escapeHtml(uiText(assignment.Stage))}${assignment.Ended_At?" · Alocare încheiată":""}</caption>
+        <thead><tr><th scope="col">Tip lucrare / Mod facturare</th><th scope="col">Bază / Ajustare</th><th scope="col">Unități facturabile</th><th scope="col">Tarif</th><th scope="col">Sumă</th></tr></thead>
+        <tbody>${rows.map(row=>`<tr>
+          <th scope="row">${escapeHtml(row.work_type)}<small>${escapeHtml(billingModeLabel(row.billing_mode))}</small></th>
+          <td>${row.kind}</td><td>${signed(row.units,row.kind==="Ajustare")}</td>
+          <td>${technicianMoney(row.unit_cost)}</td><td>${row.kind==="Ajustare"&&num(row.amount)>0?"+":""}${technicianMoney(row.amount)}</td>
+        </tr>`).join("")}</tbody>
+        <tfoot>${[...totals.values()].map(total=>`<tr><th scope="row">Total ${escapeHtml(total.workType)}<small>${escapeHtml(billingModeLabel(total.mode))}</small></th><td>Bază + ajustări</td><td>${total.quantity}</td><td>Tarife salvate mai sus</td><td>${money(total.amount)}</td></tr>`).join("")}</tfoot>
+      </table></div>
+      ${!base.length?'<p>Detaliile bazei istorice nu sunt disponibile; suma salvată este păstrată.</p>':""}
+      <p>Bază alocare: <strong>${technicianMoney(assignment.Original_Agreed_Amount)}</strong> · Total cu ajustări: <strong>${technicianMoney(assignment.Agreed_Amount)}</strong></p>
+    </div>`;
+  }).join("");
+}
+
+async function loadSavedTechnicianCostBreakdown(details){
+  if(!details.open||(!isManagement()&&!isTechnician()))return;
+  const epoch=authEpoch,userId=auth?.user?.User_ID,role=auth?.user?.Role;
+  const id=Number(details.dataset.orderId),technician=details.dataset.technician;
+  if(isTechnician()&&normalize(technician)!==normalize(auth?.user?.Technician_Name))return;
+  const request=(details.costRequest||0)+1;
+  details.costRequest=request;
+  const box=details.querySelector('.technician-cost-content');
+  if(!box)return;
+  const contextValid=()=>requestContextValid(epoch,userId)&&auth?.user?.Role===role
+    &&(isManagement()||isTechnician())&&details.isConnected&&details.open
+    &&details.costRequest===request&&Number(details.dataset.orderId)===id
+    &&details.dataset.technician===technician;
+  box.textContent="Încarc baza costului salvat...";
+  try{
+    const lab=await resolveLabOrganizationId();
+    if(!contextValid())return;
+    const history=await sbRpc("get_work_order_financial_history",{p_lab:lab,p_work_order_id:id});
+    if(!contextValid())return;
+    box.innerHTML=technicianCostBreakdownHtml(history,technician);
+  }catch(err){
+    if(!contextValid())return;
+    box.textContent=`Costurile salvate nu au putut fi încărcate: ${err.message}`;
+  }
+}
+
 function technicianSalaryStageHtml(o){
   const stages=Array.isArray(o?.salaryStages)?o.salaryStages:[];
-  if(!stages.length)return "—";
+  const breakdown=technicianCostDisclosureHtml(o,auth?.user?.Technician_Name);
+  if(!stages.length)return `—${breakdown}`;
   return `<div class="salary-stage-stack">${stages.map(s=>`
     <div class="salary-stage-row">
       <div><strong>${escapeHtml(s.stageLabel)}</strong><span>${escapeHtml(uiText(s.stageStatus))}</span></div>
       <span class="salary-payment-badge ${s.paymentStatus==="Paid"?"is-paid":"is-unpaid"}">${escapeHtml(uiText(s.paymentStatus))}</span>
       <strong class="salary-stage-amount">${technicianMoney(s.amount)}</strong>
-    </div>`).join("")}</div>`;
+    </div>`).join("")}</div>${breakdown}`;
 }
 
 function technicianSalarySearchText(o){
@@ -4012,7 +4087,7 @@ function renderTechnicians(){
       {key:"workType",label:"Work Type",type:"text",r:o=>escapeHtml(o.workType)},
       {key:"elements",label:"Elements",type:"number",r:o=>o.elements},
       {key:"status",label:"Status",type:"text",r:o=>escapeHtml(uiText(o.status))},
-      {key:"selectedCost",label:selectedTech?`${escapeHtml(selectedTech)} Cost`:"Selected Tech Cost",type:"number",sortValue:o=>selectedTech?selectedTechnicianCost(o,selectedTech):0,r:o=>selectedTech?technicianMoney(selectedTechnicianCost(o,selectedTech)):"—"},
+      {key:"selectedCost",label:selectedTech?`${escapeHtml(selectedTech)} Cost`:"Selected Tech Cost",type:"number",sortValue:o=>selectedTech?selectedTechnicianCost(o,selectedTech):0,r:o=>selectedTech?technicianMoney(selectedTechnicianCost(o,selectedTech))+technicianCostDisclosureHtml(o,selectedTech):"—"},
       {key:"modelTech",label:"Model Tech",type:"text",r:o=>escapeHtml(o.modelTech)||"—"},
       {key:"modelingTech",label:"Modelare Tech",type:"text",r:o=>escapeHtml(o.modelingTech)||"—"},
       {key:"ceramicTech",label:"Cer Fin Tech",type:"text",r:o=>escapeHtml(o.ceramicTech)||"—"}
@@ -4044,6 +4119,7 @@ function renderTechnicians(){
           <div><span>Work type</span><strong>${escapeHtml(o.workType)||"—"}</strong></div>
           <div><span>Deadline</span><strong>${fmtDate(o.deadline)}</strong></div>
         </div>
+        ${technicianCostDisclosureHtml(o,selectedTech)}
       </article>`).join(""):'<div class="empty-state mobile-empty">No matching technician work.</div>'}</div>`;
       wireTechnicianReportFilters();
       wireDateRangeFilters("technicians",renderTechnicians);
@@ -4531,6 +4607,15 @@ function adminInput(id,value,type="text",extra=""){
   return `<input id="${id}" type="${type}" value="${escapeHtml(value??"")}" ${extra}>`;
 }
 
+function adminCostBillingModeLabel(workType){
+  const configured=adminConfigData.workTypes.find(row=>normalize(row.Tip_Lucrare)===normalize(workType));
+  return configured?billingModeLabel(configured.Billing_Mode):"—";
+}
+
+function adminCostTariffHtml(id,value,workType){
+  return `${adminInput(id,value,"number",'min="0" step="0.01"')}<small id="${id}Mode">${escapeHtml(adminCostBillingModeLabel(workType))}</small>`;
+}
+
 function renderAdminConfig(){
   if(!isAdmin()){content.innerHTML="";return;}
   pageTitle.textContent="Configurare admin";
@@ -4593,9 +4678,9 @@ function renderAdminConfig(){
           <div class="admin-create-title">+ Adaugă cost</div>
           <div class="admin-add-grid admin-cost-add">
             <label>Tehnician<select id="newCostTech">${optionHtml(costTechnicians,selectedAdminTechnician,false)}</select></label>
-            <label>Tip lucrare<input id="newCostWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label>
+            <label>Tip lucrare<input id="newCostWorkType" list="adminWorkTypeList" placeholder="Tip lucrare" oninput="$('newCostValueMode').textContent=adminCostBillingModeLabel(this.value)"></label>
             <label>Etapă<select id="newCostStage">${optionHtml(["Model","Modelare","Cer_Fin"],"",true)}</select></label>
-            <label>Tarif ${adminInput("newCostValue","0","number",'min="0" step="0.01"')}</label>
+            <label>Tarif ${adminCostTariffHtml("newCostValue","0","")}</label>
             <button class="primary-btn" type="button" onclick="adminCreateCost()">+ Adaugă</button>
           </div>
         </div>
@@ -4603,9 +4688,9 @@ function renderAdminConfig(){
           <table>
             <thead><tr><th>Tip lucrare</th><th>Etapă</th><th>Tarif</th><th>Acțiuni</th></tr></thead>
             <tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr>
-              <td><input id="costWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="costTech${id}" type="hidden" value="${escapeHtml(r.Tehnician??"")}"></td>
+              <td><input id="costWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}" oninput="$('costValue${id}Mode').textContent=adminCostBillingModeLabel(this.value)"><input id="costTech${id}" type="hidden" value="${escapeHtml(r.Tehnician??"")}"></td>
               <td><select id="costStage${id}">${optionHtml(["Model","Modelare","Cer_Fin"],String(r.Etapa??""),false)}</select></td>
-              <td>${adminInput(`costValue${id}`,r.Cost,"number",'min="0" step="0.01"')}</td>
+              <td>${adminCostTariffHtml(`costValue${id}`,r.Cost,r.Tip_Lucrare)}</td>
               <td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSaveCost(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeleteCost(${id})">Șterge</button></td>
             </tr>`;}).join(""):'<tr><td colspan="4">Nu există costuri pentru tehnicianul selectat.</td></tr>'}</tbody>
           </table>
@@ -7383,16 +7468,22 @@ function renderToothPriceBreakdown(result={}){
 
 async function loadSavedWorkOrderPriceLines(saved,requestId){
   if(isTechnician()||!can("Can_View_Client_Pricing"))return null;
+  const epoch=authEpoch,userId=auth?.user?.User_ID,role=auth?.user?.Role;
+  const contextValid=()=>requestContextValid(epoch,userId)
+    &&auth?.user?.Role===role&&!isTechnician()&&can("Can_View_Client_Pricing")
+    &&requestId===toothPriceEstimateRequest&&Number(orderId?.value)===Number(saved.id);
   try{
+    const lab=await resolveLabOrganizationId();
+    if(!contextValid())return null;
     const result=await sbRpc("get_work_order_price_lines",{
-      p_lab:await resolveLabOrganizationId(),
+      p_lab:lab,
       p_order:Number(saved.id)
     });
-    if(requestId!==toothPriceEstimateRequest||Number(orderId?.value)!==Number(saved.id))return null;
+    if(!contextValid())return null;
     renderToothPriceBreakdown({...result,saved:true,matched_all:true});
     return result;
   }catch(err){
-    if(requestId!==toothPriceEstimateRequest)return null;
+    if(!contextValid())return null;
     const box=$("priceBreakdown");
     if(box)box.innerHTML="";
     priceHint.textContent=`Prețurile salvate nu au putut fi încărcate: ${err.message}`;
