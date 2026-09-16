@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Studii de caz — Adaptive Technologies</title>
+<meta name="description" content="Două sisteme în producție la clienți din România: un asistent tehnic pe WhatsApp pentru Partner Corporation și o aplicație web cu agent AI pentru laboratorul dentar ZRSIO HEALTH." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="icon" href="/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<meta name="theme-color" content="#0C3054" />
+<link rel="stylesheet" href="/assets/site.css" />
+<link rel="canonical" href="https://adaptivetech.ro/studii-de-caz/" />
+<meta property="og:title" content="Studii de caz — Adaptive Technologies" />
+<meta property="og:description" content="Ce am construit, pentru cine și cum funcționează — cu demonstrații interactive." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://adaptivetech.ro/studii-de-caz/" />
+<meta property="og:image" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
+<meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
+<meta property="og:locale" content="ro_RO" />
+<meta property="og:locale:alternate" content="en_US" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Adaptive Technologies", "item": "https://adaptivetech.ro/" },
+    { "@type": "ListItem", "position": 2, "name": "Studii de caz" }
+  ]
+}
+</script>
+
+<style>
+  /* Two cards, the two pages. On a wide screen they sit side by side and
+     take the hero's width; the big number is the client's own count, not
+     a decoration -- there are exactly two systems in production. */
+  .cases-band { padding-top: clamp(2.5rem, 5vw, 4rem); }
+  .cases-band .case-card { padding: clamp(1.8rem, 3.5vw, 2.6rem); }
+  .case-card-k { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+  .case-card-k b { color: var(--navy); font-weight: 500; }
+
+  .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: clamp(1.5rem, 4vw, 3rem); }
+  .how h3 { font-size: 1.05rem; font-weight: 600; color: var(--on-navy); margin-bottom: 0.5rem; }
+  .how p { font-size: 0.92rem; color: var(--on-navy-soft); line-height: 1.55; }
+</style>
+</head>
+
+<body>
+
+<!--@header-->
+
+<svg class="watermark" id="watermark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
+
+<main>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<header class="page-hero" id="start" data-theme="light">
+  <div class="container">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="{{HOME}}"><span data-ro>Acasă</span><span data-en>Home</span></a><i>/</i>
+      <span aria-current="page"><span data-ro>Studii de caz</span><span data-en>Case studies</span></span>
+    </nav>
+    <div class="sec-head">
+      <div class="eyebrow"><span data-ro>Studii de caz</span><span data-en>Case studies</span></div>
+      <h1 class="sec-title">
+        <span data-ro>Sisteme în producție, <em>nu prezentări.</em></span>
+        <span data-en>Systems in production, <em>not slide decks.</em></span>
+      </h1>
+      <p class="sec-sub">
+        <span data-ro>Două companii din România, două probleme diferite, aceeași abordare: pornim de la procesul așa cum este, construim ceva care funcționează din prima săptămână și îl lăsăm în proprietatea clientului. Fiecare pagină are o demonstrație interactivă a sistemului.</span>
+        <span data-en>Two Romanian companies, two different problems, the same approach: start from the process as it is, build something that works from the first week, and leave it in the client's ownership. Each page carries an interactive demonstration of the system.</span>
+      </p>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════ THE TWO ═══════════════ -->
+<section class="cases-band" id="studii" data-theme="light">
+  <div class="container">
+    <div class="case-cards">
+      <a href="{{CASES}}partner-corporation/" class="case-card reveal">
+        <div class="case-card-k"><b>Partner Corporation SRL</b> · <span data-ro>case de marcat și imprimante fiscale</span><span data-en>cash registers and fiscal printers</span></div>
+        <div>
+          <h3><span data-ro>Un asistent WhatsApp care răspunde tehnicienilor din manualele companiei — cu sursa citată.</span><span data-en>A WhatsApp assistant that answers technicians from the company's manuals — with the source cited.</span></h3>
+          <p style="margin-top:0.7rem"><span data-ro>RAG peste o colecție de documente tehnice. Tehnicianul întreabă în WhatsApp; răspunsul vine din manual, cu secțiunea citată. Același mecanism poate trăi în chatul unui site, pentru orice colecție de documente.</span><span data-en>RAG over a technical document collection. The technician asks in WhatsApp; the answer comes from the manual, section cited. The same mechanism can live in a website chat, for any document collection.</span></p>
+        </div>
+        <div>
+          <div class="case-card-tags"><span>WhatsApp</span><span>RAG</span><span>n8n</span><span><span data-ro>Căutare vectorială</span><span data-en>Vector search</span></span></div>
+          <div class="arr" style="margin-top:1rem"><span data-ro>Citiți studiul</span><span data-en>Read the case</span> →</div>
+        </div>
+      </a>
+      <a href="{{CASES}}zrsio-health/" class="case-card reveal" style="--d:0.08s">
+        <div class="case-card-k"><b>ZRSIO HEALTH SRL</b> · <span data-ro>laborator de tehnică dentară</span><span data-en>dental technology lab</span></div>
+        <div>
+          <h3><span data-ro>Flowrise Dental: tot laboratorul pe o singură tablă, cu un agent AI care execută sarcini.</span><span data-en>Flowrise Dental: the whole lab on one board, with an AI agent that carries out tasks.</span></h3>
+          <p style="margin-top:0.7rem"><span data-ro>Comenzi de lucru urmărite pe stări, de la Neînceput la Plătit. Roluri pentru manageri, tehnicieni și medici. Un agent care răspunde din date și creează comenzi — cu drepturile rolului, nu mai mult.</span><span data-en>Work orders tracked through statuses, from Not started to Paid. Roles for managers, technicians and doctors. An agent that answers from the data and creates orders — with the role's rights, no more.</span></p>
+        </div>
+        <div>
+          <div class="case-card-tags"><span><span data-ro>Aplicație web</span><span data-en>Web app</span></span><span>Supabase</span><span>n8n</span><span><span data-ro>Agent AI</span><span data-en>AI agent</span></span></div>
+          <div class="arr" style="margin-top:1rem"><span data-ro>Citiți studiul</span><span data-en>Read the case</span> →</div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ WHAT THEY HAVE IN COMMON ═══════════════ -->
+<section class="dark-band" id="in-comun" data-theme="dark">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow"><span data-ro>Ce au în comun</span><span data-en>What they share</span></div>
+      <h2 class="sec-title">
+        <span data-ro>Probleme diferite. <em>Aceleași reguli de construcție.</em></span>
+        <span data-en>Different problems. <em>The same rules of construction.</em></span>
+      </h2>
+    </div>
+    <div class="how">
+      <div class="reveal">
+        <h3><span data-ro>Pornim de la proces, nu de la unealtă</span><span data-en>Start from the process, not the tool</span></h3>
+        <p><span data-ro>Vocabularul clientului intră în sistem așa cum este: manualele lui, stările lui, rolurile lui. Nu adaptăm compania la un software generic.</span><span data-en>The client's vocabulary goes into the system as it is: their manuals, their statuses, their roles. We do not bend the company around generic software.</span></p>
+      </div>
+      <div class="reveal" style="--d:0.08s">
+        <h3><span data-ro>AI cu limite clare</span><span data-en>AI with clear limits</span></h3>
+        <p><span data-ro>Asistentul răspunde doar din documente și citează sursa. Agentul face doar ce permite rolul utilizatorului. Ce nu știe, spune că nu știe.</span><span data-en>The assistant answers only from the documents and cites the source. The agent does only what the user's role allows. What it does not know, it says it does not know.</span></p>
+      </div>
+      <div class="reveal" style="--d:0.16s">
+        <h3><span data-ro>În proprietatea clientului</span><span data-en>Owned by the client</span></h3>
+        <p><span data-ro>Datele stau în baza de date a clientului, fluxurile rulează pe infrastructura lui. Nimic nu e folosit pentru antrenarea vreunui model.</span><span data-en>The data lives in the client's database; the workflows run on their infrastructure. Nothing is used to train any model.</span></p>
+      </div>
+    </div>
+    <a href="{{HOME}}#proces" class="sec-hint reveal"><span data-ro>Cum lucrăm, pas cu pas</span><span data-en>How we work, step by step</span></a>
+  </div>
+</section>
+
+<!-- ═══════════════ CTA ═══════════════ -->
+<section id="urmatorul" data-theme="light">
+  <div class="container">
+    <div class="case-next">
+      <a href="/demo/" class="reveal">
+        <div class="eyebrow"><span data-ro>Încercați singur</span><span data-en>Try it yourself</span></div>
+        <strong><span data-ro>Demo-ul RAG, pe un document al dumneavoastră.</span><span data-en>The RAG demo, on a document of yours.</span></strong>
+        <span class="d"><span data-ro>Încărcați un PDF, puneți-i întrebări, vedeți secțiunea din care a citit fiecare răspuns. Gratuit, fără card.</span><span data-en>Upload a PDF, ask it questions, see the section each answer was read from. Free, no card.</span></span>
+        <span class="arr"><span data-ro>Deschideți demo-ul</span><span data-en>Open the demo</span> →</span>
+      </a>
+      <a href="{{HOME}}#contact" class="reveal" style="--d:0.08s">
+        <div class="eyebrow"><span data-ro>Consultație gratuită</span><span data-en>Free consultation</span></div>
+        <strong><span data-ro>Care ar fi studiul de caz al companiei dumneavoastră?</span><span data-en>What would your company's case study be?</span></strong>
+        <span class="d"><span data-ro>60 de minute, fără angajament. Veniți cu procesul care vă consumă cel mai mult timp.</span><span data-en>60 minutes, no commitment. Bring the process that eats the most of your time.</span></span>
+        <span class="arr"><span data-ro>Programați consultația</span><span data-en>Book the consultation</span> →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!--@footer-->
+
+<script>
+<!--@script-->
+</script>
+
+</body>
+</html>

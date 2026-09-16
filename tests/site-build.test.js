@@ -31,6 +31,12 @@ const PAGES = [
     url: 'https://adaptivetech.ro/en/privacy-policy.html',
     pair: 'https://adaptivetech.ro/politica-de-confidentialitate.html',
   },
+  { file: 'studii-de-caz/index.html', lang: 'ro', url: 'https://adaptivetech.ro/studii-de-caz/', pair: 'https://adaptivetech.ro/en/case-studies/' },
+  { file: 'en/case-studies/index.html', lang: 'en', url: 'https://adaptivetech.ro/en/case-studies/', pair: 'https://adaptivetech.ro/studii-de-caz/' },
+  { file: 'studii-de-caz/partner-corporation/index.html', lang: 'ro', url: 'https://adaptivetech.ro/studii-de-caz/partner-corporation/', pair: 'https://adaptivetech.ro/en/case-studies/partner-corporation/' },
+  { file: 'en/case-studies/partner-corporation/index.html', lang: 'en', url: 'https://adaptivetech.ro/en/case-studies/partner-corporation/', pair: 'https://adaptivetech.ro/studii-de-caz/partner-corporation/' },
+  { file: 'studii-de-caz/zrsio-health/index.html', lang: 'ro', url: 'https://adaptivetech.ro/studii-de-caz/zrsio-health/', pair: 'https://adaptivetech.ro/en/case-studies/zrsio-health/' },
+  { file: 'en/case-studies/zrsio-health/index.html', lang: 'en', url: 'https://adaptivetech.ro/en/case-studies/zrsio-health/', pair: 'https://adaptivetech.ro/studii-de-caz/zrsio-health/' },
 ];
 
 const read = (f) => fs.readFileSync(path.join(SITE, f), 'utf8');

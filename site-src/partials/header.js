@@ -38,3 +38,31 @@ mMenu.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeMenu
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && mMenu.classList.contains('open')) closeMenu();
 });
+
+/* The case-study dropdown. CSS opens it on hover and on keyboard focus
+   within; this covers the two cases CSS cannot: a touch tap on the
+   trigger (which has no hover, and would otherwise navigate away before
+   anyone sees the list), and closing on Escape or an outside click. On
+   a device with hover, a click on the trigger is a real navigation to
+   the index page, as its href says. */
+const navSub = document.getElementById('navCases');
+const navSubTrigger = document.getElementById('navCasesTrigger');
+if (navSub && navSubTrigger) {
+  const hoverable = window.matchMedia('(hover: hover)').matches;
+  const setSub = (open) => {
+    navSub.classList.toggle('open', open);
+    navSubTrigger.setAttribute('aria-expanded', open);
+  };
+  navSubTrigger.addEventListener('click', (e) => {
+    if (hoverable) return;
+    if (!navSub.classList.contains('open')) { e.preventDefault(); setSub(true); }
+  });
+  navSubTrigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSub(true); navSub.querySelector('.nav-sub-menu a').focus(); }
+  });
+  document.addEventListener('click', (e) => { if (!navSub.contains(e.target)) setSub(false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navSub.classList.contains('open')) { setSub(false); navSubTrigger.focus(); }
+  });
+  navSub.addEventListener('focusout', (e) => { if (!navSub.contains(e.relatedTarget)) setSub(false); });
+}

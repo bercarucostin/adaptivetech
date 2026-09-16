@@ -133,6 +133,41 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .nav-right { display: flex; align-items: center; gap: 1rem; }
 .nav.solid { box-shadow: 0 1px 0 var(--line); }
 
+/* The case-study dropdown. Opens on hover and on keyboard focus within
+   (pure CSS), and on .open, which header.js sets for touch. The trigger is
+   a link to the index page, so the menu is a shortcut, never the only way
+   in. The underline the other links carry on hover is kept on the trigger
+   and dropped inside the panel, where each row has its own hover. */
+.nav-sub { position: relative; }
+.nav-sub-trigger { display: inline-flex; align-items: center; gap: 0.35rem; }
+.nav-sub-chev { transition: transform 0.25s var(--ease); }
+.nav-sub-menu {
+  position: absolute; top: calc(100% + 0.7rem); left: -0.9rem; min-width: 300px;
+  background: var(--white); border: 1px solid var(--line); border-radius: 12px;
+  padding: 0.5rem; box-shadow: 0 18px 44px rgba(12,48,84,0.14);
+  display: grid; gap: 2px;
+  opacity: 0; visibility: hidden; transform: translateY(-6px);
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease), visibility 0s linear 0.2s;
+}
+/* A transparent bridge so the pointer can cross the gap to the panel. */
+.nav-sub-menu::before { content: ''; position: absolute; left: 0; right: 0; top: -0.8rem; height: 0.8rem; }
+.nav-sub:hover .nav-sub-menu, .nav-sub:focus-within .nav-sub-menu, .nav-sub.open .nav-sub-menu {
+  opacity: 1; visibility: visible; transform: none; transition-delay: 0s;
+}
+.nav-sub:hover .nav-sub-chev, .nav-sub:focus-within .nav-sub-chev, .nav-sub.open .nav-sub-chev { transform: rotate(180deg); }
+.nav-links .nav-sub-menu a {
+  display: grid; gap: 0.1rem; padding: 0.6rem 0.75rem; border-radius: 8px;
+  font-weight: 500; color: var(--ink); line-height: 1.3;
+}
+.nav-links .nav-sub-menu a::after { content: none; }
+.nav-links .nav-sub-menu a:hover, .nav-links .nav-sub-menu a:focus-visible { background: var(--surface); color: var(--navy); }
+.nav-sub-k { font-size: 0.9rem; font-weight: 600; color: var(--navy); }
+.nav-sub-d { font-size: 0.78rem; color: var(--ink-mute); }
+.nav-links .nav-sub-menu a.nav-sub-all {
+  margin-top: 0.25rem; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px;
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-ink);
+}
+
 .menu-btn { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 9px; color: var(--navy); }
 .menu-btn .ic-close { display: none; }
 .nav.menu-open .menu-btn .ic-burger { display: none; }
@@ -149,6 +184,15 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border-bottom: 1px solid var(--line-dark); display: flex; justify-content: space-between; align-items: center;
 }
 .m-menu a .mono { font-size: 0.7rem; color: var(--gold); }
+/* The two case-study pages, indented under their section; the demo, a
+   page of its own, after the numbered list. */
+.m-menu a.m-menu-sub { font-size: 0.95rem; font-weight: 500; color: var(--on-navy-soft); padding: 0.5rem 0 0.5rem 1.1rem; border-bottom-style: dashed; }
+.m-menu a.m-menu-sub .mono { color: var(--steel-ink); }
+.m-menu a.m-menu-head { font-size: 1.15rem; margin-top: 0.6rem; padding: 0.6rem 0; }
+@media (max-height: 700px) {
+  .m-menu a { font-size: 1.35rem; padding: 0.6rem 0; }
+  .m-menu a.btn { margin-top: 1.2rem; }
+}
 .m-menu a.btn {
   margin-top: 2rem; justify-content: center; border-bottom: none;
   font-size: 1.05rem; font-weight: 600; color: var(--navy); padding: 0.95rem 1.2rem;
@@ -307,3 +351,138 @@ section { padding: clamp(4.5rem, 9vw, 7.5rem) 0; position: relative; }
 .pulse-dot { width: 7px; height: 7px; background: var(--gold); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; flex: none; }
 @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.45; transform: scale(0.75);} }
 
+/* ─────────── SECONDARY PAGES ───────────
+   Everything that is not the homepage opens the same way: a light hero
+   that clears the fixed header, a breadcrumb, then the eyebrow/title
+   stack from the scaffold above. The privacy page used to set its own
+   hero padding from the days when its header was sticky rather than
+   fixed, and its title sat under the header once that changed. */
+.page-hero { background: var(--surface); padding: clamp(7rem, 12vw, 9rem) 0 clamp(2.5rem, 5vw, 4rem); }
+.page-hero .sec-title { font-size: clamp(2rem, 4.6vw, 3.3rem); max-width: 18ch; text-wrap: balance; }
+.page-hero .sec-head { max-width: 760px; margin-bottom: 0; }
+.crumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-mute); margin-bottom: clamp(1.6rem, 3vw, 2.4rem);
+}
+.crumbs a { color: var(--ink-soft); transition: color 0.2s; }
+.crumbs a:hover { color: var(--navy); }
+.crumbs span[aria-current] { color: var(--gold-ink); }
+.crumbs i { font-style: normal; color: var(--ink-mute); }
+
+/* ─────────── CASE STUDY PAGES ───────────
+   The three pages under /studii-de-caz/ share this vocabulary; each keeps
+   only its own widget's styles inline. */
+
+/* The client strip under the hero title: label/value pairs in a row. */
+.case-meta {
+  display: flex; flex-wrap: wrap; gap: 1rem 2.4rem; margin-top: clamp(1.8rem, 3.5vw, 2.6rem);
+  padding-top: 1.4rem; border-top: 1px solid var(--line);
+}
+.case-meta div { display: grid; gap: 0.2rem; }
+.case-meta dt { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+.case-meta dd { font-size: 0.92rem; font-weight: 600; color: var(--navy); }
+
+/* Text beside a widget: the section's own grid. */
+.case-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+.case-grid .sec-head { margin-bottom: 0; }
+.case-metrics { display: grid; grid-template-columns: repeat(3, auto); gap: 1.8rem; margin-top: 1.8rem; justify-content: start; }
+.cmetric-num { font-size: 1.5rem; font-weight: 700; color: var(--gold); letter-spacing: -0.02em; line-height: 1.15; }
+.cmetric-label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel-ink); margin-top: 0.3rem; }
+@media (max-width: 900px) {
+  .case-grid { grid-template-columns: 1fr; }
+  .case-metrics { gap: 1.2rem; }
+}
+
+/* Before / after, and any other two-column prose. */
+.case-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: clamp(1.5rem, 4vw, 3rem); }
+.case-col h3 {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--gold-ink); margin-bottom: 0.9rem; display: flex; align-items: center; gap: 0.6rem;
+}
+.case-col h3::before { content: ''; width: 18px; height: 2px; background: var(--gold); }
+.case-col p, .case-col li { color: var(--ink-soft); font-size: 0.98rem; line-height: 1.6; }
+.case-col ul { list-style: none; display: grid; gap: 0.6rem; }
+.case-col li { padding-left: 1.2rem; position: relative; }
+.case-col li::before { content: '—'; position: absolute; left: 0; color: var(--gold-deep); }
+.dark-band .case-col h3 { color: var(--gold); }
+.dark-band .case-col p, .dark-band .case-col li { color: var(--on-navy-soft); }
+.dark-band .case-col li::before { color: var(--gold); }
+
+/* A numbered flow: how the system works, step by step. Numbered because
+   the order is the point -- each step feeds the next. */
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem; counter-reset: flow; }
+.flow-step {
+  position: relative; padding: 1.5rem 1.4rem 1.5rem; border-radius: 14px;
+  background: var(--white); border: 1px solid var(--line);
+}
+.flow-step::before {
+  counter-increment: flow; content: counter(flow, decimal-leading-zero);
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--gold-ink);
+  display: block; margin-bottom: 0.9rem;
+}
+.flow-step h3 { font-size: 1.05rem; font-weight: 600; color: var(--navy); margin-bottom: 0.5rem; }
+.flow-step p { font-size: 0.9rem; color: var(--ink-soft); line-height: 1.55; }
+.flow-step code { font-family: var(--mono); font-size: 0.78rem; color: var(--navy); background: var(--surface); padding: 0.1em 0.4em; border-radius: 4px; }
+.dark-band .flow-step { background: var(--navy-850); border-color: var(--navy-700); }
+.dark-band .flow-step::before { color: var(--gold); }
+.dark-band .flow-step h3 { color: var(--on-navy); }
+.dark-band .flow-step p { color: var(--on-navy-soft); }
+.dark-band .flow-step code { color: var(--gold); background: var(--navy-900); }
+
+/* Outcome figures. The slots exist before the numbers do: a case study
+   goes live when the system does, and the client's figures follow once
+   they have been measured and agreed. Until then the block stays
+   [hidden] in the master -- a public page must not show a dash where a
+   number should be, and must never show a number nobody measured. */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.metric {
+  padding: 1.4rem 1.3rem; border-radius: 14px; background: var(--white); border: 1px solid var(--line);
+}
+.metric-num { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; color: var(--navy); letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.metric-num small { font-size: 0.5em; font-weight: 600; color: var(--gold-ink); margin-left: 0.15em; }
+.metric-label { font-size: 0.9rem; color: var(--ink-soft); margin-top: 0.55rem; line-height: 1.4; }
+.metric-note { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); margin-top: 0.7rem; }
+
+/* Where to next: the sibling case study, and the way to talk to us. */
+.case-next { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; }
+.case-next a {
+  display: grid; gap: 0.5rem; padding: 1.6rem 1.5rem; border-radius: 16px;
+  background: var(--white); border: 1px solid var(--line);
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease), border-color 0.3s;
+}
+.case-next a:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(12,48,84,0.1); border-color: var(--gold-deep); }
+.case-next .eyebrow { margin-bottom: 0.2rem; }
+.case-next strong { font-size: 1.15rem; font-weight: 600; color: var(--navy); line-height: 1.3; }
+.case-next span.d { font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
+.case-next .arr { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-ink); margin-top: 0.4rem; }
+
+/* The index page's two cards, and the homepage teaser strip. */
+.case-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.4rem; }
+.case-card {
+  display: grid; grid-template-rows: auto 1fr auto; gap: 1rem; padding: clamp(1.5rem, 3vw, 2.2rem);
+  border-radius: 18px; background: var(--white); border: 1px solid var(--line);
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease), border-color 0.3s;
+}
+.case-card:hover { transform: translateY(-4px); box-shadow: 0 22px 50px rgba(12,48,84,0.12); border-color: var(--gold-deep); }
+.case-card .eyebrow { margin-bottom: 0; }
+.case-card h3 { font-size: clamp(1.25rem, 2.2vw, 1.55rem); font-weight: 600; color: var(--navy); line-height: 1.25; letter-spacing: -0.015em; text-wrap: balance; }
+.case-card p { font-size: 0.95rem; color: var(--ink-soft); line-height: 1.55; }
+.case-card-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.case-card-tags span {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--navy); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.25rem 0.6rem;
+}
+.case-card .arr { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-ink); }
+.dark-band .case-card { background: var(--navy-850); border-color: var(--navy-700); }
+.dark-band .case-card:hover { border-color: var(--gold); box-shadow: 0 22px 50px rgba(4,14,26,0.45); }
+.dark-band .case-card h3 { color: var(--on-navy); }
+.dark-band .case-card p { color: var(--on-navy-soft); }
+.dark-band .case-card-tags span { color: var(--on-navy); background: var(--navy-900); border-color: var(--navy-700); }
+.dark-band .case-card .arr { color: var(--gold); }
+
+.dark-band .metric { background: var(--navy-850); border-color: var(--navy-700); }
+.dark-band .metric-num { color: var(--on-navy); }
+.dark-band .metric-num small { color: var(--gold); }
+.dark-band .metric-label { color: var(--on-navy-soft); }
+.dark-band .metric-note { color: var(--steel-ink); }

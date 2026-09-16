@@ -17,6 +17,10 @@
 //     /en/                                  EN homepage
 //     /politica-de-confidentialitate.html   RO privacy policy
 //     /en/privacy-policy.html               EN privacy policy
+//     /studii-de-caz/                       RO case-study index
+//     /en/case-studies/                     EN case-study index
+//     /studii-de-caz/<slug>/                RO case study
+//     /en/case-studies/<slug>/              EN case study
 //
 // The masters in site-src/ stay bilingual and are the ONLY files to edit.
 // Everything under website/ that this script names is generated -- see the
@@ -148,6 +152,63 @@ const EN_PRIVACY = {
     '<link rel="canonical" href="https://adaptivetech.ro/en/privacy-policy.html" />',
 };
 
+// The case-study pages. Their bodies are bilingual by spans like every
+// other master; only the head and the JSON-LD need a map.
+const EN_CASES = {
+  '<title>Studii de caz — Adaptive Technologies</title>':
+    '<title>Case studies — Adaptive Technologies</title>',
+  '<meta name="description" content="Două sisteme în producție la clienți din România: un asistent tehnic pe WhatsApp pentru Partner Corporation și o aplicație web cu agent AI pentru laboratorul dentar ZRSIO HEALTH." />':
+    '<meta name="description" content="Two systems in production for Romanian clients: a WhatsApp technical assistant for Partner Corporation and a web app with an AI agent for the ZRSIO HEALTH dental lab." />',
+  '<meta property="og:title" content="Studii de caz — Adaptive Technologies" />':
+    '<meta property="og:title" content="Case studies — Adaptive Technologies" />',
+  '<meta property="og:description" content="Ce am construit, pentru cine și cum funcționează — cu demonstrații interactive." />':
+    '<meta property="og:description" content="What we built, for whom and how it works — with interactive demonstrations." />',
+  '<meta property="og:url" content="https://adaptivetech.ro/studii-de-caz/" />':
+    '<meta property="og:url" content="https://adaptivetech.ro/en/case-studies/" />',
+  '<link rel="canonical" href="https://adaptivetech.ro/studii-de-caz/" />':
+    '<link rel="canonical" href="https://adaptivetech.ro/en/case-studies/" />',
+};
+
+const EN_PARTNER = {
+  '<title>Asistent tehnic pe WhatsApp pentru Partner Corporation — Studiu de caz</title>':
+    '<title>A WhatsApp technical assistant for Partner Corporation — Case study</title>',
+  '<meta name="description" content="Cum am construit pentru Partner Corporation SRL un asistent WhatsApp care răspunde tehnicienilor din manualele imprimantelor fiscale, cu sursa citată. RAG peste o colecție de documente tehnice." />':
+    '<meta name="description" content="How we built a WhatsApp assistant for Partner Corporation SRL that answers technicians from the fiscal-printer manuals, with the source cited. RAG over a technical document collection." />',
+  '<meta property="og:title" content="Asistent tehnic pe WhatsApp pentru Partner Corporation — Studiu de caz" />':
+    '<meta property="og:title" content="A WhatsApp technical assistant for Partner Corporation — Case study" />',
+  '<meta property="og:description" content="Un asistent care răspunde ca un inginer senior, din manualele companiei, cu sursa citată. În producție." />':
+    '<meta property="og:description" content="An assistant that answers like a senior engineer, from the company’s own manuals, with the source cited. In production." />',
+  '<meta property="og:url" content="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />':
+    '<meta property="og:url" content="https://adaptivetech.ro/en/case-studies/partner-corporation/" />',
+  '<link rel="canonical" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />':
+    '<link rel="canonical" href="https://adaptivetech.ro/en/case-studies/partner-corporation/" />',
+  '"name": "Asistent tehnic pe WhatsApp pentru Partner Corporation"':
+    '"name": "A WhatsApp technical assistant for Partner Corporation"',
+  '"description": "Studiu de caz: asistent WhatsApp bazat pe RAG peste manualele tehnice ale imprimantelor fiscale Partner, cu sursa citată la fiecare răspuns."':
+    '"description": "Case study: a WhatsApp assistant built on RAG over the Partner fiscal-printer technical manuals, with the source cited on every answer."',
+  '"inLanguage": "ro"': '"inLanguage": "en"',
+};
+
+const EN_ZRSIO = {
+  '<title>Flowrise Dental — aplicație web cu agent AI pentru ZRSIO HEALTH — Studiu de caz</title>':
+    '<title>Flowrise Dental — a web app with an AI agent for ZRSIO HEALTH — Case study</title>',
+  '<meta name="description" content="Cum am construit Flowrise Dental pentru laboratorul ZRSIO HEALTH SRL: comenzi de lucru urmărite pe stări, roluri pentru tehnicieni și medici, și un agent AI care execută sarcini în aplicație." />':
+    '<meta name="description" content="How we built Flowrise Dental for the ZRSIO HEALTH SRL lab: work orders tracked through statuses, roles for technicians and doctors, and an AI agent that carries out tasks inside the app." />',
+  '<meta property="og:title" content="Flowrise Dental — aplicație web cu agent AI pentru ZRSIO HEALTH — Studiu de caz" />':
+    '<meta property="og:title" content="Flowrise Dental — a web app with an AI agent for ZRSIO HEALTH — Case study" />',
+  '<meta property="og:description" content="Un laborator dentar care își vede toate comenzile pe o singură tablă, cu un agent AI care preia sarcinile repetitive. În producție." />':
+    '<meta property="og:description" content="A dental lab that sees every order on one board, with an AI agent taking the repetitive tasks. In production." />',
+  '<meta property="og:url" content="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />':
+    '<meta property="og:url" content="https://adaptivetech.ro/en/case-studies/zrsio-health/" />',
+  '<link rel="canonical" href="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />':
+    '<link rel="canonical" href="https://adaptivetech.ro/en/case-studies/zrsio-health/" />',
+  '"name": "Flowrise Dental — aplicație web cu agent AI pentru ZRSIO HEALTH"':
+    '"name": "Flowrise Dental — a web app with an AI agent for ZRSIO HEALTH"',
+  '"description": "Studiu de caz: aplicație web pentru un laborator dentar, cu comenzi urmărite pe stări, roluri și un agent AI care execută sarcini."':
+    '"description": "Case study: a web app for a dental lab, with work orders tracked through statuses, roles and an AI agent that carries out tasks."',
+  '"inLanguage": "ro"': '"inLanguage": "en"',
+};
+
 const PAGES = [
   {
     master: 'index.html',
@@ -169,14 +230,6 @@ const PAGES = [
           '<textarea id="f-msg" name="message" placeholder="In short: which process eats up most of your time?"></textarea>',
       }, EN_INDEX),
     },
-    // Root-relative links that must point into the EN tree. The demo is NOT
-    // translated -- it is one bilingual app -- so it keeps its single URL and
-    // is handed the language instead: it used to read the choice from a
-    // localStorage key the split site no longer writes.
-    linksEn: {
-      '/demo/': '/demo/?lang=en',
-      '/politica-de-confidentialitate.html': '/en/privacy-policy.html',
-    },
   },
   {
     master: 'politica-de-confidentialitate.html',
@@ -188,12 +241,45 @@ const PAGES = [
       en: { out: 'en/privacy-policy.html', url: ORIGIN + '/en/privacy-policy.html' },
     },
     text: { ro: {}, en: EN_PRIVACY },
-    // Empty on purpose: every navigational link on this page now comes from
-    // the shared header and footer, which are filled with the right language
-    // prefix at injection time. Nothing is left for a rewrite to catch.
-    linksEn: {},
+  },
+  {
+    master: 'studii-de-caz/index.html',
+    changefreq: 'monthly',
+    home: { ro: '/', en: '/en/' },
+    priority: '0.8',
+    variants: {
+      ro: { out: 'studii-de-caz/index.html', url: ORIGIN + '/studii-de-caz/' },
+      en: { out: 'en/case-studies/index.html', url: ORIGIN + '/en/case-studies/' },
+    },
+    text: { ro: {}, en: EN_CASES },
+  },
+  {
+    master: 'studii-de-caz/partner-corporation.html',
+    changefreq: 'monthly',
+    home: { ro: '/', en: '/en/' },
+    priority: '0.8',
+    variants: {
+      ro: { out: 'studii-de-caz/partner-corporation/index.html', url: ORIGIN + '/studii-de-caz/partner-corporation/' },
+      en: { out: 'en/case-studies/partner-corporation/index.html', url: ORIGIN + '/en/case-studies/partner-corporation/' },
+    },
+    text: { ro: {}, en: EN_PARTNER },
+  },
+  {
+    master: 'studii-de-caz/zrsio-health.html',
+    changefreq: 'monthly',
+    home: { ro: '/', en: '/en/' },
+    priority: '0.8',
+    variants: {
+      ro: { out: 'studii-de-caz/zrsio-health/index.html', url: ORIGIN + '/studii-de-caz/zrsio-health/' },
+      en: { out: 'en/case-studies/zrsio-health/index.html', url: ORIGIN + '/en/case-studies/zrsio-health/' },
+    },
+    text: { ro: {}, en: EN_ZRSIO },
   },
 ];
+
+// The case-study tree has a different slug per language, so pages reach it
+// through a placeholder rather than a literal path.
+const CASES = { ro: '/studii-de-caz/', en: '/en/case-studies/' };
 
 const LOCALE = { ro: 'ro_RO', en: 'en_US' };
 
@@ -215,11 +301,25 @@ function build(page, lang) {
   // ── 0. The shared components. Injected before anything else so their
   //    language spans and their links go through every later step exactly
   //    as the page's own markup does.
-  const home = page.home[lang];
-  const privacy = lang === 'en' ? '/en/privacy-policy.html' : '/politica-de-confidentialitate.html';
-  sub('<!--@header-->', HEADER.split('{{HOME}}').join(home), 'header');
-  sub('<!--@footer-->', FOOTER.split('{{PRIVACY}}').join(privacy), 'footer');
+  sub('<!--@header-->', HEADER, 'header');
+  sub('<!--@footer-->', FOOTER, 'footer');
   sub('<!--@script-->', HEADER_JS + '\n\n' + PAGE_JS, 'shared behaviour');
+
+  // ── 0b. Placeholders. Filled after injection so a master can use them in
+  //    its own body exactly as the partials do -- a case-study page links to
+  //    its sibling with {{CASES}} and to the policy with {{PRIVACY}}, and gets
+  //    the right language's URL without a per-page rewrite table.
+  const fill = {
+    '{{HOME}}': page.home[lang],
+    '{{PRIVACY}}': lang === 'en' ? '/en/privacy-policy.html' : '/politica-de-confidentialitate.html',
+    '{{CASES}}': CASES[lang],
+  };
+  for (const [k, v] of Object.entries(fill)) s = s.split(k).join(v);
+  const unfilled = s.match(/\{\{[A-Z_]+\}\}/);
+  if (unfilled) {
+    console.error('[' + page.master + ' ' + lang + '] unknown placeholder ' + unfilled[0]);
+    process.exit(1);
+  }
 
   // ── 1. Drop the other language outright. Verified safe to do with a
   //    non-greedy match: no data-span in either master contains a nested
@@ -240,17 +340,18 @@ function build(page, lang) {
   if (lang !== 'ro') sub('<html lang="ro">', '<html lang="' + lang + '">', 'html lang');
 
 
-  // ── 4. Per-language text, then the EN link rewrites.
+  // ── 4. Per-language text, then the one EN link rewrite. The demo is NOT
+  //    translated -- it is one bilingual app -- so it keeps its single URL
+  //    and is handed the language instead: it used to read the choice from
+  //    a localStorage key the split site no longer writes. The header links
+  //    to it, so every page has at least one to rewrite.
   for (const [a, b] of Object.entries(page.text[lang] || {})) sub(a, b, 'text');
   if (lang === 'en') {
-    for (const [a, b] of Object.entries(page.linksEn)) {
-      const n = s.split('href="' + a + '"').length - 1;
-      if (n === 0) {
-        console.error('[' + page.master + ' en] no link to rewrite: ' + a);
-        process.exit(1);
-      }
-      s = s.split('href="' + a + '"').join('href="' + b + '"');
+    if (!s.includes('href="/demo/"')) {
+      console.error('[' + page.master + ' en] no demo link to rewrite');
+      process.exit(1);
     }
+    s = s.split('href="/demo/"').join('href="/demo/?lang=en"');
     sub('<meta property="og:locale" content="ro_RO" />',
         '<meta property="og:locale" content="en_US" />', 'og:locale');
     if (s.includes('<meta property="og:locale:alternate" content="en_US" />')) {

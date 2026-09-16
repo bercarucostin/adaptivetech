@@ -39,4 +39,58 @@
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url>
+    <loc>https://adaptivetech.ro/studii-de-caz/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://adaptivetech.ro/en/case-studies/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://adaptivetech.ro/studii-de-caz/partner-corporation/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/partner-corporation/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://adaptivetech.ro/en/case-studies/partner-corporation/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/partner-corporation/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://adaptivetech.ro/studii-de-caz/zrsio-health/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/zrsio-health/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://adaptivetech.ro/en/case-studies/zrsio-health/</loc>
+    <xhtml:link rel="alternate" hreflang="ro" href="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adaptivetech.ro/en/case-studies/zrsio-health/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adaptivetech.ro/studii-de-caz/zrsio-health/" />
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>

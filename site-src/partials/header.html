@@ -7,9 +7,15 @@
 
      {{HOME}} is filled per page: empty on the homepage, so these stay
      same-page anchors that scroll; "/" or "/en/" elsewhere, so they cross
-     back to the right language's homepage. The privacy page used to carry
-     its own copy of this, which is how it ended up linking to #cum-lucram
-     and #despre -- two sections that do not exist. -->
+     back to the right language's homepage. {{CASES}} is the case-study
+     tree for the page's language. The privacy page used to carry its own
+     copy of this, which is how it ended up linking to #cum-lucram and
+     #despre -- two sections that do not exist.
+
+     "Studii de caz" is a dropdown. Its trigger is a real link to the index
+     page, so with no script, or on a keyboard Enter, it still goes
+     somewhere useful; the script only adds open-on-tap for touch and the
+     arrow-key handling. -->
 <nav class="nav" id="nav">
   <div class="nav-inner">
     <a href="{{HOME}}#start" class="brand" aria-label="Adaptive Technologies">
@@ -18,8 +24,24 @@
     </a>
     <div class="nav-links">
       <a href="{{HOME}}#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
-      <a href="{{HOME}}#studiu-de-caz"><span data-ro>Studii de caz</span><span data-en>Case studies</span></a>
-      <a href="{{HOME}}#demo">Demo</a>
+      <div class="nav-sub" id="navCases">
+        <a href="{{CASES}}" class="nav-sub-trigger" id="navCasesTrigger" aria-haspopup="true" aria-expanded="false" aria-controls="navCasesMenu">
+          <span data-ro>Studii de caz</span><span data-en>Case studies</span>
+          <svg class="nav-sub-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </a>
+        <div class="nav-sub-menu" id="navCasesMenu">
+          <a href="{{CASES}}partner-corporation/">
+            <span class="nav-sub-k">Partner Corporation</span>
+            <span class="nav-sub-d"><span data-ro>Asistent tehnic pe WhatsApp</span><span data-en>WhatsApp technical assistant</span></span>
+          </a>
+          <a href="{{CASES}}zrsio-health/">
+            <span class="nav-sub-k">ZRSIO HEALTH · Flowrise Dental</span>
+            <span class="nav-sub-d"><span data-ro>Aplicație web cu agent AI</span><span data-en>Web app with an AI agent</span></span>
+          </a>
+          <a href="{{CASES}}" class="nav-sub-all"><span data-ro>Toate studiile de caz</span><span data-en>All case studies</span> →</a>
+        </div>
+      </div>
+      <a href="/demo/">Demo</a>
       <a href="{{HOME}}#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
       <a href="{{HOME}}#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span></a>
       <a href="{{HOME}}#contact">Contact</a>
@@ -39,13 +61,18 @@
   </div>
 </nav>
 
+<!-- The numbers are the homepage's section numbers, the same ones on its
+     left rail. The two case studies sit under their section as pages of
+     their own; the demo is a page too, so it gets an arrow, not a number. -->
 <div class="m-menu" id="mMenu">
   <a href="{{HOME}}#probleme"><span data-ro>Probleme</span><span data-en>Problems</span><span class="mono">01</span></a>
   <a href="{{HOME}}#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span><span class="mono">02</span></a>
-  <a href="{{HOME}}#studiu-de-caz"><span data-ro>Studiu de caz</span><span data-en>Case study</span><span class="mono">03</span></a>
-  <a href="{{HOME}}#demo">Demo<span class="mono">04</span></a>
-  <a href="{{HOME}}#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span><span class="mono">05</span></a>
-  <a href="{{HOME}}#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span><span class="mono">06</span></a>
-  <a href="{{HOME}}#contact">Contact<span class="mono">07</span></a>
+  <a href="{{HOME}}#studii-de-caz"><span data-ro>Studii de caz</span><span data-en>Case studies</span><span class="mono">03</span></a>
+  <a href="{{CASES}}partner-corporation/" class="m-menu-sub">Partner Corporation<span class="mono">WhatsApp</span></a>
+  <a href="{{CASES}}zrsio-health/" class="m-menu-sub">ZRSIO HEALTH · Flowrise Dental<span class="mono">Web app</span></a>
+  <a href="{{HOME}}#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span><span class="mono">04</span></a>
+  <a href="{{HOME}}#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span><span class="mono">05</span></a>
+  <a href="{{HOME}}#contact">Contact<span class="mono">06</span></a>
+  <a href="/demo/" class="m-menu-head">Demo<span class="mono">→</span></a>
   <a href="{{HOME}}#contact" class="btn btn-gold"><span data-ro>Programați o consultație gratuită</span><span data-en>Book a free consultation</span></a>
 </div>

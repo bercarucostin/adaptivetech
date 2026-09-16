@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asistent tehnic pe WhatsApp pentru Partner Corporation — Studiu de caz</title>
+<meta name="description" content="Cum am construit pentru Partner Corporation SRL un asistent WhatsApp care răspunde tehnicienilor din manualele imprimantelor fiscale, cu sursa citată. RAG peste o colecție de documente tehnice." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230C3054'/%3E%3Cg transform='translate(14,14) scale(0.72)'%3E%3Cpath fill='%23F2A91E' d='M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="icon" href="/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<meta name="theme-color" content="#0C3054" />
+<link rel="stylesheet" href="/assets/site.css" />
+<link rel="canonical" href="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+<meta property="og:title" content="Asistent tehnic pe WhatsApp pentru Partner Corporation — Studiu de caz" />
+<meta property="og:description" content="Un asistent care răspunde ca un inginer senior, din manualele companiei, cu sursa citată. În producție." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://adaptivetech.ro/studii-de-caz/partner-corporation/" />
+<meta property="og:image" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
+<meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
+<meta property="og:locale" content="ro_RO" />
+<meta property="og:locale:alternate" content="en_US" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "name": "Asistent tehnic pe WhatsApp pentru Partner Corporation",
+      "headline": "Asistent tehnic pe WhatsApp pentru Partner Corporation",
+      "description": "Studiu de caz: asistent WhatsApp bazat pe RAG peste manualele tehnice ale imprimantelor fiscale Partner, cu sursa citată la fiecare răspuns.",
+      "inLanguage": "ro",
+      "author": { "@id": "https://adaptivetech.ro/#org" },
+      "publisher": { "@id": "https://adaptivetech.ro/#org" },
+      "about": { "@type": "Organization", "name": "Partner Corporation SRL" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Adaptive Technologies", "item": "https://adaptivetech.ro/" },
+        { "@type": "ListItem", "position": 2, "name": "Studii de caz", "item": "https://adaptivetech.ro/studii-de-caz/" },
+        { "@type": "ListItem", "position": 3, "name": "Partner Corporation" }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+  /* ═══════════════ THE WHATSAPP WIDGET ═══════════════
+     A looping conversation with the real assistant's kind of answers:
+     short, procedural, and each one ending with the manual and section
+     it was read from. */
+  .chat-shell {
+    background: var(--navy-850); border: 1px solid var(--navy-700); border-radius: 20px;
+    padding: 1.5rem; max-width: 470px; margin-left: auto; width: 100%;
+    box-shadow: 0 30px 70px rgba(4,14,26,0.45);
+  }
+  .chat-top {
+    display: flex; align-items: center; gap: 0.6rem; padding-bottom: 1rem; margin-bottom: 1.2rem;
+    border-bottom: 1px solid var(--line-dark);
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--steel-ink);
+  }
+  .chat-body {
+    height: 356px; display: flex; flex-direction: column; justify-content: flex-end;
+    overflow: hidden;
+  }
+  .chat-msg {
+    max-width: 88%; padding: 0.75rem 0.95rem; border-radius: 13px;
+    font-size: 0.86rem; line-height: 1.5; margin-top: 0.85rem; flex: none;
+    opacity: 0; transform: translateY(12px);
+    transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .chat-msg.in { opacity: 1; transform: none; }
+  .chat-user { background: var(--gold); color: var(--navy); font-weight: 500; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .chat-bot { background: var(--navy-700); color: var(--on-navy); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .chat-dots { display: inline-flex; gap: 4px; padding: 3px 2px; }
+  .chat-dots i { width: 6px; height: 6px; background: var(--steel); border-radius: 50%; animation: bounce 1s ease-in-out infinite; }
+  .chat-dots i:nth-child(2) { animation-delay: 0.15s; } .chat-dots i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce { 0%,100% { transform: translateY(0); opacity:0.5;} 50% { transform: translateY(-4px); opacity:1;} }
+  .chat-src { font-family: var(--mono); font-size: 0.62rem; color: var(--gold); margin-top: 0.5rem; opacity: 0.85; display: block; }
+  @media (max-width: 900px) { .chat-shell { margin: 0; } }
+
+  /* ═══════════════ THE DEMO CARD ═══════════════
+     The three steps of the public demo, beside its button. */
+  .demo-card {
+    display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(1.8rem, 4vw, 3rem);
+    align-items: center;
+    background: var(--navy-850); border: 1px solid var(--navy-700); border-radius: 18px;
+    padding: clamp(1.6rem, 3.5vw, 2.6rem);
+  }
+  .demo-steps { list-style: none; display: grid; gap: 1.05rem; }
+  .demo-step { display: flex; gap: 0.95rem; align-items: flex-start; }
+  .demo-step-n {
+    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+    background: var(--gold); color: var(--navy);
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .demo-step-t { font-weight: 600; color: var(--on-navy); font-size: 0.98rem; }
+  .demo-step-d { font-size: 0.87rem; color: var(--on-navy-soft); line-height: 1.5; margin-top: 0.15rem; }
+  .demo-aside { display: grid; gap: 1.1rem; justify-items: start; }
+  .demo-note {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em;
+    color: var(--steel-ink); line-height: 1.6;
+  }
+  .demo-note a { color: var(--gold); text-decoration: underline; }
+  @media (max-width: 860px) { .demo-card { grid-template-columns: 1fr; } }
+
+  /* The channels the same assistant can live in. */
+  .channels { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.4rem; }
+  .channels span {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--on-navy); border: 1px solid var(--navy-700); border-radius: 999px; padding: 0.35rem 0.75rem;
+  }
+  .channels span.now { border-color: var(--gold); color: var(--gold); }
+</style>
+</head>
+
+<body>
+
+<!--@header-->
+
+<svg class="watermark" id="watermark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 L90 88 L67 88 L50 54 L33 88 L10 88 Z"/></svg>
+
+<main>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<header class="page-hero" id="start" data-theme="light">
+  <div class="container">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="{{HOME}}"><span data-ro>Acasă</span><span data-en>Home</span></a><i>/</i>
+      <a href="{{CASES}}"><span data-ro>Studii de caz</span><span data-en>Case studies</span></a><i>/</i>
+      <span aria-current="page">Partner Corporation</span>
+    </nav>
+    <div class="sec-head">
+      <div class="eyebrow"><span data-ro>Studiu de caz · în producție</span><span data-en>Case study · in production</span></div>
+      <h1 class="sec-title">
+        <span data-ro>Un asistent WhatsApp care răspunde ca un <em>inginer senior.</em></span>
+        <span data-en>A WhatsApp assistant that answers like a <em>senior engineer.</em></span>
+      </h1>
+      <p class="sec-sub">
+        <span data-ro>Pentru Partner Corporation SRL — producător românesc de case de marcat și imprimante fiscale — am construit un asistent WhatsApp antrenat pe manualele tehnice ale echipamentelor Partner 200, 300 și 600. Tehnicienii din teren primesc răspunsuri instant, cu sursa citată.</span>
+        <span data-en>For Partner Corporation SRL — a Romanian maker of cash registers and fiscal printers — we built a WhatsApp assistant grounded in the technical manuals of the Partner 200, 300 and 600 equipment. Field technicians get instant answers, with the source cited.</span>
+      </p>
+    </div>
+    <dl class="case-meta">
+      <div><dt>Client</dt><dd>Partner Corporation SRL</dd></div>
+      <div><dt><span data-ro>Domeniu</span><span data-en>Sector</span></dt><dd><span data-ro>Case de marcat și imprimante fiscale</span><span data-en>Cash registers and fiscal printers</span></dd></div>
+      <div><dt><span data-ro>Canal</span><span data-en>Channel</span></dt><dd>WhatsApp</dd></div>
+      <div><dt><span data-ro>Tehnologie</span><span data-en>Technology</span></dt><dd>RAG · n8n · <span data-ro>căutare vectorială</span><span data-en>vector search</span></dd></div>
+    </dl>
+  </div>
+</header>
+
+<!-- ═══════════════ THE ASSISTANT ═══════════════ -->
+<section class="dark-band" id="asistent" data-theme="dark">
+  <div class="container">
+    <div class="case-grid">
+      <div>
+        <div class="sec-head reveal">
+          <div class="eyebrow"><span data-ro>Cum arată</span><span data-en>What it looks like</span></div>
+          <h2 class="sec-title">
+            <span data-ro>Întrebarea vine de pe teren. <em>Răspunsul vine din manual.</em></span>
+            <span data-en>The question comes from the field. <em>The answer comes from the manual.</em></span>
+          </h2>
+          <p class="sec-sub">
+            <span data-ro>Tehnicianul scrie în WhatsApp, așa cum ar întreba un coleg. Asistentul caută în colecția de documente tehnice a companiei, răspunde doar din ce găsește acolo și spune din ce manual și din ce secțiune a citit.</span>
+            <span data-en>The technician writes in WhatsApp, the way they would ask a colleague. The assistant searches the company's technical document collection, answers only from what it finds there, and says which manual and which section it read.</span>
+          </p>
+        </div>
+        <div class="case-metrics reveal" style="--d:0.1s">
+          <div><div class="cmetric-num">~50</div><div class="cmetric-label"><span data-ro>Documente indexate</span><span data-en>Documents indexed</span></div></div>
+          <div><div class="cmetric-num">24/7</div><div class="cmetric-label"><span data-ro>Disponibil pe teren</span><span data-en>Available in the field</span></div></div>
+          <div><div class="cmetric-num">100%</div><div class="cmetric-label"><span data-ro>Răspunsuri cu sursă</span><span data-en>Answers with sources</span></div></div>
+        </div>
+      </div>
+
+      <div class="reveal" style="--d:0.12s">
+        <div class="chat-shell" id="chatShell">
+          <div class="chat-top"><span class="pulse-dot"></span> Partner Assistant · WhatsApp</div>
+          <div class="chat-body" id="chatBody" aria-live="off"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ THE PROBLEM ═══════════════ -->
+<section id="problema" data-theme="light">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow"><span data-ro>Problema</span><span data-en>The problem</span></div>
+      <h2 class="sec-title">
+        <span data-ro>Răspunsul exista. <em>Doar că era în pagina 84.</em></span>
+        <span data-en>The answer existed. <em>It was just on page 84.</em></span>
+      </h2>
+    </div>
+    <div class="case-cols">
+      <div class="case-col reveal">
+        <h3><span data-ro>Înainte</span><span data-en>Before</span></h3>
+        <ul>
+          <li><span data-ro>Zeci de manuale, ghiduri de integrare și proceduri interne, în PDF-uri răspândite pe mai multe calculatoare.</span><span data-en>Dozens of manuals, integration guides and internal procedures, as PDFs spread across several computers.</span></li>
+          <li><span data-ro>Un tehnician la client, cu o eroare pe ecran, suna un coleg senior — care era, de obicei, tot la un client.</span><span data-en>A technician on site, with an error on the screen, would phone a senior colleague — who was usually at a client too.</span></li>
+          <li><span data-ro>Aceleași cinci întrebări, puse de fiecare dată de altcineva, primeau de fiecare dată răspunsuri ușor diferite.</span><span data-en>The same five questions, asked each time by someone else, got slightly different answers each time.</span></li>
+        </ul>
+      </div>
+      <div class="case-col reveal" style="--d:0.1s">
+        <h3><span data-ro>Acum</span><span data-en>Now</span></h3>
+        <ul>
+          <li><span data-ro>Toate documentele sunt indexate într-un singur loc și rămân în proprietatea companiei.</span><span data-en>Every document is indexed in one place and stays the company's property.</span></li>
+          <li><span data-ro>Tehnicianul întreabă în WhatsApp și primește pașii, cu manualul și secțiunea citate, în câteva secunde.</span><span data-en>The technician asks in WhatsApp and gets the steps, with the manual and section cited, within seconds.</span></li>
+          <li><span data-ro>Dacă răspunsul nu e în documente, asistentul spune asta — nu inventează o procedură.</span><span data-en>If the answer is not in the documents, the assistant says so — it does not invent a procedure.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ HOW IT WORKS ═══════════════ -->
+<section class="dark-band" id="cum-functioneaza" data-theme="dark">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow"><span data-ro>Cum funcționează</span><span data-en>How it works</span></div>
+      <h2 class="sec-title">
+        <span data-ro>RAG: modelul <em>citește înainte să răspundă.</em></span>
+        <span data-en>RAG: the model <em>reads before it answers.</em></span>
+      </h2>
+      <p class="sec-sub">
+        <span data-ro>Retrieval-Augmented Generation. Modelul de limbaj nu răspunde din memoria lui generală, ci din fragmentele de document pe care le primește pentru fiecare întrebare. De aceea poate cita sursa — și de aceea nu inventează.</span>
+        <span data-en>Retrieval-Augmented Generation. The language model does not answer from its general memory, but from the document fragments it is handed for each question. That is why it can cite the source — and why it does not make things up.</span>
+      </p>
+    </div>
+    <div class="flow">
+      <div class="flow-step reveal">
+        <h3><span data-ro>Indexare</span><span data-en>Indexing</span></h3>
+        <p><span data-ro>Manualele, ghidurile și procedurile sunt împărțite în fragmente, fiecare cu titlul documentului și secțiunea din care provine. Fragmentele devin vectori într-o bază de date de căutare semantică.</span><span data-en>Manuals, guides and procedures are split into fragments, each tagged with the document title and the section it came from. The fragments become vectors in a semantic search database.</span></p>
+      </div>
+      <div class="flow-step reveal" style="--d:0.08s">
+        <h3><span data-ro>Căutare</span><span data-en>Retrieval</span></h3>
+        <p><span data-ro>Întrebarea din WhatsApp intră printr-un flux <code>n8n</code>, este transformată în același tip de vector și comparată cu toate fragmentele. Cele mai apropiate — de obicei trei-cinci — sunt selectate.</span><span data-en>The WhatsApp question enters through an <code>n8n</code> workflow, is turned into the same kind of vector and compared against every fragment. The closest ones — usually three to five — are selected.</span></p>
+      </div>
+      <div class="flow-step reveal" style="--d:0.16s">
+        <h3><span data-ro>Răspuns cu sursă</span><span data-en>Grounded answer</span></h3>
+        <p><span data-ro>Modelul primește întrebarea și doar acele fragmente, cu instrucțiunea de a răspunde exclusiv din ele. Răspunsul, cu documentul și secțiunea citate, se întoarce în WhatsApp.</span><span data-en>The model receives the question and only those fragments, with the instruction to answer exclusively from them. The answer, with the document and section cited, goes back to WhatsApp.</span></p>
+      </div>
+      <div class="flow-step reveal" style="--d:0.24s">
+        <h3><span data-ro>Actualizare</span><span data-en>Updates</span></h3>
+        <p><span data-ro>Un manual nou sau o procedură revizuită se adaugă la colecție și este disponibilă imediat. Nu se reantrenează nimic — se reindexează un document.</span><span data-en>A new manual or a revised procedure is added to the collection and available immediately. Nothing is retrained — one document is re-indexed.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ RESULTS ═══════════════ -->
+<section id="rezultate" data-theme="light">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow"><span data-ro>Rezultate</span><span data-en>Results</span></div>
+      <h2 class="sec-title">
+        <span data-ro>Cunoștințele seniorilor, <em>disponibile fiecărui tehnician.</em></span>
+        <span data-en>The seniors' knowledge, <em>available to every technician.</em></span>
+      </h2>
+    </div>
+
+    <!-- OUTCOME FIGURES. The slots are built and styled; the numbers are
+         the client's to measure and approve. Remove the hidden attribute
+         and fill each .metric-num once they are in. Never publish a figure
+         that was not measured. -->
+    <div class="metrics reveal" id="cifre" hidden>
+      <div class="metric">
+        <div class="metric-num">—<small></small></div>
+        <div class="metric-label"><span data-ro>Timp mediu până la răspuns, față de un apel telefonic</span><span data-en>Average time to an answer, versus a phone call</span></div>
+        <div class="metric-note"><span data-ro>Măsurat de client</span><span data-en>Measured by the client</span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-num">—<small></small></div>
+        <div class="metric-label"><span data-ro>Întrebări pe lună rezolvate fără un coleg senior</span><span data-en>Questions per month resolved without a senior colleague</span></div>
+        <div class="metric-note"><span data-ro>Măsurat de client</span><span data-en>Measured by the client</span></div>
+      </div>
+      <div class="metric">
+        <div class="metric-num">—<small></small></div>
+        <div class="metric-label"><span data-ro>Tehnicieni care folosesc asistentul săptămânal</span><span data-en>Technicians using the assistant weekly</span></div>
+        <div class="metric-note"><span data-ro>Măsurat de client</span><span data-en>Measured by the client</span></div>
+      </div>
+    </div>
+
+    <div class="case-cols">
+      <div class="case-col reveal">
+        <h3><span data-ro>Pentru tehnicieni</span><span data-en>For technicians</span></h3>
+        <p><span data-ro>Un singur loc de întrebat, deschis oricând, care răspunde în limbajul manualului și arată de unde a citit. Cine nu are încredere în răspuns poate deschide secțiunea citată și verifica.</span><span data-en>One place to ask, open at any hour, that answers in the manual's own language and shows where it read from. Anyone who doubts an answer can open the cited section and check.</span></p>
+      </div>
+      <div class="case-col reveal" style="--d:0.08s">
+        <h3><span data-ro>Pentru companie</span><span data-en>For the company</span></h3>
+        <p><span data-ro>Cunoștințele care stăteau în capul câtorva oameni stau acum în documentele companiei — și rămân acolo când oamenii pleacă. Un tehnician nou devine util din prima săptămână.</span><span data-en>Knowledge that lived in a few people's heads now lives in the company's documents — and stays there when people leave. A new technician is useful from the first week.</span></p>
+      </div>
+      <div class="case-col reveal" style="--d:0.16s">
+        <h3><span data-ro>Pentru date</span><span data-en>For the data</span></h3>
+        <p><span data-ro>Documentele rămân ale companiei, într-o bază de date proprie. Nimic nu este folosit pentru antrenarea vreunui model.</span><span data-en>The documents remain the company's, in its own database. Nothing is used to train any model.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ NOT ONLY WHATSAPP ═══════════════ -->
+<section class="dark-band" id="oriunde" data-theme="dark">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow"><span data-ro>Același mecanism, altă colecție</span><span data-en>Same mechanism, another collection</span></div>
+      <h2 class="sec-title">
+        <span data-ro>WhatsApp a fost alegerea lor. <em>Poate fi chatul din site-ul dumneavoastră.</em></span>
+        <span data-en>WhatsApp was their choice. <em>It can be the chat on your website.</em></span>
+      </h2>
+      <p class="sec-sub">
+        <span data-ro>Asistentul nu știe nimic despre imprimante fiscale — știe să citească o colecție de documente. Aceeași construcție răspunde din contracte, proceduri interne, cataloage de produse sau politici de HR, și poate fi integrată direct într-un site, într-o aplicație internă sau într-un canal de mesagerie.</span>
+        <span data-en>The assistant knows nothing about fiscal printers — it knows how to read a document collection. The same build answers from contracts, internal procedures, product catalogues or HR policies, and can be embedded directly in a website, an internal app or a messaging channel.</span>
+      </p>
+      <div class="channels" aria-label="Canale">
+        <span class="now">WhatsApp</span><span><span data-ro>Chat în site</span><span data-en>Website chat</span></span><span>Slack / Teams</span><span>Email</span><span><span data-ro>Aplicație internă</span><span data-en>Internal app</span></span>
+      </div>
+    </div>
+
+    <div class="demo-card reveal">
+      <ol class="demo-steps">
+        <li class="demo-step">
+          <span class="demo-step-n">1</span>
+          <div>
+            <div class="demo-step-t"><span data-ro>Încărcați un document</span><span data-en>Upload a document</span></div>
+            <div class="demo-step-d"><span data-ro>PDF, DOCX sau TXT. Un contract, un manual, o procedură — orice citiți des și în care căutați greu.</span><span data-en>PDF, DOCX or TXT. A contract, a manual, a procedure — anything you read often and search badly.</span></div>
+          </div>
+        </li>
+        <li class="demo-step">
+          <span class="demo-step-n">2</span>
+          <div>
+            <div class="demo-step-t"><span data-ro>Puneți-i întrebări</span><span data-en>Ask it questions</span></div>
+            <div class="demo-step-d"><span data-ro>Răspunde doar din ce scrie în document. Dacă răspunsul nu e acolo, v-o spune — nu inventează.</span><span data-en>It answers only from what the document says. If the answer is not there, it tells you — it does not invent one.</span></div>
+          </div>
+        </li>
+        <li class="demo-step">
+          <span class="demo-step-n">3</span>
+          <div>
+            <div class="demo-step-t"><span data-ro>Verificați sursa</span><span data-en>Check the source</span></div>
+            <div class="demo-step-d"><span data-ro>Fiecare răspuns arată secțiunea din care a citit, ca să puteți verifica singur.</span><span data-en>Every answer shows the section it read from, so you can check it yourself.</span></div>
+          </div>
+        </li>
+      </ol>
+
+      <div class="demo-aside">
+        <div class="eyebrow" style="margin-bottom:0"><span data-ro>Încercați singur</span><span data-en>Try it yourself</span></div>
+        <p class="sec-sub" style="font-size:0.95rem"><span data-ro>Studiul de caz de mai sus, la scară mică: același mecanism, pe un singur document al dumneavoastră.</span><span data-en>The case study above, in miniature: the same mechanism, on a single document of yours.</span></p>
+        <a href="/demo/" class="btn btn-gold">
+          <span data-ro>Deschideți demo-ul</span><span data-en>Open the demo</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <p class="demo-note">
+          <span data-ro>Gratuit · fără card · un singur document<br>Documentul și fragmentele extrase se șterg automat după 2 ore. <a href="{{PRIVACY}}">Politica de confidențialitate</a>.</span>
+          <span data-en>Free · no card · one document<br>Your document and the extracted fragments are deleted automatically after 2 hours. <a href="{{PRIVACY}}">Privacy policy</a>.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ NEXT ═══════════════ -->
+<section id="urmatorul" data-theme="light">
+  <div class="container">
+    <div class="case-next">
+      <a href="{{CASES}}zrsio-health/" class="reveal">
+        <div class="eyebrow"><span data-ro>Următorul studiu de caz</span><span data-en>Next case study</span></div>
+        <strong>ZRSIO HEALTH · Flowrise Dental</strong>
+        <span class="d"><span data-ro>O aplicație web pentru un laborator dentar: comenzi urmărite pe stări, roluri pentru tehnicieni și medici, și un agent AI care execută sarcini.</span><span data-en>A web app for a dental lab: work orders tracked through statuses, roles for technicians and doctors, and an AI agent that carries out tasks.</span></span>
+        <span class="arr"><span data-ro>Citiți studiul</span><span data-en>Read the case</span> →</span>
+      </a>
+      <a href="{{HOME}}#contact" class="reveal" style="--d:0.08s">
+        <div class="eyebrow"><span data-ro>Aveți o colecție de documente?</span><span data-en>Have a document collection?</span></div>
+        <strong><span data-ro>Vă arătăm în 60 de minute cum ar răspunde din ea.</span><span data-en>In 60 minutes we show you how it would answer from it.</span></strong>
+        <span class="d"><span data-ro>O consultație gratuită, fără angajament. Veniți cu documentele și cu întrebările pe care le primiți cel mai des.</span><span data-en>A free consultation, no commitment. Bring the documents and the questions you get asked most.</span></span>
+        <span class="arr"><span data-ro>Programați consultația</span><span data-en>Book the consultation</span> →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!--@footer-->
+
+<script>
+<!--@script-->
+
+  /* ── The looping conversation ─────────────────────
+     One language per built page, so the copy is picked once from the
+     document's lang rather than emitted as bilingual spans for the build
+     to strip out of a string literal. */
+  (function () {
+    const LANG = document.documentElement.lang === 'en' ? 'en' : 'ro';
+    const body = document.getElementById('chatBody');
+    const shell = document.getElementById('chatShell');
+    const data = [
+      {
+        q: { ro: 'Cum resetez Partner 300 după eroarea 47?', en: 'How do I reset the Partner 300 after error 47?' },
+        a: { ro: 'Eroarea 47 indică o problemă de memorie fiscală. Opriți casa, țineți apăsat butonul MOD 5 secunde, apoi introduceți codul de service.', en: 'Error 47 indicates a fiscal memory issue. Power off, hold the MOD button for 5 seconds, then enter the service code.' },
+        s: { ro: 'Sursă: Manual Partner 300 · secțiunea 8.4', en: 'Source: Partner 300 Manual · section 8.4' }
+      },
+      {
+        q: { ro: 'Ce înseamnă E-12 pe Partner 200?', en: 'What does E-12 mean on the Partner 200?' },
+        a: { ro: 'Senzor de hârtie blocat sau rolă epuizată. Înlocuiți rola și curățați senzorul cu aer comprimat.', en: 'Paper sensor blocked or roll empty. Replace the roll and clean the sensor with compressed air.' },
+        s: { ro: 'Sursă: Manual Partner 200 · secțiunea 5.2', en: 'Source: Partner 200 Manual · section 5.2' }
+      },
+      {
+        q: { ro: 'Pot conecta Partner 600 la POS prin USB?', en: 'Can I connect the Partner 600 to a POS over USB?' },
+        a: { ro: 'Da — activați modul „PC” din meniul de service, apoi instalați driverul v2.3 de pe portalul de suport.', en: 'Yes — enable "PC" mode in the service menu, then install driver v2.3 from the support portal.' },
+        s: { ro: 'Sursă: Ghid integrare Partner 600 · cap. 3', en: 'Source: Partner 600 integration guide · ch. 3' }
+      },
+      {
+        q: { ro: 'Clientul vrea factură pentru bonul fiscal. Ce fac?', en: 'The client wants an invoice for the receipt. What do I do?' },
+        a: { ro: 'Emiteți factura din SmartBill pe baza bonului, în maximum 5 zile lucrătoare. Pașii compleți sunt în procedură.', en: 'Issue the invoice from SmartBill based on the receipt, within 5 working days. Full steps are in the procedure.' },
+        s: { ro: 'Sursă: Procedura de facturare · pag. 2', en: 'Source: Invoicing procedure · p. 2' }
+      }
+    ];
+
+    const t = (pair) => pair[LANG];
+    function push(cls, html) {
+      const d = document.createElement('div');
+      d.className = 'chat-msg ' + cls;
+      d.innerHTML = html;
+      body.appendChild(d);
+      requestAnimationFrame(() => requestAnimationFrame(() => d.classList.add('in')));
+      return d;
+    }
+    const answer = (pair) => t(pair.a) + '<span class="chat-src">' + t(pair.s) + '</span>';
+
+    if (reduceMotion) {
+      data.slice(0, 2).forEach(pair => {
+        push('chat-user in', t(pair.q));
+        push('chat-bot in', answer(pair));
+      });
+      return;
+    }
+
+    let started = false;
+    function cycle() {
+      body.innerHTML = '';
+      let at = 500;
+      data.forEach(pair => {
+        setTimeout(() => push('chat-user', t(pair.q)), at);
+        at += 1000;
+        let typing;
+        setTimeout(() => { typing = push('chat-bot', '<span class="chat-dots"><i></i><i></i><i></i></span>'); }, at);
+        at += 1500;
+        setTimeout(() => {
+          if (typing) typing.remove();
+          push('chat-bot', answer(pair));
+        }, at);
+        at += 2600;
+      });
+      setTimeout(cycle, at + 3200);
+    }
+    new IntersectionObserver((entries, obs) => {
+      if (!entries[0].isIntersecting || started) return;
+      started = true; obs.disconnect();
+      setTimeout(cycle, 300);
+    }, { threshold: 0.4 }).observe(shell);
+  })();
+</script>
+
+</body>
+</html>

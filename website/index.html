@@ -23,7 +23,7 @@
 <meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
 <meta property="og:image:alt" content="Adaptive Technologies" />
 
-<link rel="stylesheet" href="/assets/site.css?v=bf6bfeb6" />
+<link rel="stylesheet" href="/assets/site.css?v=eeb081da" />
 <link rel="canonical" href="https://adaptivetech.ro/" />
 <meta name="theme-color" content="#0C3054" />
 
@@ -533,47 +533,12 @@
   @media (max-width: 1000px) { .trees { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .trees { grid-template-columns: 1fr; } }
 
-  /* ═══════════════ 03 · CASE STUDY ═══════════════ */
-  .sec-case { overflow: hidden; }
-  .case-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
-  .case-metrics { display: grid; grid-template-columns: repeat(3, auto); gap: 1.8rem; margin-top: 1.8rem; justify-content: start; }
-  .cmetric-num { font-size: 1.5rem; font-weight: 700; color: var(--gold); letter-spacing: -0.02em; line-height: 1.15; }
-  .cmetric-label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel-ink); margin-top: 0.3rem; }
-
-  .chat-shell {
-    background: var(--navy-850); border: 1px solid var(--navy-700); border-radius: 20px;
-    padding: 1.5rem; max-width: 470px; margin-left: auto; width: 100%;
-    box-shadow: 0 30px 70px rgba(4,14,26,0.45);
-  }
-  .chat-top {
-    display: flex; align-items: center; gap: 0.6rem; padding-bottom: 1rem; margin-bottom: 1.2rem;
-    border-bottom: 1px solid var(--line-dark);
-    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--steel-ink);
-  }
-  .chat-body {
-    height: 356px; display: flex; flex-direction: column; justify-content: flex-end;
-    overflow: hidden;
-  }
-  .chat-msg {
-    max-width: 88%; padding: 0.75rem 0.95rem; border-radius: 13px;
-    font-size: 0.86rem; line-height: 1.5; margin-top: 0.85rem; flex: none;
-    opacity: 0; transform: translateY(12px);
-    transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
-  }
-  .chat-msg.in { opacity: 1; transform: none; }
-  .chat-user { background: var(--gold); color: var(--navy); font-weight: 500; align-self: flex-end; border-bottom-right-radius: 4px; }
-  .chat-bot { background: var(--navy-700); color: var(--on-navy); align-self: flex-start; border-bottom-left-radius: 4px; }
-  .chat-dots { display: inline-flex; gap: 4px; padding: 3px 2px; }
-  .chat-dots i { width: 6px; height: 6px; background: var(--steel); border-radius: 50%; animation: bounce 1s ease-in-out infinite; }
-  .chat-dots i:nth-child(2) { animation-delay: 0.15s; } .chat-dots i:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes bounce { 0%,100% { transform: translateY(0); opacity:0.5;} 50% { transform: translateY(-4px); opacity:1;} }
-  .chat-src { font-family: var(--mono); font-size: 0.62rem; color: var(--gold); margin-top: 0.5rem; opacity: 0.85; display: block; }
-
-  @media (max-width: 900px) {
-    .case-grid { grid-template-columns: 1fr; }
-    .chat-shell { margin: 0; }
-    .case-metrics { gap: 1.2rem; }
-  }
+  /* ═══════════════ 03 · CASE STUDIES ═══════════════
+     A teaser for the two case-study pages. The cards themselves are the
+     shared .case-card from base.css; this only tints the band so it reads
+     as a step between the white solutions section and the navy process. */
+  .sec-cases { background: var(--surface); }
+  .sec-cases .case-card { box-shadow: 0 10px 30px rgba(12,48,84,0.05); }
 
   /* ═══════════════ 04 · PROCESS ═══════════════ */
   .how-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
@@ -698,32 +663,6 @@
 
   @media (max-width: 900px) { .contact-grid { grid-template-columns: 1fr; } }
 
-  /* ═══════════════ DEMO ═══════════════ */
-  .demo-card {
-    display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(1.8rem, 4vw, 3rem);
-    align-items: center;
-    background: var(--white); border: 1px solid var(--line); border-radius: 18px;
-    padding: clamp(1.6rem, 3.5vw, 2.6rem);
-    box-shadow: 0 16px 40px rgba(12,48,84,0.07);
-  }
-  .demo-steps { list-style: none; display: grid; gap: 1.05rem; }
-  .demo-step { display: flex; gap: 0.95rem; align-items: flex-start; }
-  .demo-step-n {
-    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
-    background: var(--navy); color: var(--gold);
-    font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .demo-step-t { font-weight: 600; color: var(--navy); font-size: 0.98rem; }
-  .demo-step-d { font-size: 0.87rem; color: var(--ink-soft); line-height: 1.5; margin-top: 0.15rem; }
-  .demo-aside { display: grid; gap: 1.1rem; justify-items: start; }
-  .demo-note {
-    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em;
-    color: var(--ink-mute); line-height: 1.6;
-  }
-  .demo-note a { color: var(--gold-ink); text-decoration: underline; }
-  @media (max-width: 860px) { .demo-card { grid-template-columns: 1fr; } }
-
   /* ═══════════════ FLOATING ═══════════════ */
   .chatbot-slot {
     position: fixed; bottom: calc(1.4rem + var(--footer-h)); right: 1.4rem; z-index: 180;
@@ -778,9 +717,15 @@
 
       is filled per page: empty on the homepage, so these stay
      same-page anchors that scroll; "/" or "/en/" elsewhere, so they cross
-     back to the right language's homepage. The privacy page used to carry
-     its own copy of this, which is how it ended up linking to #cum-lucram
-     and #despre -- two sections that do not exist. -->
+     back to the right language's homepage. /studii-de-caz/ is the case-study
+     tree for the page's language. The privacy page used to carry its own
+     copy of this, which is how it ended up linking to #cum-lucram and
+     #despre -- two sections that do not exist.
+
+     "Studii de caz" is a dropdown. Its trigger is a real link to the index
+     page, so with no script, or on a keyboard Enter, it still goes
+     somewhere useful; the script only adds open-on-tap for touch and the
+     arrow-key handling. -->
 <nav class="nav" id="nav">
   <div class="nav-inner">
     <a href="#start" class="brand" aria-label="Adaptive Technologies">
@@ -789,8 +734,24 @@
     </a>
     <div class="nav-links">
       <a href="#solutii"><span data-ro>Soluții</span></a>
-      <a href="#studiu-de-caz"><span data-ro>Studii de caz</span></a>
-      <a href="#demo">Demo</a>
+      <div class="nav-sub" id="navCases">
+        <a href="/studii-de-caz/" class="nav-sub-trigger" id="navCasesTrigger" aria-haspopup="true" aria-expanded="false" aria-controls="navCasesMenu">
+          <span data-ro>Studii de caz</span>
+          <svg class="nav-sub-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </a>
+        <div class="nav-sub-menu" id="navCasesMenu">
+          <a href="/studii-de-caz/partner-corporation/">
+            <span class="nav-sub-k">Partner Corporation</span>
+            <span class="nav-sub-d"><span data-ro>Asistent tehnic pe WhatsApp</span></span>
+          </a>
+          <a href="/studii-de-caz/zrsio-health/">
+            <span class="nav-sub-k">ZRSIO HEALTH · Flowrise Dental</span>
+            <span class="nav-sub-d"><span data-ro>Aplicație web cu agent AI</span></span>
+          </a>
+          <a href="/studii-de-caz/" class="nav-sub-all"><span data-ro>Toate studiile de caz</span> →</a>
+        </div>
+      </div>
+      <a href="/demo/">Demo</a>
       <a href="#proces"><span data-ro>Cum lucrăm</span></a>
       <a href="#de-ce-noi"><span data-ro>De ce noi</span></a>
       <a href="#contact">Contact</a>
@@ -811,16 +772,36 @@
   </div>
 </nav>
 
+<!-- The numbers are the homepage's section numbers, the same ones on its
+     left rail. The two case studies sit under their section as pages of
+     their own; the demo is a page too, so it gets an arrow, not a number. -->
 <div class="m-menu" id="mMenu">
   <a href="#probleme"><span data-ro>Probleme</span><span class="mono">01</span></a>
   <a href="#solutii"><span data-ro>Soluții</span><span class="mono">02</span></a>
-  <a href="#studiu-de-caz"><span data-ro>Studiu de caz</span><span class="mono">03</span></a>
-  <a href="#demo">Demo<span class="mono">04</span></a>
-  <a href="#proces"><span data-ro>Cum lucrăm</span><span class="mono">05</span></a>
-  <a href="#de-ce-noi"><span data-ro>De ce noi</span><span class="mono">06</span></a>
-  <a href="#contact">Contact<span class="mono">07</span></a>
+  <a href="#studii-de-caz"><span data-ro>Studii de caz</span><span class="mono">03</span></a>
+  <a href="/studii-de-caz/partner-corporation/" class="m-menu-sub">Partner Corporation<span class="mono">WhatsApp</span></a>
+  <a href="/studii-de-caz/zrsio-health/" class="m-menu-sub">ZRSIO HEALTH · Flowrise Dental<span class="mono">Web app</span></a>
+  <a href="#proces"><span data-ro>Cum lucrăm</span><span class="mono">04</span></a>
+  <a href="#de-ce-noi"><span data-ro>De ce noi</span><span class="mono">05</span></a>
+  <a href="#contact">Contact<span class="mono">06</span></a>
+  <a href="/demo/" class="m-menu-head">Demo<span class="mono">→</span></a>
   <a href="#contact" class="btn btn-gold"><span data-ro>Programați o consultație gratuită</span></a>
 </div>
+
+<!-- ═══════════════ LEFT RAIL ═══════════════
+     The section index on wide screens. Its numbers are the section
+     numbers; the mobile menu in the header carries the same ones. -->
+<aside class="rail" id="rail" aria-label="Cuprins">
+  <div class="rail-track"><div class="rail-fill" id="railFill"></div></div>
+  <nav class="rail-items" id="railItems">
+    <a href="#probleme"><span class="rail-num">01</span><span class="rail-label"><span data-ro>Probleme</span></span></a>
+    <a href="#solutii"><span class="rail-num">02</span><span class="rail-label"><span data-ro>Soluții</span></span></a>
+    <a href="#studii-de-caz"><span class="rail-num">03</span><span class="rail-label"><span data-ro>Studii de caz</span></span></a>
+    <a href="#proces"><span class="rail-num">04</span><span class="rail-label"><span data-ro>Cum lucrăm</span></span></a>
+    <a href="#de-ce-noi"><span class="rail-num">05</span><span class="rail-label"><span data-ro>De ce noi</span></span></a>
+    <a href="#contact"><span class="rail-num">06</span><span class="rail-label">Contact</span></a>
+  </nav>
+</aside>
 
 <!-- ═══════════════ HERO ═══════════════ -->
 <header class="hero" id="start" data-theme="light">
@@ -1291,98 +1272,55 @@
   </div>
 </section>
 
-<!-- ═══════════════ 03 · CASE STUDY ═══════════════ -->
-<section class="dark-band sec-case" id="studiu-de-caz" data-theme="dark">
-  <div class="container">
-    <div class="case-grid">
-      <div>
-        <div class="sec-head reveal" style="margin-bottom: 0;">
-          <div class="eyebrow">03 · <span data-ro>Studiu de caz · în producție</span></div>
-          <h2 class="sec-title">
-            <span data-ro>Un asistent WhatsApp care răspunde ca un <em>inginer senior.</em></span>
-            
-          </h2>
-          <p class="sec-sub">
-            <span data-ro>Pentru Partner Corporation — companie românească de case de marcat — am construit un asistent WhatsApp antrenat pe manualele tehnice ale imprimantelor fiscale Partner 200, 300 și 600. Tehnicienii din teren primesc răspunsuri instant, cu sursa citată.</span>
-            
-          </p>
-        </div>
-        <div class="case-metrics reveal" style="--d:0.1s">
-          <div><div class="cmetric-num">~50</div><div class="cmetric-label"><span data-ro>Documente indexate</span></div></div>
-          <div><div class="cmetric-num">24/7</div><div class="cmetric-label"><span data-ro>Disponibil pe teren</span></div></div>
-          <div><div class="cmetric-num">100%</div><div class="cmetric-label"><span data-ro>Răspunsuri cu sursă</span></div></div>
-        </div>
-      </div>
-
-      <div class="reveal" style="--d:0.12s">
-        <div class="chat-shell" id="chatShell">
-          <div class="chat-top"><span class="pulse-dot"></span> Partner Assistant · WhatsApp</div>
-          <div class="chat-body" id="chatBody" aria-live="off"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ 04 · LIVE DEMO ═══════════════ -->
-<section id="demo" data-theme="light">
+<!-- ═══════════════ 03 · CASE STUDIES ═══════════════ -->
+<section class="sec-cases" id="studii-de-caz" data-theme="light">
   <div class="container">
     <div class="sec-head reveal">
-      <div class="eyebrow">04 · <span data-ro>Încercați singur</span></div>
+      <div class="eyebrow">03 · <span data-ro>În producție</span></div>
       <h2 class="sec-title">
-        <span data-ro>Studiul de caz de mai sus, <em>la scară mică</em>.</span>
+        <span data-ro>Două sisteme care <em>lucrează acum</em> la clienți din România.</span>
         
       </h2>
       <p class="sec-sub">
-        <span data-ro>Același mecanism, pe un singur document. Încărcați-l, puneți-i întrebări și vedeți exact secțiunea din care a citit fiecare răspuns.</span>
+        <span data-ro>Nu prezentări — sisteme în producție. Fiecare are pagina lui, cu o demonstrație interactivă a felului în care funcționează.</span>
         
       </p>
     </div>
 
-    <div class="demo-card reveal">
-      <ol class="demo-steps">
-        <li class="demo-step">
-          <span class="demo-step-n">1</span>
-          <div>
-            <div class="demo-step-t"><span data-ro>Încărcați un document</span></div>
-            <div class="demo-step-d"><span data-ro>PDF, DOCX sau TXT. Un contract, un manual, o procedură — orice citiți des și în care căutați greu.</span></div>
-          </div>
-        </li>
-        <li class="demo-step">
-          <span class="demo-step-n">2</span>
-          <div>
-            <div class="demo-step-t"><span data-ro>Puneți-i întrebări</span></div>
-            <div class="demo-step-d"><span data-ro>Răspunde doar din ce scrie în document. Dacă răspunsul nu e acolo, v-o spune — nu inventează.</span></div>
-          </div>
-        </li>
-        <li class="demo-step">
-          <span class="demo-step-n">3</span>
-          <div>
-            <div class="demo-step-t"><span data-ro>Verificați sursa</span></div>
-            <div class="demo-step-d"><span data-ro>Fiecare răspuns arată secțiunea din care a citit, ca să puteți verifica singur.</span></div>
-          </div>
-        </li>
-      </ol>
-
-      <div class="demo-aside">
-        <a href="/demo/" class="btn btn-gold">
-          <span data-ro>Deschideți demo-ul</span>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </a>
-        <p class="demo-note">
-          <span data-ro>Gratuit · fără card · un singur document<br>Documentul și fragmentele extrase se șterg automat după 2 ore. <a href="/politica-de-confidentialitate.html">Politica de confidențialitate</a>.</span>
-          
-        </p>
-      </div>
+    <div class="case-cards">
+      <a href="/studii-de-caz/partner-corporation/" class="case-card reveal">
+        <div class="eyebrow">Partner Corporation SRL</div>
+        <div>
+          <h3><span data-ro>Un asistent WhatsApp care răspunde tehnicienilor din manualele companiei.</span></h3>
+          <p style="margin-top:0.7rem"><span data-ro>RAG peste manualele imprimantelor fiscale: răspunsuri instant, cu sursa citată. Același mecanism poate trăi în chatul unui site, pentru orice colecție de documente.</span></p>
+        </div>
+        <div>
+          <div class="case-card-tags"><span>WhatsApp</span><span>RAG</span><span>n8n</span></div>
+          <div class="arr" style="margin-top:1rem"><span data-ro>Citiți studiul</span> →</div>
+        </div>
+      </a>
+      <a href="/studii-de-caz/zrsio-health/" class="case-card reveal" style="--d:0.08s">
+        <div class="eyebrow">ZRSIO HEALTH SRL · Flowrise Dental</div>
+        <div>
+          <h3><span data-ro>Tot laboratorul dentar pe o singură tablă, cu un agent AI care execută sarcini.</span></h3>
+          <p style="margin-top:0.7rem"><span data-ro>Comenzi de lucru urmărite pe stări, roluri pentru tehnicieni și medici, și un agent care răspunde din date și creează comenzi — cu drepturile rolului, nu mai mult.</span></p>
+        </div>
+        <div>
+          <div class="case-card-tags"><span><span data-ro>Aplicație web</span></span><span>Supabase</span><span><span data-ro>Agent AI</span></span></div>
+          <div class="arr" style="margin-top:1rem"><span data-ro>Citiți studiul</span> →</div>
+        </div>
+      </a>
     </div>
+
+    <a href="/demo/" class="sec-hint reveal"><span data-ro>Sau încercați singur: demo-ul RAG, pe un document al dumneavoastră</span></a>
   </div>
 </section>
 
-<!-- ═══════════════ 05 · PROCESS ═══════════════ -->
+<!-- ═══════════════ 04 · PROCESS ═══════════════ -->
 <section class="dark-band" id="proces" data-theme="dark">
   <div class="container">
     <div class="sec-head reveal">
-      <div class="eyebrow">05 · <span data-ro>Cum lucrăm</span></div>
+      <div class="eyebrow">04 · <span data-ro>Cum lucrăm</span></div>
       <h2 class="sec-title">
         <span data-ro>Vedeți valoarea <em>înainte</em> de orice angajament.</span>
         
@@ -1480,7 +1418,7 @@
 <section class="sec-why" id="de-ce-noi" data-theme="light">
   <div class="container">
     <div class="sec-head reveal">
-      <div class="eyebrow">06 · <span data-ro>De ce Adaptive</span></div>
+      <div class="eyebrow">05 · <span data-ro>De ce Adaptive</span></div>
       <h2 class="sec-title">
         <span data-ro>Locali. Experimentați. <em>Corecți.</em></span>
         
@@ -1565,7 +1503,7 @@
     <div class="contact-grid">
       <div>
         <div class="sec-head reveal" style="margin-bottom:0;">
-          <div class="eyebrow">07 · Contact</div>
+          <div class="eyebrow">06 · Contact</div>
           <h2 class="sec-title">
             <span data-ro>Începeți cu o consultație <em>gratuită</em> de 60 de minute.</span>
             
@@ -1697,6 +1635,34 @@ mMenu.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeMenu
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && mMenu.classList.contains('open')) closeMenu();
 });
+
+/* The case-study dropdown. CSS opens it on hover and on keyboard focus
+   within; this covers the two cases CSS cannot: a touch tap on the
+   trigger (which has no hover, and would otherwise navigate away before
+   anyone sees the list), and closing on Escape or an outside click. On
+   a device with hover, a click on the trigger is a real navigation to
+   the index page, as its href says. */
+const navSub = document.getElementById('navCases');
+const navSubTrigger = document.getElementById('navCasesTrigger');
+if (navSub && navSubTrigger) {
+  const hoverable = window.matchMedia('(hover: hover)').matches;
+  const setSub = (open) => {
+    navSub.classList.toggle('open', open);
+    navSubTrigger.setAttribute('aria-expanded', open);
+  };
+  navSubTrigger.addEventListener('click', (e) => {
+    if (hoverable) return;
+    if (!navSub.classList.contains('open')) { e.preventDefault(); setSub(true); }
+  });
+  navSubTrigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSub(true); navSub.querySelector('.nav-sub-menu a').focus(); }
+  });
+  document.addEventListener('click', (e) => { if (!navSub.contains(e.target)) setSub(false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navSub.classList.contains('open')) { setSub(false); navSubTrigger.focus(); }
+  });
+  navSub.addEventListener('focusout', (e) => { if (!navSub.contains(e.relatedTarget)) setSub(false); });
+}
 
 /* Behaviour every content page shares. Injected right after header.js.
 
@@ -1954,76 +1920,6 @@ if (watermark) {
       cycle();
       setInterval(cycle, 3400);
     }, { threshold: 0.3 }).observe(flow2);
-  })();
-
-  /* ── Case study: looping conversation ────────────── */
-  (function () {
-    const body = document.getElementById('chatBody');
-    const shell = document.getElementById('chatShell');
-    const data = [
-      {
-        q: { ro: 'Cum resetez Partner 300 după eroarea 47?', en: 'How do I reset the Partner 300 after error 47?' },
-        a: { ro: 'Eroarea 47 indică o problemă de memorie fiscală. Opriți casa, țineți apăsat butonul MOD 5 secunde, apoi introduceți codul de service.', en: 'Error 47 indicates a fiscal memory issue. Power off, hold the MOD button for 5 seconds, then enter the service code.' },
-        s: { ro: 'Sursă: Manual Partner 300 · secțiunea 8.4', en: 'Source: Partner 300 Manual · section 8.4' }
-      },
-      {
-        q: { ro: 'Ce înseamnă E-12 pe Partner 200?', en: 'What does E-12 mean on the Partner 200?' },
-        a: { ro: 'Senzor de hârtie blocat sau rolă epuizată. Înlocuiți rola și curățați senzorul cu aer comprimat.', en: 'Paper sensor blocked or roll empty. Replace the roll and clean the sensor with compressed air.' },
-        s: { ro: 'Sursă: Manual Partner 200 · secțiunea 5.2', en: 'Source: Partner 200 Manual · section 5.2' }
-      },
-      {
-        q: { ro: 'Pot conecta Partner 600 la POS prin USB?', en: 'Can I connect the Partner 600 to a POS over USB?' },
-        a: { ro: 'Da — activați modul „PC” din meniul de service, apoi instalați driverul v2.3 de pe portalul de suport.', en: 'Yes — enable "PC" mode in the service menu, then install driver v2.3 from the support portal.' },
-        s: { ro: 'Sursă: Ghid integrare Partner 600 · cap. 3', en: 'Source: Partner 600 integration guide · ch. 3' }
-      },
-      {
-        q: { ro: 'Clientul vrea factură pentru bonul fiscal. Ce fac?', en: 'The client wants an invoice for the receipt. What do I do?' },
-        a: { ro: 'Emiteți factura din SmartBill pe baza bonului, în maximum 5 zile lucrătoare. Pașii compleți sunt în procedură.', en: 'Issue the invoice from SmartBill based on the receipt, within 5 working days. Full steps are in the procedure.' },
-        s: { ro: 'Sursă: Procedura de facturare · pag. 2', en: 'Source: Invoicing procedure · p. 2' }
-      }
-    ];
-
-    function bi(pair) { return '<span data-ro>' + pair.ro + '</span>'; }
-    function push(cls, html) {
-      const d = document.createElement('div');
-      d.className = 'chat-msg ' + cls;
-      d.innerHTML = html;
-      body.appendChild(d);
-      requestAnimationFrame(() => requestAnimationFrame(() => d.classList.add('in')));
-      return d;
-    }
-
-    if (reduceMotion) {
-      data.slice(0, 2).forEach(pair => {
-        push('chat-user in', bi(pair.q));
-        push('chat-bot in', bi(pair.a) + '<span class="chat-src">' + bi(pair.s) + '</span>');
-      });
-      return;
-    }
-
-    let started = false;
-    function cycle() {
-      body.innerHTML = '';
-      let t = 500;
-      data.forEach(pair => {
-        setTimeout(() => push('chat-user', bi(pair.q)), t);
-        t += 1000;
-        let typing;
-        setTimeout(() => { typing = push('chat-bot', '<span class="chat-dots"><i></i><i></i><i></i></span>'); }, t);
-        t += 1500;
-        setTimeout(() => {
-          if (typing) typing.remove();
-          push('chat-bot', bi(pair.a) + '<span class="chat-src">' + bi(pair.s) + '</span>');
-        }, t);
-        t += 2600;
-      });
-      setTimeout(cycle, t + 3200);
-    }
-    new IntersectionObserver((entries, obs) => {
-      if (!entries[0].isIntersecting || started) return;
-      started = true; obs.disconnect();
-      setTimeout(cycle, 300);
-    }, { threshold: 0.4 }).observe(shell);
   })();
 
   /* ── Contact form → mailto ───────────────────────── */

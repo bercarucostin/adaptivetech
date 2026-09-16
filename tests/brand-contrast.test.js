@@ -125,7 +125,10 @@ test('no page defines its own tokens or shared components', () => {
   // behind -- which is how the privacy policy ended up a warm-beige site with
   // a different lockup and two dead nav links.
   const pages = ['index.html', 'en/index.html',
-    'politica-de-confidentialitate.html', 'en/privacy-policy.html'];
+    'politica-de-confidentialitate.html', 'en/privacy-policy.html',
+    'studii-de-caz/index.html', 'en/case-studies/index.html',
+    'studii-de-caz/partner-corporation/index.html', 'en/case-studies/partner-corporation/index.html',
+    'studii-de-caz/zrsio-health/index.html', 'en/case-studies/zrsio-health/index.html'];
   for (const page of pages) {
     const html = fs.readFileSync(path.join(SITE, page), 'utf8');
     const inline = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
