@@ -12,6 +12,10 @@
      copy of this, which is how it ended up linking to #cum-lucram and
      #despre -- two sections that do not exist.
 
+     Order: the links that scroll the homepage first (Soluții, Cum lucrăm,
+     De ce noi), then the ones that leave for another page (Studii de caz,
+     Demo), then Contact. Interleaving the two kinds read as random.
+
      "Studii de caz" is a dropdown. Its trigger is a real link to the index
      page, so with no script, or on a keyboard Enter, it still goes
      somewhere useful; the script only adds open-on-tap for touch and the
@@ -24,6 +28,8 @@
     </a>
     <div class="nav-links">
       <a href="{{HOME}}#solutii"><span data-ro>Soluții</span><span data-en>Solutions</span></a>
+      <a href="{{HOME}}#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
+      <a href="{{HOME}}#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span></a>
       <div class="nav-sub" id="navCases">
         <a href="{{CASES}}" class="nav-sub-trigger" id="navCasesTrigger" aria-haspopup="true" aria-expanded="false" aria-controls="navCasesMenu">
           <span data-ro>Studii de caz</span><span data-en>Case studies</span>
@@ -42,8 +48,6 @@
         </div>
       </div>
       <a href="/demo/">Demo</a>
-      <a href="{{HOME}}#proces"><span data-ro>Cum lucrăm</span><span data-en>How we work</span></a>
-      <a href="{{HOME}}#de-ce-noi"><span data-ro>De ce noi</span><span data-en>Why us</span></a>
       <a href="{{HOME}}#contact">Contact</a>
     </div>
     <div class="nav-right">
