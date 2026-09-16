@@ -40,6 +40,10 @@ const HEADER = fs.readFileSync(path.join(PARTIALS, 'header.html'), 'utf8').trimE
 const FOOTER = fs.readFileSync(path.join(PARTIALS, 'footer.html'), 'utf8').trimEnd();
 const BASE_CSS = fs.readFileSync(path.join(PARTIALS, 'base.css'), 'utf8');
 const HEADER_JS = fs.readFileSync(path.join(PARTIALS, 'header.js'), 'utf8').trimEnd();
+// Page behaviour shared beyond the header: reveal-on-scroll, watermark theme,
+// and the reduceMotion flag every page script reads. Same scope as the page's
+// own script, so a page must not redeclare what this provides.
+const PAGE_JS = fs.readFileSync(path.join(PARTIALS, 'page.js'), 'utf8').trimEnd();
 
 // ── Cache busting by content hash.
 //
@@ -215,7 +219,7 @@ function build(page, lang) {
   const privacy = lang === 'en' ? '/en/privacy-policy.html' : '/politica-de-confidentialitate.html';
   sub('<!--@header-->', HEADER.split('{{HOME}}').join(home), 'header');
   sub('<!--@footer-->', FOOTER.split('{{PRIVACY}}').join(privacy), 'footer');
-  sub('<!--@script-->', HEADER_JS, 'header behaviour');
+  sub('<!--@script-->', HEADER_JS + '\n\n' + PAGE_JS, 'shared behaviour');
 
   // ── 1. Drop the other language outright. Verified safe to do with a
   //    non-greedy match: no data-span in either master contains a nested

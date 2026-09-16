@@ -23,7 +23,7 @@
 <meta property="og:image:secure_url" content="https://adaptivetech.ro/assets/social/og-1200x630.png" />
 <meta property="og:image:alt" content="Adaptive Technologies" />
 
-<link rel="stylesheet" href="/assets/site.css?v=d70f5c95" />
+<link rel="stylesheet" href="/assets/site.css?v=2e2cd77c" />
 <link rel="canonical" href="https://adaptivetech.ro/en/" />
 <meta name="theme-color" content="#0C3054" />
 
@@ -147,37 +147,9 @@
 
   :focus-visible { outline: 2px solid var(--gold-deep); outline-offset: 3px; border-radius: 4px; }
 
-  .container { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--pad); }
-  section > .container, footer .container { position: relative; z-index: 2; }
-
-  .mono { font-family: var(--mono); }
 
   /* No bilingual CSS: each built page carries one language only, and the
      other language lives at its own URL. See tools/build-site.js. */
-
-  /* ═══════════════ FIXED BACKGROUND WATERMARK ═══════════════ */
-  .watermark {
-    position: fixed; right: -5vw; top: 50%; transform: translateY(-50%);
-    height: min(82vh, 740px); width: auto;
-    z-index: 1; pointer-events: none;
-  }
-  .watermark path { fill: var(--navy); opacity: 0.05; transition: fill 0.6s, opacity 0.6s; }
-  .watermark.on-dark path { fill: #EAF0F7; opacity: 0.07; }
-
-  /* ═══════════════ REVEAL ANIMATIONS ═══════════════ */
-  .reveal {
-    opacity: 0;
-    transform: translateY(22px);
-    transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
-    transition-delay: var(--d, 0s);
-  }
-  .reveal.in { opacity: 1; transform: none; }
-
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-    .reveal { opacity: 1; transform: none; }
-  }
 
   /* ═══════════════ LEFT RAIL ═══════════════ */
   .rail {
@@ -202,32 +174,7 @@
   .rail.on-dark .rail-items a.active .rail-num { color: var(--gold); }
   .rail.on-dark .rail-items a.active .rail-label { color: var(--gold); }
 
-  /* ═══════════════ SECTION SCAFFOLD ═══════════════ */
-  section { padding: clamp(4.5rem, 9vw, 7.5rem) 0; position: relative; }
-  .sec-head { max-width: 680px; margin-bottom: clamp(2.2rem, 5vw, 3.5rem); }
-  .sec-head.wide { max-width: 1000px; }
-  .eyebrow {
-    font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase;
-    letter-spacing: 0.16em; color: var(--gold-ink); margin-bottom: 1.1rem;
-    display: flex; align-items: center; gap: 0.6rem;
-  }
-  .eyebrow::before { content: ''; width: 26px; height: 2px; background: var(--gold); flex: none; }
-  .sec-title {
-    font-size: clamp(1.85rem, 4vw, 2.9rem); font-weight: 700;
-    letter-spacing: -0.025em; line-height: 1.08; color: var(--navy); margin-bottom: 1rem;
-  }
-  .sec-title em, .h-em { font-style: normal; color: var(--gold-deep); }
-  .sec-sub { font-size: 1.06rem; color: var(--ink-soft); line-height: 1.55; max-width: 60ch; }
-  .sec-hint {
-    display: flex; align-items: center; gap: 0.55rem;
-    font-family: var(--mono); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--gold-ink);
-    margin-top: clamp(2.2rem, 4.5vw, 3.4rem);
-  }
-  .sec-hint::before { content: '→'; color: var(--gold); }
   #solutii .sec-head { margin-bottom: 1.1rem; }
-
-  .dark-band { background: var(--navy); color: var(--on-navy); }
 
   /* The token remap belongs to the two sections that were INVERTED, not to
      every dark band. studiu-de-caz and contact were designed dark from the
@@ -242,10 +189,6 @@
     --white: var(--navy-850);
     --surface: var(--navy-850);
   }
-  .dark-band .sec-title { color: var(--on-navy); }
-  .dark-band .sec-title em { color: var(--gold); }
-  .dark-band .eyebrow { color: var(--gold); }
-  .dark-band .sec-sub { color: var(--on-navy-soft); }
   /* --navy stays navy (it is a background elsewhere), so the handful of
      places that use it as TEXT are lifted by hand. */
   #probleme .prob-name,
@@ -355,8 +298,6 @@
   .hero-honest svg { width: 18px; height: 18px; flex: none; stroke: var(--gold-deep); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-top: 2px; }
   .hero-honest strong { color: var(--navy); }
   .hero-card .btn { width: auto; }
-  .pulse-dot { width: 7px; height: 7px; background: var(--gold); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; flex: none; }
-  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.45; transform: scale(0.75);} }
 
   @media (max-width: 860px) {
     .hero-top { grid-template-columns: 1fr; gap: 1.4rem; }
@@ -1737,9 +1678,6 @@
 </a>
 
 <script>
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-
 /* THE header's behaviour. Injected at the <!--@script--> marker on every
    page that carries the shared header, so the header cannot be present
    without the code that makes it work.
@@ -1781,13 +1719,36 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && mMenu.classList.contains('open')) closeMenu();
 });
 
-  /* ── Reveal on scroll ────────────────────────────── */
-  const revealObs = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealObs.unobserve(e.target); } });
-  }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
-  document.querySelectorAll('.reveal').forEach(el => {
-    if (reduceMotion) el.classList.add('in'); else revealObs.observe(el);
-  });
+/* Behaviour every content page shares. Injected right after header.js.
+
+   Reveal-on-scroll and the watermark theme used to live in the homepage
+   script. The case-study pages need both, and a second copy is how the
+   privacy page once ended up running a nav script against elements it
+   did not have. */
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Elements marked .reveal fade in as they enter the viewport. Under reduced
+   motion they are simply shown; the <noscript> rule in the stylesheet shows
+   them when there is no script at all. */
+const revealObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealObs.unobserve(e.target); } });
+}, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+document.querySelectorAll('.reveal').forEach(el => {
+  if (reduceMotion) el.classList.add('in'); else revealObs.observe(el);
+});
+
+/* The fixed A-mark watermark inverts over dark bands. Sections declare
+   data-theme; whichever one crosses the middle of the viewport decides. */
+const watermark = document.getElementById('watermark');
+if (watermark) {
+  const themeObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) watermark.classList.toggle('on-dark', e.target.dataset.theme === 'dark');
+    });
+  }, { rootMargin: '-42% 0px -52% 0px' });
+  document.querySelectorAll('[data-theme]').forEach(s => themeObs.observe(s));
+}
 
   /* ── Count-up stats ──────────────────────────────── */
   document.querySelectorAll('[data-count]').forEach(el => {
@@ -1810,7 +1771,6 @@ document.addEventListener('keydown', (e) => {
   const railLinks = [...document.querySelectorAll('#railItems a')];
   const rail = document.getElementById('rail');
   const toTop = document.getElementById('toTop');
-  const watermark = document.getElementById('watermark');
   const sections = [...document.querySelectorAll('[data-theme]')];
 
   window.addEventListener('scroll', () => {
@@ -1825,7 +1785,6 @@ document.addEventListener('keydown', (e) => {
       const dark = e.target.dataset.theme === 'dark';
       rail.classList.toggle('on-dark', dark);
       toTop.classList.toggle('on-dark', dark);
-      watermark.classList.toggle('on-dark', dark);
       const id = e.target.id;
       if (id) railLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
     });
