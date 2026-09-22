@@ -8966,7 +8966,8 @@ body.dashboard-production-maximized .kanban-col{
 .order-tooth-chart .tooth-svg-group.batch-selected .tooth-svg-shape{
   fill:var(--tooth-color,#d2d2d0)!important;
   stroke:#292921!important;
-  stroke-width:3px!important;
+  stroke-width:2px!important;
+  vector-effect:none;
   stroke-dasharray:4 2;
   transform:none!important;
 }
