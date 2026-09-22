@@ -9302,3 +9302,5 @@ body.dashboard-production-maximized .kanban-col{
   outline:2px solid #169447!important;
   outline-offset:3px!important;
 }
+
+.tooth-connection:not(.checked) .connection-check{display:none;}

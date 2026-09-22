@@ -43,22 +43,10 @@ test('chart exposes 30 accessible pair controls, checked state and disabled unco
  assert.doesNotMatch(readonly,/role="checkbox"/);
 });
 
-test('editor can expose direct connection controls before tooth configuration',()=>{
- const svg=run('dentalChartSvg([],true,{connections:[],allowUnconfiguredConnections:true})');
- assert.match(svg,/data-tooth-connection="46-45"[^>]*aria-checked="false"[^>]*aria-disabled="false"/);
-});
-
-test('direct connection click includes endpoints and toggles green state without inventing work types',()=>{
- const events={};
- const element={dataset:{toothConnection:'46-45'},getAttribute:()=> 'false',addEventListener:(name,fn)=>events[name]=fn,focus(){}};
- const chart={querySelectorAll:()=>[element],querySelector:()=>element};
- const draft={selected:[],perTooth:{},connections:[]};
- context.testChart=chart;context.testDraft=draft;
- vm.runInContext('bindToothConnectionControls(testChart,testDraft,()=>{},()=>false,true)',context);
- events.click({stopPropagation(){}});
- assert.deepEqual(Array.from(draft.selected),[46,45]);
- assert.deepEqual(JSON.parse(JSON.stringify(draft.connections)),[[46,45]]);
- assert.equal(draft.perTooth[46].type,undefined);
- events.click({stopPropagation(){}});
- assert.deepEqual(JSON.parse(JSON.stringify(draft.connections)),[]);
+test('only changes between actively selected teeth affect the connection preview',()=>{
+ assert.equal(vm.runInContext('typeof previewToothConnections',context),'function');
+ assert.deepEqual(run('previewToothConnections([[11,21]], {"46-45":true}, [])'),[[11,21]]);
+ assert.deepEqual(run('previewToothConnections([[11,21]], {"46-45":true}, [46])'),[[11,21]]);
+ assert.deepEqual(run('previewToothConnections([[11,21]], {"46-45":true}, [46,45])'),[[11,21],[46,45]]);
+ assert.deepEqual(run('previewToothConnections([[46,45],[45,44]], {"46-45":false}, [46,45])'),[[45,44]]);
 });

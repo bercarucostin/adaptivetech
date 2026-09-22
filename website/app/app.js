@@ -88,6 +88,7 @@ let orderCaseLoaded=false;
 let activeOrderTooth=null;
 let activeOrderToothAnchor=null;
 let activeOrderTeeth=[];
+let activeOrderConnectionChanges={};
 let activeOrderMixedFields=new Set();
 let orderToothViewMode="upperlower";
 let includeOlderOrders=false;
@@ -354,6 +355,7 @@ function resetRuntimeState(){
   activeOrderTooth=null;
   activeOrderToothAnchor=null;
   activeOrderTeeth=[];
+  activeOrderConnectionChanges={};
   activeOrderMixedFields=new Set();
   orderToothViewMode="upperlower";
   includeOlderOrders=false;
@@ -2828,6 +2830,18 @@ function setSelectedToothConnections(connections,selected,joined){
     : normalizeToothConnections(connections).filter(pair=>!pair.every(t=>scope.has(t))));
 }
 
+function previewToothConnections(connections,changes,selection){
+  const keys=new Set(normalizeToothConnections(connections).map(pair=>pair.join("-")));
+  const scope=new Set(selection.map(Number));
+  for(const pair of TOOTH_CONNECTION_PAIRS){
+    const key=pair.join("-");
+    if(!pair.every(t=>scope.has(t)))continue;
+    if(changes[key]===true)keys.add(key);
+    if(changes[key]===false)keys.delete(key);
+  }
+  return TOOTH_CONNECTION_PAIRS.filter(pair=>keys.has(pair.join("-")));
+}
+
 function toothConnectionGroups(selected,connections){
   const scope=new Set(selected.map(Number));
   const links=new Set(normalizeToothConnections(connections,selected).map(pair=>pair.join("-")));
@@ -2848,20 +2862,14 @@ function toothConnectionsSummary(draft){
     `${group.join("–")}: ${group.length>1?"solidarizați":"solo"}`).join(" · ");
 }
 
-function bindToothConnectionControls(chart,draft,onChange,readOnly=()=>false,includeUnconfigured=false){
+function bindToothConnectionControls(chart,draft,onChange,readOnly=()=>false){
   chart?.querySelectorAll("[data-tooth-connection]").forEach(el=>{
     const toggle=()=>{
       if(readOnly()||el.getAttribute("aria-disabled")==="true")return;
       const pair=el.dataset.toothConnection.split("-").map(Number);
-      const addedTeeth=includeUnconfigured?pair.filter(t=>!draft.selected.includes(t)):[];
-      if(addedTeeth.length){
-        draft.selected=orderedSelectedTeeth([...draft.selected,...addedTeeth]);
-        draft.perTooth??={};
-        addedTeeth.forEach(t=>{draft.perTooth[t]??={};});
-      }
       const checked=normalizeToothConnections(draft.connections,draft.selected).some(edge=>edge.join("-")===pair.join("-"));
       draft.connections=setSelectedToothConnections(draft.connections,pair,!checked);
-      onChange(pair,addedTeeth);
+      onChange();
       chart.querySelector(`[data-tooth-connection="${pair.join("-")}"]`)?.focus({preventScroll:true});
     };
     el.addEventListener("click",e=>{e.stopPropagation();toggle();});
@@ -3007,18 +3015,18 @@ const TOOTH_LAYOUT={
   24:{x:362.887,y:114.399,r:53,sx:1.28831,sy:1.31014},
   15:{x:101.09,y:156.331,r:-70,sx:1.15729,sy:1.19005},
   25:{x:376.922,y:154.634,r:70,sx:1.15729,sy:1.19005},
-  16:{x:93.12,y:211.13,r:-85,sx:1.61584,sy:1.62676},
-  26:{x:384.609,y:207.482,r:85,sx:1.61584,sy:1.62676},
-  17:{x:88.298,y:276.704,r:-88,sx:1.67043,sy:1.6486},
-  27:{x:389.519,y:274.255,r:88,sx:1.67043,sy:1.6486},
-  18:{x:88.298,y:340.345,r:-90,sx:1.69227,sy:1.62676},
-  28:{x:389.519,y:336.722,r:90,sx:1.69227,sy:1.62676},
-  48:{t:0.9999948,sx:1.752185,sy:1.728818},
-  38:{t:0.9999948,sx:1.752185,sy:1.728818},
-  47:{t:0.8560796,sx:1.787224,sy:1.763868},
-  37:{t:0.8560796,sx:1.787224,sy:1.763868},
-  46:{t:0.6890517,sx:1.740501,sy:1.728818},
-  36:{t:0.6890517,sx:1.740501,sy:1.728818},
+  16:{x:93.517,y:208.398,r:-85,sx:1.486573,sy:1.496619},
+  26:{x:384.233,y:204.900,r:85,sx:1.486573,sy:1.496619},
+  17:{x:89.080,y:268.745,r:-88,sx:1.536796,sy:1.516712},
+  27:{x:388.752,y:266.350,r:88,sx:1.536796,sy:1.516712},
+  18:{x:89.080,y:327.314,r:-90,sx:1.556888,sy:1.496619},
+  28:{x:388.752,y:323.838,r:90,sx:1.556888,sy:1.496619},
+  48:{t:0.9709198,sx:1.612010,sy:1.590513},
+  38:{t:0.9709198,sx:1.612010,sy:1.590513},
+  47:{t:0.8370234,sx:1.644246,sy:1.622759},
+  37:{t:0.8370234,sx:1.644246,sy:1.622759},
+  46:{t:0.6821020,sx:1.601261,sy:1.590513},
+  36:{t:0.6821020,sx:1.601261,sy:1.590513},
   45:{t:0.5317413,sx:1.448467,sy:1.471834},
   35:{t:0.5317413,sx:1.448467,sy:1.471834},
   44:{t:0.3862421,sx:1.495201,sy:1.471834},
@@ -3034,7 +3042,7 @@ const TOOTH_LAYOUT={
 // One smooth centerline for both halves of the lower arch, from the incisors
 // to the posterior molars. Stations and crown scales preserve outline contacts.
 const LOWER_ARCH_CURVE=[
-  {x:241,y:735}, {x:110,y:735}, {x:89,y:600}, {x:89,y:438}
+  {x:241,y:703.001}, {x:110,y:703.001}, {x:89,y:568.001}, {x:89,y:406.001}
 ];
 
 function lowerArchPosition(t,right=false){
@@ -3354,25 +3362,25 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
   build(FDI_LOWER);
 
   const dividers=viewMode==="quadrants"
-    ? `<line x1="241" y1="18" x2="241" y2="758" class="chart-divider"></line>
-       <line x1="45" y1="388" x2="437" y2="388" class="chart-divider"></line>`
+    ? `<line x1="241" y1="18" x2="241" y2="726.001" class="chart-divider"></line>
+       <line x1="45" y1="373.079" x2="437" y2="373.079" class="chart-divider"></line>`
     : viewMode==="upperlower"
-      ? `<line x1="55" y1="388" x2="427" y2="388" class="chart-divider horizontal"></line>
-         <text x="241" y="350" text-anchor="middle" class="arch-center-letter">U</text>
-         <text x="241" y="428" text-anchor="middle" class="arch-center-letter">L</text>`
+      ? `<line x1="55" y1="373.079" x2="427" y2="373.079" class="chart-divider horizontal"></line>
+         <text x="241" y="335.079" text-anchor="middle" class="arch-center-letter">U</text>
+         <text x="241" y="413.079" text-anchor="middle" class="arch-center-letter">L</text>`
       : ``;
 
   const connections=options.connections===undefined?"":TOOTH_CONNECTION_PAIRS.map(([a,b])=>{
     const p=toothConnectionPosition(a,b);
     const checked=normalizeToothConnections(options.connections,selected).some(pair=>pair[0]===a&&pair[1]===b);
-    const disabled=!interactive||(!options.allowUnconfiguredConnections&&(!selectedSet.has(a)||!selectedSet.has(b)));
-    const label=`${a}–${b}: ${checked?"solidarizați":"solo"}${!selectedSet.has(a)||!selectedSet.has(b)?(options.allowUnconfiguredConnections?" · Click pentru a include dinții în lucrare":" · Include ambii dinți în lucrare"):""}`;
+    const disabled=!interactive||!selectedSet.has(a)||!selectedSet.has(b);
+    const label=`${a}–${b}: ${checked?"solidarizați":"solo"}${!selectedSet.has(a)||!selectedSet.has(b)?" · Include ambii dinți în lucrare":""}`;
     return `<g class="tooth-connection${checked?" checked":""}" data-tooth-connection="${a}-${b}" aria-checked="${checked}" aria-disabled="${disabled}"
       ${interactive?`role="checkbox" tabindex="${disabled?-1:0}"`:''} aria-label="${escapeHtml(label)}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
       <title>${escapeHtml(label)}</title><circle class="connection-hit" r="11"/><circle class="connection-dot" r="4.5"/>
-      ${checked?'<path class="connection-check" d="M-2,0 L-.5,1.5 L2.5,-2"/>':''}</g>`;
+      <path class="connection-check" d="M-2,0 L-.5,1.5 L2.5,-2"/></g>`;
   }).join("");
-  return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="${options.connections===undefined?'0 0 474 776':'0 -26 474 826'}" aria-label="FDI anatomical tooth chart">
+  return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="${options.connections===undefined?'0 0 474 744.001':'0 -26 474 794.001'}" aria-label="FDI anatomical tooth chart">
     ${dividers}
     ${groups.join("")}
     ${labels.join("")}
@@ -5369,6 +5377,7 @@ function closeOrderToothPopover(){
   activeOrderTooth=null;
   activeOrderToothAnchor=null;
   activeOrderTeeth=[];
+  activeOrderConnectionChanges={};
   activeOrderMixedFields=new Set();
   if(orderApplySameShade)orderApplySameShade.checked=false;
   orderSameShadeWrap?.classList.add("hidden");
@@ -5378,6 +5387,7 @@ function closeOrderToothPopover(){
   orderToothPopover?.style.removeProperty("top");
   orderToothPopover?.style.removeProperty("bottom");
   syncBatchToothHighlight();
+  syncOrderConnectionControls();
 }
 
 function positionOrderToothPopover(anchor=null){
@@ -5619,9 +5629,42 @@ function batchPreviewHtml(teeth){
   </div>`;
 }
 
+function syncOrderConnectionControls(){
+  if(!orderCaseDraft||!orderToothChart)return;
+  const keys=new Set(previewToothConnections(orderCaseDraft.connections,activeOrderConnectionChanges,activeOrderTeeth).map(pair=>pair.join("-")));
+  orderToothChart.querySelectorAll("[data-tooth-connection]").forEach(el=>{
+    const key=el.dataset.toothConnection;
+    const checked=keys.has(key);
+    const enabled=!doctorModalReadOnly()&&key.split("-").every(t=>activeOrderTeeth.includes(Number(t)));
+    const label=`${key.replace("-","–")}: ${checked?"solidarizați":"solo"}${enabled?"":" · Selectează ambii dinți pentru a modifica legătura"}`;
+    el.classList.toggle("checked",checked);
+    el.setAttribute("aria-checked",String(checked));
+    el.setAttribute("aria-disabled",String(!enabled));
+    el.setAttribute("tabindex",enabled?"0":"-1");
+    el.setAttribute("aria-label",label);
+    const title=el.querySelector("title");
+    if(title)title.textContent=label;
+  });
+}
+
+function toggleOrderToothConnection(pair){
+  if(doctorModalReadOnly()||!orderCaseDraft||!pair.every(t=>activeOrderTeeth.includes(t)))return;
+  // Apply an explicit pending bulk choice before refining an individual link.
+  if(orderJoinTeeth?.dataset.changed==="true"){
+    for(const edge of TOOTH_CONNECTION_PAIRS.filter(edge=>edge.every(t=>activeOrderTeeth.includes(t)))){
+      activeOrderConnectionChanges[edge.join("-")]=orderJoinTeeth.checked;
+    }
+  }
+  const key=pair.join("-");
+  const preview=previewToothConnections(orderCaseDraft.connections,activeOrderConnectionChanges,activeOrderTeeth);
+  activeOrderConnectionChanges[key]=!preview.some(edge=>edge.join("-")===key);
+  syncOrderJoinTeethControl();
+  syncOrderConnectionControls();
+}
+
 function syncOrderJoinTeethControl(teeth=activeOrderTeeth){
   const joinable=TOOTH_CONNECTION_PAIRS.filter(pair=>pair.every(t=>teeth.includes(t)));
-  const joined=normalizeToothConnections(orderCaseDraft.connections,teeth).length;
+  const joined=normalizeToothConnections(previewToothConnections(orderCaseDraft.connections,activeOrderConnectionChanges,teeth),teeth).length;
   if(orderJoinTeeth){
     orderJoinTeeth.checked=joinable.length>0&&joined===joinable.length;
     orderJoinTeeth.indeterminate=joined>0&&joined<joinable.length;
@@ -5655,6 +5698,9 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
     return;
   }
 
+  // Dropping either endpoint discards only its provisional connection changes.
+  activeOrderConnectionChanges=Object.fromEntries(Object.entries(activeOrderConnectionChanges)
+    .filter(([key])=>key.split("-").every(t=>activeOrderTeeth.includes(Number(t)))));
   activeOrderTooth=current;
   activeOrderToothAnchor=anchor;
   activeOrderMixedFields=new Set();
@@ -5700,7 +5746,6 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
     ? "Observații diferite — scrie pentru a suprascrie"
     : "Observații suplimentare...";
 
-  [orderToothType,orderToothShade,orderToothNote].forEach(input=>{input.dataset.initialValue=input.value;});
   orderToothTypeSuggestions?.classList.add("hidden");
 
   orderToothRemoveBtn.classList.toggle("hidden",configuredCount===0);
@@ -5710,6 +5755,7 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
   updateToothDetailBadge(orderToothType.value);
   orderToothPopover.classList.remove("hidden");
   syncBatchToothHighlight();
+  syncOrderConnectionControls();
   positionOrderToothPopover(anchor);
 
   // Avoid opening the on-screen keyboard or moving the scroll position on
@@ -5766,6 +5812,8 @@ function saveOrderToothPopover(){
   }
 
   orderCaseDraft.selected=orderedSelectedTeeth([...selectedSet]);
+  orderCaseDraft.connections=normalizeToothConnections(
+    previewToothConnections(orderCaseDraft.connections,activeOrderConnectionChanges,teeth),orderCaseDraft.selected);
   if(orderJoinTeeth?.dataset.changed==="true"){
     orderCaseDraft.connections=setSelectedToothConnections(orderCaseDraft.connections,teeth,orderJoinTeeth.checked);
   }
@@ -5802,37 +5850,16 @@ function renderOrderToothPicker(){
     details:orderCaseDraft.perTooth,
     colorByType:true,
     viewMode:orderToothViewMode,
-    connections:orderCaseDraft.connections,
-    allowUnconfiguredConnections:true
+    connections:orderCaseDraft.connections
   });
-  bindToothConnectionControls(orderToothChart,orderCaseDraft,(pair,addedTeeth)=>{
-    syncOrderCaseDraftFromInputs();
-    const alreadyEditingPair=pair.every(t=>activeOrderTeeth.includes(t));
-    const selection=orderedActiveTeeth([...activeOrderTeeth,...pair]);
-    const pendingFields=activeOrderTeeth.length
-      ? [["type",orderToothType],["shade",orderToothShade],["note",orderToothNote]]
-        .filter(([field,input])=>input.value!==input.dataset.initialValue||(field==="shade"&&orderApplySameShade?.checked))
-        .map(([field,input])=>({field,value:input.value}))
-      : [];
-    renderOrderToothPicker();
-    if(addedTeeth.length&&!alreadyEditingPair){
-      openOrderToothPopover(pair[0],null,{batch:selection});
-      for(const {field,value} of pendingFields){
-        const input={type:orderToothType,shade:orderToothShade,note:orderToothNote}[field];
-        input.value=value;
-        activeOrderMixedFields.delete(field);
-        if(field==="shade"){
-          orderApplySameShade.checked=true;
-          orderToothShade.disabled=false;
-          orderToothShade.placeholder="A1, A2, BL2...";
-        }
-      }
-      updateToothDetailBadge(orderToothType.value);
-    }else if(activeOrderTeeth.length){
-      // Direct dots must not discard unsaved shade/type/note edits in the open popover.
-      syncOrderJoinTeethControl();
-    }
-  },doctorModalReadOnly,true);
+  orderToothChart.querySelectorAll("[data-tooth-connection]").forEach(el=>{
+    const pair=el.dataset.toothConnection.split("-").map(Number);
+    el.addEventListener("click",e=>{e.stopPropagation();toggleOrderToothConnection(pair);});
+    el.addEventListener("keydown",e=>{
+      if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();toggleOrderToothConnection(pair);}
+    });
+  });
+  syncOrderConnectionControls();
   const connectionSummary=$("orderConnectionsSummary");
   if(connectionSummary)connectionSummary.textContent=toothConnectionsSummary(orderCaseDraft);
 
