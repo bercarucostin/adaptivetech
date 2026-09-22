@@ -8399,46 +8399,58 @@ a,
 
 /* ==========================================================================\n   V18.3 — REFERENCE-CLOSER ODONTOGRAM GEOMETRY\n   ========================================================================== */
 .reference-odontogram .tooth-svg-shape{
-  stroke:#50504e!important;
-  stroke-width:1.2!important;
+  stroke:var(--tooth-stroke,#666962)!important;
+  stroke-width:.9!important;
   stroke-linejoin:round!important;
+  filter:none!important;
+}
+.tooth-enamel-light{
+  stroke:none;
+  pointer-events:none;
 }
 .reference-odontogram .tooth-anatomy{
-  stroke:#70706d!important;
-  stroke-width:1.02!important;
-  opacity:.88!important;
+  stroke:var(--tooth-line,#777a73)!important;
+  stroke-width:.75!important;
+  opacity:.55!important;
   stroke-linecap:round!important;
   stroke-linejoin:round!important;
 }
 .reference-odontogram .tooth-cusp{
-  stroke:#787875!important;
-  stroke-width:.86!important;
-  opacity:.72!important;
+  stroke:var(--tooth-line,#777a73)!important;
+  stroke-width:.65!important;
+  opacity:.35!important;
   stroke-linecap:round!important;
 }
 .reference-odontogram .tooth-highlight{
-  stroke:rgba(255,255,255,.72)!important;
+  stroke:rgba(255,255,255,.85)!important;
   stroke-width:1.05!important;
   opacity:.72!important;
 }
 .reference-odontogram .tooth-render{
-  filter:drop-shadow(0 1px 1.4px rgba(30,30,30,.14))!important;
+  filter:drop-shadow(0 1.5px 1.3px rgba(30,35,40,.18))!important;
 }
 .reference-odontogram .tooth-svg-group:not(.selected) .tooth-svg-shape{
-  fill:#d7d7d5!important;
+  fill:#d9dbd5!important;
+  stroke:#656963!important;
+}
+.reference-odontogram .tooth-svg-group:not(.selected) .tooth-anatomy,
+.reference-odontogram .tooth-svg-group:not(.selected) .tooth-cusp{
+  opacity:.48!important;
+}
+.reference-odontogram .tooth-svg-group.selected .tooth-enamel-light{
+  opacity:.6;
 }
 .reference-odontogram .tooth-svg-group.interactive:hover .tooth-svg-shape,
 .reference-odontogram .tooth-svg-group.interactive:focus .tooth-svg-shape{
   stroke:#9b6a12!important;
   stroke-width:1.8!important;
-  filter:drop-shadow(0 0 4px rgba(181,121,8,.16))!important;
 }
 .reference-inside-label{
   font-size:15px!important;
-  font-weight:800!important;
-  fill:#242423!important;
-  stroke:#f3f3f1!important;
-  stroke-width:2.2px!important;
+  font-weight:700!important;
+  fill:#292d2b!important;
+  stroke:#fafbf7!important;
+  stroke-width:2.6px!important;
 }
 
 
@@ -8953,6 +8965,10 @@ body.dashboard-production-maximized .kanban-col{
 .order-tooth-chart .tooth-svg-group.batch-selected{
   opacity:1!important;
   filter:drop-shadow(0 0 5px rgba(197,126,0,.95)) drop-shadow(0 0 12px rgba(244,185,66,.72))!important;
+}
+.order-tooth-chart .tooth-svg-group.batch-selected .tooth-enamel-light{
+  transform:scale(1.12);
+  opacity:.6;
 }
 .order-tooth-chart .tooth-svg-group.batch-selected .tooth-svg-shape{
   fill:#f4b942!important;

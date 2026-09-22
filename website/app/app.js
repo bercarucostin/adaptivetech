@@ -2940,48 +2940,48 @@ const TOOTH_LAYOUT={
   12:{x:162,y:61,r:-20,sx:.90,sy:1.06},
   22:{x:319,y:62,r:20,sx:.90,sy:1.06},
 
-  13:{x:128,y:88,r:-36,sx:.92,sy:1.07},
-  23:{x:352,y:88,r:36,sx:.92,sy:1.07},
+  13:{x:128,y:88,r:-36,sx:1.10,sy:1.20},
+  23:{x:352,y:88,r:36,sx:1.10,sy:1.20},
 
-  14:{x:103,y:125,r:-49,sx:.98,sy:1.02},
-  24:{x:378,y:124,r:49,sx:.98,sy:1.02},
+  14:{x:103,y:125,r:-49,sx:1.15,sy:1.18},
+  24:{x:378,y:124,r:49,sx:1.15,sy:1.18},
 
-  15:{x:87,y:166,r:-65,sx:1.03,sy:1.03},
-  25:{x:395,y:165,r:65,sx:1.03,sy:1.03},
+  15:{x:87,y:166,r:-65,sx:1.22,sy:1.22},
+  25:{x:395,y:165,r:65,sx:1.22,sy:1.22},
 
-  16:{x:76,y:219,r:-82,sx:1.18,sy:1.16},
-  26:{x:407,y:220,r:82,sx:1.18,sy:1.16},
+  16:{x:76,y:219,r:-82,sx:1.40,sy:1.36},
+  26:{x:407,y:220,r:82,sx:1.40,sy:1.36},
 
-  17:{x:72,y:286,r:-88,sx:1.15,sy:1.12},
-  27:{x:411,y:286,r:88,sx:1.15,sy:1.12},
+  17:{x:72,y:286,r:-88,sx:1.42,sy:1.36},
+  27:{x:411,y:286,r:88,sx:1.42,sy:1.36},
 
-  18:{x:71,y:353,r:-90,sx:1.03,sy:1.03},
-  28:{x:411,y:353,r:90,sx:1.03,sy:1.03},
+  18:{x:71,y:353,r:-90,sx:1.22,sy:1.22},
+  28:{x:411,y:353,r:90,sx:1.22,sy:1.22},
 
   // MANDIBULAR / LOWER
-  48:{x:72,y:438,r:-90,sx:1.04,sy:1.08},
-  38:{x:411,y:438,r:90,sx:1.04,sy:1.08},
+  48:{x:72,y:438,r:-90,sx:1.30,sy:1.34},
+  38:{x:411,y:438,r:90,sx:1.30,sy:1.34},
 
-  47:{x:78,y:503,r:-84,sx:1.10,sy:1.10},
-  37:{x:407,y:503,r:84,sx:1.10,sy:1.10},
+  47:{x:78,y:503,r:-84,sx:1.36,sy:1.32},
+  37:{x:407,y:503,r:84,sx:1.36,sy:1.32},
 
-  46:{x:85,y:568,r:-78,sx:1.13,sy:1.11},
-  36:{x:395,y:563,r:78,sx:1.13,sy:1.11},
+  46:{x:85,y:568,r:-78,sx:1.38,sy:1.32},
+  36:{x:395,y:563,r:78,sx:1.38,sy:1.32},
 
-  45:{x:100,y:626,r:-67,sx:1.00,sy:1.04},
-  35:{x:378,y:614,r:67,sx:1.00,sy:1.04},
+  45:{x:100,y:626,r:-67,sx:1.17,sy:1.20},
+  35:{x:378,y:614,r:67,sx:1.17,sy:1.20},
 
-  44:{x:123,y:679,r:-55,sx:1.00,sy:1.04},
-  34:{x:360,y:663,r:55,sx:1.03,sy:1.07},
+  44:{x:123,y:679,r:-55,sx:1.17,sy:1.20},
+  34:{x:360,y:663,r:55,sx:1.17,sy:1.20},
 
-  43:{x:155,y:715,r:-39,sx:1.03,sy:1.08},
-  33:{x:338,y:704,r:39,sx:1.03,sy:1.08},
+  43:{x:155,y:715,r:-39,sx:1.16,sy:1.20},
+  33:{x:338,y:704,r:39,sx:1.16,sy:1.20},
 
-  42:{x:188,y:738,r:-22,sx:.90,sy:.95},
-  32:{x:307,y:733,r:22,sx:.90,sy:.95},
+  42:{x:188,y:738,r:-22,sx:1.08,sy:1.10},
+  32:{x:307,y:733,r:22,sx:1.08,sy:1.10},
 
-  41:{x:222,y:747,r:-7,sx:.84,sy:.92},
-  31:{x:264,y:744,r:7,sx:.84,sy:.92}
+  41:{x:222,y:747,r:-7,sx:1.10,sy:1.08},
+  31:{x:264,y:744,r:7,sx:1.10,sy:1.08}
 };
 
 function toothPosition(tooth){
@@ -3058,7 +3058,7 @@ function lightenHex(hex,amount=28){
   return `#${vals.map(v=>v.toString(16).padStart(2,"0")).join("")}`;
 }
 
-function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false){
+function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false,surfaceId="toothSurface"){
   const kind=toothKind(tooth);
   const variant=toothVariant(tooth);
   const n=Number(tooth);
@@ -3079,14 +3079,14 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
   // --------------------------- INCISORS ---------------------------
   if(pos===1 && upper){
     crown=`<path class="tooth-svg-shape" d="
-      M-13.7,-18.2
-      C-9.2,-21.0 -4.4,-21.6 0,-20.8
-      C4.5,-21.6 9.4,-20.8 13.7,-18.0
-      C15.1,-10.0 15.0,-2.4 13.5,5.5
-      C12.1,12.3 8.2,17.1 2.4,18.4
-      C1.0,18.8 -1.1,18.8 -2.6,18.4
-      C-8.4,17.0 -12.2,12.2 -13.6,5.4
-      C-15.1,-2.5 -15.2,-10.1 -13.7,-18.2 Z"></path>`;
+      M-18.0,-15.4
+      C-12.5,-18.0 -5.6,-17.1 0,-17.7
+      C6.1,-18.3 13.8,-17.5 18.2,-14.8
+      C20.0,-9.7 19.2,-1.6 16.5,4.1
+      C13.3,8.8 8.1,12.2 4.2,17.0
+      C2.0,19.5 -1.8,19.8 -4.5,17.3
+      C-8.5,13.2 -13.8,9.1 -16.9,3.4
+      C-19.5,-2.7 -20.0,-10.0 -18.0,-15.4 Z"></path>`;
     anatomy=`
       <path class="tooth-anatomy" d="M-8.4,-12.5 C-4.8,-9.4 -2.7,-5.2 -1.7,-1.0"></path>
       <path class="tooth-anatomy" d="M8.4,-12.5 C4.8,-9.4 2.7,-5.2 1.7,-1.0"></path>
@@ -3109,14 +3109,14 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
   }
   else if(pos===2 && upper){
     crown=`<path class="tooth-svg-shape" d="
-      M-11.2,-16.4
-      C-7.7,-19.1 -3.4,-19.9 0,-19.2
-      C3.5,-19.9 7.8,-19.0 11.2,-16.3
-      C12.7,-9.0 12.4,-2.1 11.0,5.4
-      C9.9,11.7 6.4,15.9 1.4,16.9
-      C0.6,17.1 -0.7,17.1 -1.5,16.9
-      C-6.7,15.8 -10.1,11.5 -11.2,5.3
-      C-12.6,-2.2 -12.8,-9.1 -11.2,-16.4 Z"></path>`;
+      M-13.7,-14.8
+      C-9.3,-17.5 -3.6,-17.9 1.3,-17.0
+      C6.2,-17.5 12.4,-15.8 14.5,-12.3
+      C16.2,-6.5 14.7,0.7 11.9,5.2
+      C9.4,9.8 5.8,12.3 2.0,16.0
+      C0.0,17.9 -2.5,17.3 -4.6,15.4
+      C-8.1,12.1 -12.1,8.7 -14.0,3.6
+      C-16.0,-2.1 -16.5,-10.0 -13.7,-14.8 Z"></path>`;
     anatomy=`
       <path class="tooth-anatomy" d="M-6.8,-10.7 C-3.7,-7.6 -1.9,-3.2 -1.1,1.8"></path>
       <path class="tooth-anatomy" d="M6.7,-10.7 C3.8,-7.6 1.9,-3.2 1.0,1.8"></path>
@@ -3356,10 +3356,22 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
 
   return `
     <g class="tooth-glyph ${kind} ${variant}" style="--tooth-color:${color};--tooth-stroke:${stroke};--tooth-line:${line}">
-      <g class="tooth-render">
-        ${crown}${anatomy}
+      <g class="tooth-render"${!upper&&pos<=2?' transform="rotate(180)"':""}>
+        ${crown}
+        ${crown.replace('class="tooth-svg-shape"',`class="tooth-enamel-light" fill="url(#${surfaceId})" aria-hidden="true"`)}
+        ${anatomy}
       </g>
     </g>`;
+}
+
+function toothSurfaceDefs(id){
+  return `<radialGradient id="${id}" cx="38%" cy="30%" r="72%">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".82"></stop>
+    <stop offset=".38" stop-color="#ffffff" stop-opacity=".38"></stop>
+    <stop offset=".66" stop-color="#ffffff" stop-opacity=".08"></stop>
+    <stop offset=".86" stop-color="#555b62" stop-opacity=".16"></stop>
+    <stop offset="1" stop-color="#343a42" stop-opacity=".32"></stop>
+  </radialGradient>`;
 }
 
 function dentalChartSvg(selected=[],interactive=false,options={}){
@@ -3408,6 +3420,7 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
 
   return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="0 0 474 776" aria-label="FDI anatomical tooth chart">
     <defs>
+      ${toothSurfaceDefs("toothSurface")}
       <filter id="toothBevel" x="-35%" y="-35%" width="170%" height="170%">
         <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur"></feGaussianBlur>
         <feSpecularLighting in="blur" surfaceScale="3.5" specularConstant=".52" specularExponent="14" lighting-color="#ffffff" result="spec">
@@ -5488,6 +5501,7 @@ function positionOrderToothPopover(anchor=null){
 function toothPreviewSvg(tooth,color){
   return `<svg viewBox="-34 -34 68 68" aria-hidden="true">
     <defs>
+      ${toothSurfaceDefs("toothPreviewSurface")}
       <filter id="previewBevel" x="-35%" y="-35%" width="170%" height="170%">
         <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur"></feGaussianBlur>
         <feSpecularLighting in="blur" surfaceScale="4" specularConstant=".7" specularExponent="17" lighting-color="#ffffff" result="spec">
@@ -5498,7 +5512,7 @@ function toothPreviewSvg(tooth,color){
       </filter>
     </defs>
     <g transform="scale(1.32)" filter="url(#previewBevel)">
-      ${toothGlyphMarkup(tooth,color,true,false)}
+      ${toothGlyphMarkup(tooth,color,true,false,"toothPreviewSurface")}
     </g>
   </svg>`;
 }
