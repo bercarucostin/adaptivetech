@@ -2,7 +2,8 @@
 
 Punctele din exteriorul arcadelor reprezintă cele 30 de perechi FDI vecine.
 Verde înseamnă legătură activă; un punct gol înseamnă lipsa legăturii.
-Punctele sunt disponibile numai când ambii dinți sunt incluși în lucrare.
+Clickul pe punct activează imediat legătura. Dacă un dinte nu este inclus încă,
+este adăugat în selecție și pop-up-ul cere tipul lucrării înainte de salvare.
 Nu există legături între arcade sau peste dinți lipsă.
 
 În pop-up, „Solidarizează dinții selectați” modifică numai legăturile cu
@@ -44,7 +45,7 @@ duplicate care ar putea deveni contradictorii. Cazurile vechi pornesc fără leg
    Schimbările sunt în `AI - Parse Final`, `AI - Build Final Prompt` și
    `AI - Build Retrieval Plan`. AI citește legăturile existente înainte de editare
    și păstrează perechile neafectate. Nu sunt necesare credențiale noi.
-3. Publică fișierele `website/app/app.js`, `styles.css` și `index.html` (18.37).
+3. Publică fișierele `website/app/app.js`, `styles.css` și `index.html` (18.38).
 4. Verifică într-o lucrare de test: două puncte consecutive bifate, salvare,
    redeschidere, debifare și eliminarea dintelui intermediar.
 

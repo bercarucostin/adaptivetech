@@ -9256,3 +9256,49 @@ body.dashboard-production-maximized .kanban-col{
 .tooth-connection:focus-visible .connection-hit {stroke:#155b38;stroke-width:1;stroke-dasharray:2 2;}
 .tooth-connections-help,.tooth-connections-summary {font-size:12px;color:var(--muted,#6b716c);line-height:1.5;margin:8px 0;}
 .tooth-connections-summary:empty {display:none;}
+
+/* Compact, consistently aligned options in the tooth popover. */
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:9px!important;
+  padding:9px 11px!important;
+  margin:8px 0 0!important;
+  border:1px solid #dce5de!important;
+  border-radius:8px!important;
+  background:#f6f9f6!important;
+  color:#34483b!important;
+  font-size:12px!important;
+  font-weight:600!important;
+  line-height:1.4!important;
+  text-transform:none!important;
+  cursor:pointer!important;
+}
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle.hidden{display:none!important;}
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle input[type="checkbox"]{
+  appearance:auto!important;
+  -webkit-appearance:checkbox!important;
+  flex:0 0 15px!important;
+  width:15px!important;
+  min-width:15px!important;
+  max-width:15px!important;
+  height:15px!important;
+  min-height:15px!important;
+  max-height:15px!important;
+  margin:0!important;
+  padding:0!important;
+  accent-color:#169447!important;
+  box-shadow:none!important;
+  cursor:pointer!important;
+}
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle span{flex:1;min-width:0;}
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle:has(input:checked){
+  border-color:#b7d8c0!important;
+  background:#edf7ef!important;
+}
+.order-tooth-popover .tooth-popover-fields .same-shade-toggle input:focus-visible{
+  outline:2px solid #169447!important;
+  outline-offset:3px!important;
+}

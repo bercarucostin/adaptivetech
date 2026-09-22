@@ -10,7 +10,7 @@ function fn(name){
  return app.slice(start,end);
 }
 const popover=html.slice(html.indexOf('<div id="orderToothPopover"'),html.indexOf('\n              </main>',html.indexOf('<div id="orderToothPopover"')));
-const names=['orderedActiveTeeth','commonBatchField','openOrderToothPopover','saveOrderToothPopover','removeActiveOrderTooth','closeOrderToothPopover','renderOrderToothPicker'];
+const names=['orderedActiveTeeth','commonBatchField','syncOrderJoinTeethControl','openOrderToothPopover','saveOrderToothPopover','removeActiveOrderTooth','closeOrderToothPopover','renderOrderToothPicker'];
 const code=app.slice(app.indexOf('const FDI_UPPER='),app.indexOf('function hasMeaningfulCaseData('))+
  app.slice(app.indexOf('function orderedSelectedTeeth('),app.indexOf('function selectedToothRowHtml('))+names.map(fn).join('\n');
 const ids=['orderToothChart','orderToothPopover','orderToothPopoverTitle','orderToothPopoverMeta','orderToothPreview','orderToothType','orderToothShade','orderToothNote','orderJoinTeeth','orderJoinTeethWrap','orderApplySameShade','orderSameShadeWrap','orderToothTypeSuggestions','orderToothRemoveBtn','orderToothSaveBtn'];
@@ -35,6 +35,14 @@ const links=()=>JSON.stringify(orderCaseDraft.connections);
 try{
  orderJoinTeeth.addEventListener('change',()=>{orderJoinTeeth.dataset.changed='true';});
  orderToothSaveBtn.addEventListener('click',saveOrderToothPopover);
+ orderCaseDraft={selected:[46],perTooth:{46:{type:'Crown',shade:'A2'}},connections:[]};
+ renderOrderToothPicker();openOrderToothPopover(46);
+ orderToothType.value='Bridge';orderToothNote.value='pending note';orderToothShade.value='A3';
+ edge('46-45').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+ check(orderToothType.value==='Bridge'&&orderToothNote.value==='pending note','Expanding selection preserves pending type and note');
+ check(orderToothShade.value==='A3'&&orderApplySameShade.checked,'Expanding selection preserves pending shade');
+ orderToothSaveBtn.click();
+ check(orderCaseDraft.perTooth[45].type==='Bridge'&&orderCaseDraft.perTooth[45].note==='pending note'&&orderCaseDraft.perTooth[45].shade==='A3','Pending edits save to expanded selection');
  orderCaseDraft={selected:[11,21,46,45,44],perTooth:Object.fromEntries([11,21,46,45,44].map(t=>[t,{type:'Crown',shade:'A2'}])),connections:[]};
  renderOrderToothPicker();
  edge('46-45').dispatchEvent(new MouseEvent('click',{bubbles:true}));
@@ -42,7 +50,12 @@ try{
  edge('45-44').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));
  check(links()==='[[46,45],[45,44]]','Keyboard extends connected group');
  edge('44-43').dispatchEvent(new MouseEvent('click',{bubbles:true}));
- check(links()==='[[46,45],[45,44]]','Unconfigured endpoint cannot be joined');
+ check(links()==='[[46,45],[45,44],[44,43]]','Direct point includes unconfigured endpoint and joins it');
+ check(orderCaseDraft.selected.includes(43),'New endpoint belongs to draft');
+ check(!orderToothPopover.classList.contains('hidden'),'New endpoint opens configuration');
+ check(edge('44-43').getAttribute('aria-checked')==='true','New connection turns green immediately');
+ edge('44-43').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+ closeOrderToothPopover();
  edge('45-44').dispatchEvent(new MouseEvent('click',{bubbles:true}));
  openOrderToothPopover(46,null,{batch:[46,45,44]});
  check(orderJoinTeeth.indeterminate,'Partial group opens mixed checkbox');
@@ -69,9 +82,19 @@ try{
  const payload=caseDraftPayload(orderCaseDraft);
  const restored=draftFromServerCase({id:1,items:orderCaseDraft.selected.map(tooth_number=>({tooth_number,work_type:'Crown'}))},{tooth_details:payload.tooth_details,case_snapshot:payload.tooth_details.__case});
  check(JSON.stringify(restored.connections)===links(),'Round trip retains connected groups');
+ openOrderToothPopover(46,null,{batch:[46,45,44]});
+ orderToothNote.value='unsaved note';
+ edge('46-45').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+ check(orderToothNote.value==='unsaved note'&&!orderToothPopover.classList.contains('hidden'),'Direct point preserves open popover edits');
+ for(const checkbox of [orderJoinTeeth,orderApplySameShade]){
+  const style=getComputedStyle(checkbox),row=getComputedStyle(checkbox.parentElement);
+  check(style.width==='15px'&&style.height==='15px','Checkbox is compact');
+  check(style.accentColor==='rgb(22, 148, 71)','Checkbox uses green accent');
+  check(row.display==='flex'&&row.alignItems==='center','Checkbox aligns with label');
+ }
  document.getElementById('result').textContent='PASS '+results.length+' browser assertions';
  document.body.dataset.result='pass';
 }catch(error){document.getElementById('result').textContent='FAIL '+error.stack;document.body.dataset.result='fail';}
 `;
 fs.writeFileSync(process.argv[2]||'/tmp/tooth-connections.html',`<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}
-body{background:#fff;color:#222;padding:10px}#fixture{width:min(${Number(process.argv[3])||390}px,100%);margin:auto}#result{white-space:pre-wrap;font-size:12px;color:#18582f}.order-tooth-chart{width:100%;max-height:none!important}.dental-chart-svg{width:100%;height:auto!important;max-height:none!important}#orderToothPopover{display:none!important}</style><body><pre id="result"></pre><div id="fixture"><main class="tooth-studio-center"><div id="orderToothChart" class="order-tooth-chart"></div>${popover}</main><p id="orderConnectionsSummary"></p></div><script>${setup}\n${code}\n${checks}</script></body></html>`);
+body{background:#fff;color:#222;padding:10px}#fixture{width:min(${Number(process.argv[3])||390}px,100%);margin:auto}#result{white-space:pre-wrap;font-size:12px;color:#18582f}.order-tooth-chart{width:100%;max-height:none!important}.dental-chart-svg{width:100%;height:auto!important;max-height:none!important}#orderToothPopover:not(.hidden){display:block!important;position:relative!important;inset:auto!important;width:100%!important;max-width:none!important;transform:none!important;margin-top:20px}</style><body><pre id="result"></pre><div id="fixture"><main class="tooth-studio-center"><div id="orderToothChart" class="order-tooth-chart"></div>${popover}</main><p id="orderConnectionsSummary"></p></div><script>${setup}\n${code}\n${checks}</script></body></html>`);

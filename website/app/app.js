@@ -2848,14 +2848,20 @@ function toothConnectionsSummary(draft){
     `${group.join("–")}: ${group.length>1?"solidarizați":"solo"}`).join(" · ");
 }
 
-function bindToothConnectionControls(chart,draft,onChange,readOnly=()=>false){
+function bindToothConnectionControls(chart,draft,onChange,readOnly=()=>false,includeUnconfigured=false){
   chart?.querySelectorAll("[data-tooth-connection]").forEach(el=>{
     const toggle=()=>{
       if(readOnly()||el.getAttribute("aria-disabled")==="true")return;
       const pair=el.dataset.toothConnection.split("-").map(Number);
+      const addedTeeth=includeUnconfigured?pair.filter(t=>!draft.selected.includes(t)):[];
+      if(addedTeeth.length){
+        draft.selected=orderedSelectedTeeth([...draft.selected,...addedTeeth]);
+        draft.perTooth??={};
+        addedTeeth.forEach(t=>{draft.perTooth[t]??={};});
+      }
       const checked=normalizeToothConnections(draft.connections,draft.selected).some(edge=>edge.join("-")===pair.join("-"));
       draft.connections=setSelectedToothConnections(draft.connections,pair,!checked);
-      onChange();
+      onChange(pair,addedTeeth);
       chart.querySelector(`[data-tooth-connection="${pair.join("-")}"]`)?.focus({preventScroll:true});
     };
     el.addEventListener("click",e=>{e.stopPropagation();toggle();});
@@ -3359,8 +3365,8 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
   const connections=options.connections===undefined?"":TOOTH_CONNECTION_PAIRS.map(([a,b])=>{
     const p=toothConnectionPosition(a,b);
     const checked=normalizeToothConnections(options.connections,selected).some(pair=>pair[0]===a&&pair[1]===b);
-    const disabled=!interactive||!selectedSet.has(a)||!selectedSet.has(b);
-    const label=`${a}–${b}: ${checked?"solidarizați":"solo"}${!selectedSet.has(a)||!selectedSet.has(b)?" · Include ambii dinți în lucrare":""}`;
+    const disabled=!interactive||(!options.allowUnconfiguredConnections&&(!selectedSet.has(a)||!selectedSet.has(b)));
+    const label=`${a}–${b}: ${checked?"solidarizați":"solo"}${!selectedSet.has(a)||!selectedSet.has(b)?(options.allowUnconfiguredConnections?" · Click pentru a include dinții în lucrare":" · Include ambii dinți în lucrare"):""}`;
     return `<g class="tooth-connection${checked?" checked":""}" data-tooth-connection="${a}-${b}" aria-checked="${checked}" aria-disabled="${disabled}"
       ${interactive?`role="checkbox" tabindex="${disabled?-1:0}"`:''} aria-label="${escapeHtml(label)}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
       <title>${escapeHtml(label)}</title><circle class="connection-hit" r="11"/><circle class="connection-dot" r="4.5"/>
@@ -5613,6 +5619,18 @@ function batchPreviewHtml(teeth){
   </div>`;
 }
 
+function syncOrderJoinTeethControl(teeth=activeOrderTeeth){
+  const joinable=TOOTH_CONNECTION_PAIRS.filter(pair=>pair.every(t=>teeth.includes(t)));
+  const joined=normalizeToothConnections(orderCaseDraft.connections,teeth).length;
+  if(orderJoinTeeth){
+    orderJoinTeeth.checked=joinable.length>0&&joined===joinable.length;
+    orderJoinTeeth.indeterminate=joined>0&&joined<joinable.length;
+    orderJoinTeeth.dataset.changed="false";
+    orderJoinTeeth.disabled=!joinable.length;
+  }
+  orderJoinTeethWrap?.classList.toggle("hidden",!joinable.length);
+}
+
 function openOrderToothPopover(tooth,anchor=null,options={}){
   if(doctorModalReadOnly())return;
   if(!orderCaseDraft||!orderToothPopover)return;
@@ -5668,15 +5686,7 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
   orderToothShade.placeholder=activeOrderMixedFields.has("shade")
     ? "Valori diferite — scrie pentru a suprascrie"
     : "A1, A2, BL2...";
-  const joinable=TOOTH_CONNECTION_PAIRS.filter(pair=>pair.every(t=>teeth.includes(t)));
-  const joined=normalizeToothConnections(orderCaseDraft.connections,teeth).length;
-  if(orderJoinTeeth){
-    orderJoinTeeth.checked=joinable.length>0&&joined===joinable.length;
-    orderJoinTeeth.indeterminate=joined>0&&joined<joinable.length;
-    orderJoinTeeth.dataset.changed="false";
-    orderJoinTeeth.disabled=!joinable.length;
-  }
-  orderJoinTeethWrap?.classList.toggle("hidden",!joinable.length);
+  syncOrderJoinTeethControl(teeth);
   const isBatch=teeth.length>1;
   if(orderApplySameShade)orderApplySameShade.checked=false;
   orderSameShadeWrap?.classList.toggle("hidden",!isBatch);
@@ -5690,6 +5700,7 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
     ? "Observații diferite — scrie pentru a suprascrie"
     : "Observații suplimentare...";
 
+  [orderToothType,orderToothShade,orderToothNote].forEach(input=>{input.dataset.initialValue=input.value;});
   orderToothTypeSuggestions?.classList.add("hidden");
 
   orderToothRemoveBtn.classList.toggle("hidden",configuredCount===0);
@@ -5791,13 +5802,37 @@ function renderOrderToothPicker(){
     details:orderCaseDraft.perTooth,
     colorByType:true,
     viewMode:orderToothViewMode,
-    connections:orderCaseDraft.connections
+    connections:orderCaseDraft.connections,
+    allowUnconfiguredConnections:true
   });
-  bindToothConnectionControls(orderToothChart,orderCaseDraft,()=>{
+  bindToothConnectionControls(orderToothChart,orderCaseDraft,(pair,addedTeeth)=>{
     syncOrderCaseDraftFromInputs();
-    closeOrderToothPopover();
+    const alreadyEditingPair=pair.every(t=>activeOrderTeeth.includes(t));
+    const selection=orderedActiveTeeth([...activeOrderTeeth,...pair]);
+    const pendingFields=activeOrderTeeth.length
+      ? [["type",orderToothType],["shade",orderToothShade],["note",orderToothNote]]
+        .filter(([field,input])=>input.value!==input.dataset.initialValue||(field==="shade"&&orderApplySameShade?.checked))
+        .map(([field,input])=>({field,value:input.value}))
+      : [];
     renderOrderToothPicker();
-  },doctorModalReadOnly);
+    if(addedTeeth.length&&!alreadyEditingPair){
+      openOrderToothPopover(pair[0],null,{batch:selection});
+      for(const {field,value} of pendingFields){
+        const input={type:orderToothType,shade:orderToothShade,note:orderToothNote}[field];
+        input.value=value;
+        activeOrderMixedFields.delete(field);
+        if(field==="shade"){
+          orderApplySameShade.checked=true;
+          orderToothShade.disabled=false;
+          orderToothShade.placeholder="A1, A2, BL2...";
+        }
+      }
+      updateToothDetailBadge(orderToothType.value);
+    }else if(activeOrderTeeth.length){
+      // Direct dots must not discard unsaved shade/type/note edits in the open popover.
+      syncOrderJoinTeethControl();
+    }
+  },doctorModalReadOnly,true);
   const connectionSummary=$("orderConnectionsSummary");
   if(connectionSummary)connectionSummary.textContent=toothConnectionsSummary(orderCaseDraft);
 
