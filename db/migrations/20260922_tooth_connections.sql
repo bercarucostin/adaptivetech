@@ -1,3 +1,7 @@
+-- Targeted, repeatable update for tooth connections. No table rebuild or data deletion.
+-- Functions mirror db/schema/20_functions/save_work_order_clinical_case.sql.
+BEGIN;
+
 -- Canonical connection list. Absence of an edge means solo for that pair.
 -- Explicit writes reject endpoints outside scope; retained links are pruned after scope edits.
 CREATE OR REPLACE FUNCTION public.normalize_tooth_connections(p_connections jsonb,p_teeth integer[],p_strict boolean DEFAULT true)
@@ -118,3 +122,5 @@ BEGIN
     RETURN v_id;
 END; $$;
 REVOKE ALL ON FUNCTION public.save_work_order_clinical_case(uuid,bigint,jsonb) FROM public,authenticated;
+
+COMMIT;

@@ -153,3 +153,14 @@ test('prompt documents tooth items and preserves stock-material commands',()=>{
   assert.match(prompt,/material add\|subtract/);
   assert.match(prompt,/material set/);
 });
+
+test('AI rejects malformed or nonadjacent connections and canonicalizes reversed pairs',()=>{
+ for(const edges of [null,{},[[18,48]],[[46,44]],[[11,11]],[[11,21,22]],[["11",21]]]){
+  const fields={case:{tooth_details:{__case:{tooth_connections:edges}}}};
+  assert.equal(parse({intent:'update',payload:{ids:[42],fields}}).intent,'clarify',JSON.stringify(edges));
+  assert.equal(parse({intent:'preview',operation:{entity:'work_order',operation:'update',target:{id:42},fields}},{role:'admin'}).intent,'clarify');
+ }
+ const fields={case:{tooth_details:{__case:{tooth_connections:[[21,11],[11,21],[45,46]]}}}};
+ const result=parse({intent:'update',payload:{ids:[42],fields}});
+ assert.deepEqual(result.payload.fields.case.tooth_details.__case.tooth_connections,[[11,21],[46,45]]);
+});

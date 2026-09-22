@@ -17,6 +17,7 @@ const modalBackdrop=$("modalBackdrop"),modalTitle=$("modalTitle"),modalSubtitle=
 const modelTech=$("modelTech"),statusModel=$("statusModel"),paidModel=$("paidModel"),modelingTech=$("modelingTech"),statusModeling=$("statusModeling"),paidModeling=$("paidModeling"),ceramicTech=$("ceramicTech"),statusCerFin=$("statusCerFin"),paidCerFin=$("paidCerFin"),listPrice=$("listPrice"),finalPrice=$("finalPrice"),priceHint=$("priceHint"),saveOrderBtn=$("saveOrderBtn");
 const modelNotApplicable=$("modelNotApplicable"),modelingNotApplicable=$("modelingNotApplicable"),ceramicNotApplicable=$("ceramicNotApplicable");
 const orderToothChart=$("orderToothChart"),orderToothStage=$("orderToothStage"),orderWorkTypeLegend=$("orderWorkTypeLegend"),orderToothPopover=$("orderToothPopover"),orderToothPopoverTitle=$("orderToothPopoverTitle"),orderToothPopoverMeta=$("orderToothPopoverMeta"),orderToothPreview=$("orderToothPreview"),orderToothTypeBadge=$("orderToothTypeBadge"),orderToothEmpty=$("orderToothEmpty"),orderToothForm=$("orderToothForm"),orderToothType=$("orderToothType"),orderToothTypeSuggestions=$("orderToothTypeSuggestions"),orderToothShade=$("orderToothShade"),orderToothMethod=$("orderToothMethod"),orderToothNote=$("orderToothNote"),orderToothPopoverClose=$("orderToothPopoverClose"),orderToothCancelBtn=$("orderToothCancelBtn"),orderToothSaveBtn=$("orderToothSaveBtn"),orderToothRemoveBtn=$("orderToothRemoveBtn"),orderTeethSelected=$("orderTeethSelected"),orderShade=$("orderShade"),orderMethod=$("orderMethod"),orderClinicNote=$("orderClinicNote"),orderProductionNotes=$("orderProductionNotes"),orderToothDetailsBody=$("orderToothDetailsBody"),orderSelectAnteriorBtn=$("orderSelectAnteriorBtn"),orderClearTeethBtn=$("orderClearTeethBtn"),orderCasePdfBtn=$("orderCasePdfBtn");
+const orderJoinTeeth=$("orderJoinTeeth"),orderJoinTeethWrap=$("orderJoinTeethWrap");
 const orderApplySameShade=$("orderApplySameShade"),orderSameShadeWrap=$("orderSameShadeWrap");
 const chatMessages=$("chatMessages"),chatForm=$("chatForm"),chatInput=$("chatInput"),sendBtn=$("sendBtn"),photoInput=$("photoInput"),voiceBtn=$("voiceBtn"),voiceState=$("voiceState"),newChatBtn=$("newChatBtn");
 const mobileMenuBtn=$("mobileMenuBtn"),mobileSidebarCloseBtn=$("mobileSidebarCloseBtn"),mobileAiBtn=$("mobileAiBtn"),mobileAiCloseBtn=$("mobileAiCloseBtn"),mobileBackdrop=$("mobileBackdrop");
@@ -2808,6 +2809,62 @@ function renderPatients(){
 const FDI_UPPER=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
 const FDI_LOWER=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
 
+// Connections are stored once, as adjacent FDI pairs in arch order.
+const TOOTH_CONNECTION_PAIRS=[FDI_UPPER,FDI_LOWER].flatMap(arch=>arch.slice(1).map((tooth,i)=>[arch[i],tooth]));
+
+function normalizeToothConnections(connections,selected=[...FDI_UPPER,...FDI_LOWER]){
+  const scope=new Set(selected.map(Number));
+  const requested=new Set((Array.isArray(connections)?connections:[])
+    .filter(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(Number.isInteger))
+    .map(pair=>[...pair].sort((a,b)=>a-b).join("-")));
+  return TOOTH_CONNECTION_PAIRS.filter(([a,b])=>scope.has(a)&&scope.has(b)&&requested.has([a,b].sort((a,b)=>a-b).join("-")));
+}
+
+function setSelectedToothConnections(connections,selected,joined){
+  const scope=new Set(selected.map(Number));
+  const affected=TOOTH_CONNECTION_PAIRS.filter(pair=>pair.every(t=>scope.has(t)));
+  return normalizeToothConnections(joined
+    ? [...(connections||[]),...affected]
+    : normalizeToothConnections(connections).filter(pair=>!pair.every(t=>scope.has(t))));
+}
+
+function toothConnectionGroups(selected,connections){
+  const scope=new Set(selected.map(Number));
+  const links=new Set(normalizeToothConnections(connections,selected).map(pair=>pair.join("-")));
+  const groups=[];
+  for(const arch of [FDI_UPPER,FDI_LOWER]){
+    let group=null;
+    arch.forEach((tooth,i)=>{
+      if(!scope.has(tooth)){group=null;return;}
+      if(!group||!links.has(`${arch[i-1]}-${tooth}`)){group=[];groups.push(group);}
+      group.push(tooth);
+    });
+  }
+  return groups;
+}
+
+function toothConnectionsSummary(draft){
+  return toothConnectionGroups(draft.selected||[],draft.connections).map(group=>
+    `${group.join("–")}: ${group.length>1?"solidarizați":"solo"}`).join(" · ");
+}
+
+function bindToothConnectionControls(chart,draft,onChange,readOnly=()=>false){
+  chart?.querySelectorAll("[data-tooth-connection]").forEach(el=>{
+    const toggle=()=>{
+      if(readOnly()||el.getAttribute("aria-disabled")==="true")return;
+      const pair=el.dataset.toothConnection.split("-").map(Number);
+      const checked=normalizeToothConnections(draft.connections,draft.selected).some(edge=>edge.join("-")===pair.join("-"));
+      draft.connections=setSelectedToothConnections(draft.connections,pair,!checked);
+      onChange();
+      chart.querySelector(`[data-tooth-connection="${pair.join("-")}"]`)?.focus({preventScroll:true});
+    };
+    el.addEventListener("click",e=>{e.stopPropagation();toggle();});
+    el.addEventListener("keydown",e=>{
+      if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();toggle();}
+    });
+  });
+}
+
 const FDI_TO_US={
   18:1,17:2,16:3,15:4,14:5,13:6,12:7,11:8,
   21:9,22:10,23:11,24:12,25:13,26:14,27:15,28:16,
@@ -2859,6 +2916,8 @@ function draftFromServerCase(order,serverCase){
 
   return {
     selected,
+    connections:normalizeToothConnections(snapshot.tooth_connections,selected),
+    caseMetadata:{...snapshot},
     shade:String(serverCase?.shade??snapshot.shade??""),
     method:String(serverCase?.method??snapshot.method??""),
     notes:String(serverCase?.production_notes??snapshot.production_notes??""),
@@ -2871,7 +2930,8 @@ function draftFromServerCase(order,serverCase){
 
 function caseDraftPayload(draft){
   return {
-    tooth_details:draft?.perTooth??{},
+    tooth_details:{...(draft?.perTooth??{}),__case:{...(draft?.caseMetadata??{}),
+      tooth_connections:normalizeToothConnections(draft?.connections,draft?.selected??[])}},
     shade:String(draft?.shade??""),
     method:String(draft?.method??""),
     clinic_note:String(draft?.doctorNotes??""),
@@ -3243,6 +3303,16 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
     </g>`;
 }
 
+function toothConnectionPosition(a,b){
+  const p=toothPosition(a),q=toothPosition(b);
+  const dx=q.x-p.x,dy=q.y-p.y,length=Math.hypot(dx,dy)||1;
+  const direction=a<30?1:-1;
+  // Scale offset with crown size; leave room for the control outside the contour.
+  const offset=22*Math.max(p.scaleX,p.scaleY,q.scaleX,q.scaleY)+10;
+  return {x:(p.x+q.x)/2+direction*dy/length*offset,
+    y:(p.y+q.y)/2-direction*dx/length*offset};
+}
+
 function dentalChartSvg(selected=[],interactive=false,options={}){
   const selectedSet=new Set((selected||[]).map(Number));
   const details=options.details??{};
@@ -3286,10 +3356,21 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
          <text x="241" y="428" text-anchor="middle" class="arch-center-letter">L</text>`
       : ``;
 
-  return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="0 0 474 776" aria-label="FDI anatomical tooth chart">
+  const connections=options.connections===undefined?"":TOOTH_CONNECTION_PAIRS.map(([a,b])=>{
+    const p=toothConnectionPosition(a,b);
+    const checked=normalizeToothConnections(options.connections,selected).some(pair=>pair[0]===a&&pair[1]===b);
+    const disabled=!interactive||!selectedSet.has(a)||!selectedSet.has(b);
+    const label=`${a}–${b}: ${checked?"solidarizați":"solo"}${!selectedSet.has(a)||!selectedSet.has(b)?" · Include ambii dinți în lucrare":""}`;
+    return `<g class="tooth-connection${checked?" checked":""}" data-tooth-connection="${a}-${b}" aria-checked="${checked}" aria-disabled="${disabled}"
+      ${interactive?`role="checkbox" tabindex="${disabled?-1:0}"`:''} aria-label="${escapeHtml(label)}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
+      <title>${escapeHtml(label)}</title><circle class="connection-hit" r="11"/><circle class="connection-dot" r="4.5"/>
+      ${checked?'<path class="connection-check" d="M-2,0 L-.5,1.5 L2.5,-2"/>':''}</g>`;
+  }).join("");
+  return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="${options.connections===undefined?'0 0 474 776':'0 -26 474 826'}" aria-label="FDI anatomical tooth chart">
     ${dividers}
     ${groups.join("")}
     ${labels.join("")}
+    ${connections}
   </svg>`;
 }
 
@@ -3331,6 +3412,7 @@ function syncCaseSheetDraftFromInputs(){
 
 function bindCaseSheetEditor(order,draft){
   const chart=$("caseToothChart");
+  bindToothConnectionControls(chart,draft,()=>{syncCaseSheetDraftFromInputs();renderCaseSheetEditor(order,draft);});
   chart?.querySelectorAll("[data-tooth]").forEach(el=>{
     const toggle=()=>{
       syncCaseSheetDraftFromInputs();
@@ -3390,6 +3472,7 @@ function bindCaseSheetEditor(order,draft){
 
 function renderCaseSheetEditor(order,draft){
   const selected=orderedSelectedTeeth(draft.selected);
+  draft.connections=normalizeToothConnections(draft.connections,selected);
   caseSheetTitle.textContent=`Case sheet · #${order.id}`;
   caseSheetSubtitle.textContent=`${order.patient||"Pacient"} · ${order.partner||"Partener"}`;
 
@@ -3417,13 +3500,14 @@ function renderCaseSheetEditor(order,draft){
         </div>
 
         <div id="caseToothChart" class="case-tooth-chart">
-          ${dentalChartSvg(selected,true)}
+          ${dentalChartSvg(selected,true,{connections:draft.connections})}
         </div>
 
         <div class="case-selected-line">
           <strong>${selected.length}</strong> selected
           <span>·</span>
           <span>Elemente derivate: ${order.elements||0}</span>
+          <span>${escapeHtml(toothConnectionsSummary(draft))}</span>
         </div>
       </section>
 
@@ -3641,7 +3725,7 @@ function renderPhysicalCaseSheet(order,draft){
       <td>${FDI_TO_US[tooth]??"—"}</td>
       <td>${escapeHtml(uiText(type))}</td>
       <td>${escapeHtml(shade)}</td>
-      <td>${escapeHtml(toothNote)}</td>
+      <td>${escapeHtml(toothNote)}<br>${escapeHtml(toothConnectionGroups(selected,draft.connections).find(group=>group.includes(tooth))?.length>1?"Solidarizați: "+toothConnectionGroups(selected,draft.connections).find(group=>group.includes(tooth)).join("–"):"Solo")}</td>
     </tr>`;
   }).join("");
 
@@ -5584,6 +5668,15 @@ function openOrderToothPopover(tooth,anchor=null,options={}){
   orderToothShade.placeholder=activeOrderMixedFields.has("shade")
     ? "Valori diferite — scrie pentru a suprascrie"
     : "A1, A2, BL2...";
+  const joinable=TOOTH_CONNECTION_PAIRS.filter(pair=>pair.every(t=>teeth.includes(t)));
+  const joined=normalizeToothConnections(orderCaseDraft.connections,teeth).length;
+  if(orderJoinTeeth){
+    orderJoinTeeth.checked=joinable.length>0&&joined===joinable.length;
+    orderJoinTeeth.indeterminate=joined>0&&joined<joinable.length;
+    orderJoinTeeth.dataset.changed="false";
+    orderJoinTeeth.disabled=!joinable.length;
+  }
+  orderJoinTeethWrap?.classList.toggle("hidden",!joinable.length);
   const isBatch=teeth.length>1;
   if(orderApplySameShade)orderApplySameShade.checked=false;
   orderSameShadeWrap?.classList.toggle("hidden",!isBatch);
@@ -5662,6 +5755,9 @@ function saveOrderToothPopover(){
   }
 
   orderCaseDraft.selected=orderedSelectedTeeth([...selectedSet]);
+  if(orderJoinTeeth?.dataset.changed==="true"){
+    orderCaseDraft.connections=setSelectedToothConnections(orderCaseDraft.connections,teeth,orderJoinTeeth.checked);
+  }
 
   closeOrderToothPopover();
   renderOrderToothPicker();
@@ -5689,12 +5785,21 @@ function removeActiveOrderTooth(){
 function renderOrderToothPicker(){
   if(!orderToothChart||!orderCaseDraft)return;
   const selected=orderedSelectedTeeth(orderCaseDraft.selected);
+  orderCaseDraft.connections=normalizeToothConnections(orderCaseDraft.connections,selected);
 
-  orderToothChart.innerHTML=dentalChartSvg(selected,true,{
+  orderToothChart.innerHTML=dentalChartSvg(selected,!doctorModalReadOnly(),{
     details:orderCaseDraft.perTooth,
     colorByType:true,
-    viewMode:orderToothViewMode
+    viewMode:orderToothViewMode,
+    connections:orderCaseDraft.connections
   });
+  bindToothConnectionControls(orderToothChart,orderCaseDraft,()=>{
+    syncOrderCaseDraftFromInputs();
+    closeOrderToothPopover();
+    renderOrderToothPicker();
+  },doctorModalReadOnly);
+  const connectionSummary=$("orderConnectionsSummary");
+  if(connectionSummary)connectionSummary.textContent=toothConnectionsSummary(orderCaseDraft);
 
   orderToothChart.querySelectorAll("[data-tooth]").forEach(el=>{
     const tooth=Number(el.dataset.tooth);
@@ -6380,6 +6485,7 @@ orderToothPopoverClose?.addEventListener("click",closeOrderToothPopover);
 orderToothCancelBtn?.addEventListener("click",closeOrderToothPopover);
 orderToothSaveBtn?.addEventListener("click",saveOrderToothPopover);
 orderToothRemoveBtn?.addEventListener("click",removeActiveOrderTooth);
+orderJoinTeeth?.addEventListener("change",()=>{orderJoinTeeth.dataset.changed="true";});
 orderApplySameShade?.addEventListener("change",()=>{
   if(!orderToothShade)return;
   orderToothShade.disabled=!orderApplySameShade.checked;

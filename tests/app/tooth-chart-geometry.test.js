@@ -75,3 +75,18 @@ test('lower teeth follow the arch direction instead of facing neighbors with cor
   assert.ok(difference<15,`Tooth ${arch[i]} is ${difference.toFixed(1)}° off the local arch direction`);
  }
 });
+
+test('connection targets stay outside crowns and do not overlap each other',()=>{
+ const controls=[];
+ for(const arch of [teeth.slice(0,16),teeth.slice(16)])for(let i=1;i<arch.length;i++){
+  const {x,y}=vm.runInContext(`toothConnectionPosition(${arch[i-1]},${arch[i]})`,ctx);
+  const point=[x,y];
+  for(const [tooth,poly] of polys){
+   assert.ok(!inside(point,poly),`Control ${arch[i-1]}-${arch[i]} inside tooth ${tooth}`);
+   const gap=Math.min(...poly.map((p,k)=>pointSegment(point,p,poly[(k+1)%poly.length])));
+   assert.ok(gap>=11,`Control ${arch[i-1]}-${arch[i]} click area overlaps tooth ${tooth}: ${gap}`);
+  }
+  for(const other of controls)assert.ok(Math.hypot(x-other[0],y-other[1])>=22,'Connection click areas overlap');
+  controls.push(point);
+ }
+});
