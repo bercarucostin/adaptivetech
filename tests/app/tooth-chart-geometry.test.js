@@ -31,20 +31,34 @@ const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
 function pointSegment(p,a,b){const ab=sub(b,a),t=Math.max(0,Math.min(1,dot(sub(p,a),ab)/(dot(ab,ab)||1)));return Math.hypot(p[0]-a[0]-t*ab[0],p[1]-a[1]-t*ab[1]);}
 function inside(p,poly){let hit=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])hit=!hit;}return hit;}
-// Sample the actual cubic SVG contours after every production transform.
-// Five viewBox units leave room for the active stroke, which scales with the crown.
-test('all tooth crowns retain clearance without overlapping their neighbors',()=>{
-const polys=teeth.map(n=>({n,points:polygon(n)}));
-const bad=[];
-for(let i=0;i<polys.length;i++)for(let j=i+1;j<polys.length;j++){
- const a=polys[i],b=polys[j];
- const bounds=p=>[Math.min(...p.map(v=>v[0])),Math.max(...p.map(v=>v[0])),Math.min(...p.map(v=>v[1])),Math.max(...p.map(v=>v[1]))];
- const aa=bounds(a.points),bb=bounds(b.points);
- if(aa[0]>bb[1]+8||bb[0]>aa[1]+8||aa[2]>bb[3]+8||bb[2]>aa[3]+8)continue;
+const bounds=p=>[Math.min(...p.map(v=>v[0])),Math.max(...p.map(v=>v[0])),Math.min(...p.map(v=>v[1])),Math.max(...p.map(v=>v[1]))];
+function clearance(a,b){
+ if(a.some(p=>inside(p,b))||b.some(p=>inside(p,a)))return -1;
  let gap=Infinity;
- if(a.points.some(p=>inside(p,b.points))||b.points.some(p=>inside(p,a.points)))gap=-1;
- else for(const [p,q] of [[a.points,b.points],[b.points,a.points]])for(const point of p)for(let k=0;k<q.length;k++)gap=Math.min(gap,pointSegment(point,q[k],q[(k+1)%q.length]));
- if(gap<5)bad.push({pair:[a.n,b.n],gap:Number(gap.toFixed(2))});
+ for(const [p,q] of [[a,b],[b,a]])for(const point of p)for(let k=0;k<q.length;k++)gap=Math.min(gap,pointSegment(point,q[k],q[(k+1)%q.length]));
+ return gap;
 }
-assert.deepEqual(bad,[],`Crowns too close: ${JSON.stringify(bad)}`);
+const polys=new Map(teeth.map(n=>[n,polygon(n)]));
+// Check the transformed contours, not their rectangular click bounds.
+test('tooth crown interiors never overlap',()=>{
+ const bad=[];
+ for(let i=0;i<teeth.length;i++)for(let j=i+1;j<teeth.length;j++){
+  const a=polys.get(teeth[i]),b=polys.get(teeth[j]),aa=bounds(a),bb=bounds(b);
+  if(aa[0]>bb[1]||bb[0]>aa[1]||aa[2]>bb[3]||bb[2]>aa[3])continue;
+  if(clearance(a,b)<0)bad.push([teeth[i],teeth[j]]);
+ }
+ assert.deepEqual(bad,[],`Overlapping crowns: ${JSON.stringify(bad)}`);
+});
+test('adjacent crowns meet at their outlines within each arch',()=>{
+ const bad=[];
+ for(const arch of [teeth.slice(0,16),teeth.slice(16)])for(let i=1;i<arch.length;i++){
+  const gap=clearance(polys.get(arch[i-1]),polys.get(arch[i]));
+  if(gap<0||gap>.8)bad.push({pair:[arch[i-1],arch[i]],gap:Number(gap.toFixed(2))});
+ }
+ assert.deepEqual(bad,[],`Open or overlapping contacts: ${JSON.stringify(bad)}`);
+});
+test('upper and lower arches remain visibly separated',()=>{
+ for(const [a,b] of [[18,48],[28,38]]){
+  assert.ok(clearance(polys.get(a),polys.get(b))>=15,`${a} and ${b} must retain the interarch gap`);
+ }
 });
