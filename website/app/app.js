@@ -2947,35 +2947,53 @@ const TOOTH_LAYOUT={
   27:{x:389.519,y:274.255,r:88,sx:1.67043,sy:1.6486},
   18:{x:88.298,y:340.345,r:-90,sx:1.69227,sy:1.62676},
   28:{x:389.519,y:336.722,r:90,sx:1.69227,sy:1.62676},
-  48:{x:89.155,y:440.752,r:-90,sx:1.63768,sy:1.61584},
-  38:{x:392.449,y:435.17,r:90,sx:1.63768,sy:1.61584},
-  47:{x:89.155,y:502.363,r:-89,sx:1.67043,sy:1.6486},
-  37:{x:392.449,y:498.37,r:89,sx:1.67043,sy:1.6486},
-  46:{x:92.653,y:568.98,r:-87,sx:1.62676,sy:1.61584},
-  36:{x:389.014,y:565.48,r:87,sx:1.62676,sy:1.61584},
-  45:{x:108.822,y:627.946,r:-70,sx:1.35381,sy:1.37565},
-  35:{x:372.523,y:625.624,r:70,sx:1.35381,sy:1.37565},
-  44:{x:130.491,y:672.271,r:-49,sx:1.39749,sy:1.37565},
-  34:{x:350.88,y:669.895,r:49,sx:1.39749,sy:1.37565},
-  43:{x:161.079,y:709.347,r:-40,sx:1.53942,sy:1.44116},
-  33:{x:319.998,y:707.328,r:40,sx:1.53942,sy:1.44116},
-  42:{x:188.305,y:729.148,r:-10,sx:1.31014,sy:1.28831},
-  32:{x:289.65,y:729.399,r:10,sx:1.31014,sy:1.28831},
-  41:{x:222.992,y:735.455,r:0,sx:1.47391,sy:1.28831},
-  31:{x:256.346,y:735.455,r:0,sx:1.47391,sy:1.28831}
+  48:{t:0.9999948,sx:1.752185,sy:1.728818},
+  38:{t:0.9999948,sx:1.752185,sy:1.728818},
+  47:{t:0.8560796,sx:1.787224,sy:1.763868},
+  37:{t:0.8560796,sx:1.787224,sy:1.763868},
+  46:{t:0.6890517,sx:1.740501,sy:1.728818},
+  36:{t:0.6890517,sx:1.740501,sy:1.728818},
+  45:{t:0.5317413,sx:1.448467,sy:1.471834},
+  35:{t:0.5317413,sx:1.448467,sy:1.471834},
+  44:{t:0.3862421,sx:1.495201,sy:1.471834},
+  34:{t:0.3862421,sx:1.495201,sy:1.471834},
+  43:{t:0.2390055,sx:1.647054,sy:1.541924},
+  33:{t:0.2390055,sx:1.647054,sy:1.541924},
+  42:{t:0.1341598,sx:1.401743,sy:1.378387},
+  32:{t:0.1341598,sx:1.401743,sy:1.378387},
+  41:{t:0.0431564,sx:1.576964,sy:1.378387},
+  31:{t:0.0431564,sx:1.576964,sy:1.378387}
 };
 
+// One smooth centerline for both halves of the lower arch, from the incisors
+// to the posterior molars. Stations and crown scales preserve outline contacts.
+const LOWER_ARCH_CURVE=[
+  {x:241,y:735}, {x:110,y:735}, {x:89,y:600}, {x:89,y:438}
+];
+
+function lowerArchPosition(t,right=false){
+  const u=1-t;
+  const [a,b,c,d]=LOWER_ARCH_CURVE;
+  const coordinate=key=>u*u*u*a[key]+3*u*u*t*b[key]+3*u*t*t*c[key]+t*t*t*d[key];
+  const tangent=key=>3*u*u*(b[key]-a[key])+6*u*t*(c[key]-b[key])+3*t*t*(d[key]-c[key]);
+  const x=coordinate("x");
+  const rotation=Math.atan2(-tangent("y"),-tangent("x"))*180/Math.PI;
+  return {x:right?2*a.x-x:x,y:coordinate("y"),rotation:right?-rotation:rotation};
+}
+
 function toothPosition(tooth){
-  const p=TOOTH_LAYOUT[Number(tooth)];
+  const n=Number(tooth);
+  const p=TOOTH_LAYOUT[n];
   if(!p)throw new Error(`Missing tooth layout for ${tooth}`);
+  const position=p.t===undefined
+    ? {x:p.x,y:p.y,rotation:p.r}
+    : lowerArchPosition(p.t,n<40);
   return {
-    x:p.x,
-    y:p.y,
-    rotation:p.r,
+    ...position,
     scaleX:p.sx,
     scaleY:p.sy,
-    dx:p.x-241,
-    dy:p.y-388
+    dx:position.x-241,
+    dy:position.y-388
   };
 }
 
@@ -3147,16 +3165,7 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
       <path class="tooth-cusp" d="M-8.4,-9.3 C-4.1,-12.5 -1.2,-9.3 0,-5.7 C1.5,-9.6 4.8,-12.4 8.7,-9.0"></path>`;
   }
   else if(pos===4){
-    crown=`<path class="tooth-svg-shape" d="
-      M-12.9,-13.8
-      C-9.1,-17.1 -4.2,-17.6 0,-15.9
-      C4.4,-17.7 9.3,-16.6 12.9,-13.1
-      C16.1,-9.7 16.9,-4.3 15.2,0.1
-      C16.6,4.8 14.7,9.7 11.1,12.8
-      C7.4,16.2 3.0,16.8 -0.6,15.0
-      C-4.3,16.6 -8.7,15.5 -11.9,12.0
-      C-15.3,8.5 -16.0,4.2 -14.4,0.0
-      C-16.0,-4.2 -15.4,-9.6 -12.9,-13.8 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-10,-15 C-6,-18 5,-17 10,-14 C14,-10 16,-5 16,0 C16,7 13,12 8,15 C3,18 -3,16 -8,14 C-13,11 -16,6 -16,0 C-16,-6 -14,-12 -10,-15 Z"></path>`;
     anatomy=`
       <path class="tooth-anatomy" d="M-9.1,-4.3 C-5.0,-5.9 -2.4,-3.9 0,-0.2 C2.5,-4.0 5.1,-5.8 9.1,-4.1"></path>
       <path class="tooth-anatomy" d="M-8.6,4.9 C-5.0,3.5 -2.2,1.6 0,-0.2 C2.3,1.8 5.1,3.7 8.8,5.0"></path>
@@ -3180,16 +3189,7 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
       <path class="tooth-cusp" d="M-8.8,-8.6 C-4.6,-11.6 -1.7,-8.9 0,-5.3 C1.8,-9.0 4.8,-11.4 8.9,-8.4"></path>`;
   }
   else if(pos===5){
-    crown=`<path class="tooth-svg-shape" d="
-      M-14.0,-13.6
-      C-9.6,-17.3 -4.0,-17.2 0,-15.2
-      C4.2,-17.3 9.8,-16.9 14.0,-13.0
-      C17.0,-9.8 17.8,-4.7 16.0,0.0
-      C17.2,5.0 15.1,10.1 11.3,13.3
-      C7.4,16.5 2.9,17.1 -0.6,15.4
-      C-4.2,17.1 -9.2,16.0 -12.6,12.6
-      C-16.0,9.1 -16.8,4.7 -15.1,0.0
-      C-16.8,-4.4 -16.2,-9.6 -14.0,-13.6 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-12,-14 C-7,-17 5,-17 11,-14 C15,-11 17,-5 17,0 C17,6 13,12 8,15 C3,18 -4,16 -9,14 C-14,10 -17,5 -17,0 C-17,-6 -16,-11 -12,-14 Z"></path>`;
     anatomy=`
       <path class="tooth-anatomy" d="M-9.8,-4.2 C-5.8,-5.7 -2.4,-3.6 0,-0.1 C2.5,-3.8 5.9,-5.6 9.9,-4.0"></path>
       <path class="tooth-anatomy" d="M-9.4,5.0 C-5.6,3.6 -2.4,1.5 0,-0.1 C2.5,1.6 5.6,3.6 9.4,4.9"></path>
@@ -3235,7 +3235,7 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
   }
 
   return `
-    <g class="tooth-glyph ${kind} ${variant}" style="--tooth-color:${color};--tooth-stroke:${stroke};--tooth-line:${line}">
+    <g class="tooth-glyph ${kind} ${variant}" style="--tooth-color:${color};--tooth-stroke:${stroke};--tooth-line:${line}"${!upper&&n<40?' transform="scale(-1 1)"':""}>
       <g class="tooth-render"${!upper&&pos<=2?' transform="rotate(180)"':""}>
         ${crown}
         ${anatomy}

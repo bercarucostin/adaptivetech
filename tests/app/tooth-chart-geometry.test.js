@@ -24,8 +24,9 @@ function polygon(n){
   }else if(cmd!=='Z')throw Error(`Unsupported SVG command ${cmd}`);
  }
  const flip=markup.includes('transform="rotate(180)"')?-1:1;
+ const mirror=markup.includes('transform="scale(-1 1)"')?-1:1;
  const r=p.rotation*Math.PI/180;
- return points.map(([x,y])=>{x*=p.scaleX*flip;y*=p.scaleY*flip;return [p.x+x*Math.cos(r)-y*Math.sin(r),p.y+x*Math.sin(r)+y*Math.cos(r)];});
+ return points.map(([x,y])=>{x*=p.scaleX*flip*mirror;y*=p.scaleY*flip;return [p.x+x*Math.cos(r)-y*Math.sin(r),p.y+x*Math.sin(r)+y*Math.cos(r)];});
 }
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
@@ -60,5 +61,17 @@ test('adjacent crowns meet at their outlines within each arch',()=>{
 test('upper and lower arches remain visibly separated',()=>{
  for(const [a,b] of [[18,48],[28,38]]){
   assert.ok(clearance(polys.get(a),polys.get(b))>=15,`${a} and ${b} must retain the interarch gap`);
+ }
+});
+
+test('lower teeth follow the arch direction instead of facing neighbors with corners',()=>{
+ const arch=teeth.slice(16);
+ for(let i=1;i<arch.length-1;i++){
+  const a=vm.runInContext(`toothPosition(${arch[i-1]})`,ctx);
+  const p=vm.runInContext(`toothPosition(${arch[i]})`,ctx);
+  const b=vm.runInContext(`toothPosition(${arch[i+1]})`,ctx);
+  const tangent=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+  const difference=Math.abs(((p.rotation-tangent)%180+270)%180-90);
+  assert.ok(difference<15,`Tooth ${arch[i]} is ${difference.toFixed(1)}° off the local arch direction`);
  }
 });
