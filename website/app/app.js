@@ -2929,59 +2929,39 @@ function orderedSelectedTeeth(selected){
 }
 
 const TOOTH_LAYOUT={
-  // Coordinates are intentionally matched to the supplied reference odontogram
-  // (reference canvas ~474 x 776). Each tooth has independent position,
-  // rotation and scale instead of being generated from an ellipse.
-
-  // MAXILLARY / UPPER
-  11:{x:214,y:48,r:-2,sx:1.12,sy:1.15},
-  21:{x:268,y:48,r:2,sx:1.12,sy:1.15},
-
-  12:{x:162,y:61,r:-20,sx:.90,sy:1.06},
-  22:{x:319,y:62,r:20,sx:.90,sy:1.06},
-
-  13:{x:128,y:88,r:-36,sx:1.10,sy:1.20},
-  23:{x:352,y:88,r:36,sx:1.10,sy:1.20},
-
-  14:{x:103,y:125,r:-49,sx:1.15,sy:1.18},
-  24:{x:378,y:124,r:49,sx:1.15,sy:1.18},
-
-  15:{x:87,y:166,r:-65,sx:1.22,sy:1.22},
-  25:{x:395,y:165,r:65,sx:1.22,sy:1.22},
-
-  16:{x:76,y:219,r:-82,sx:1.40,sy:1.36},
-  26:{x:407,y:220,r:82,sx:1.40,sy:1.36},
-
-  17:{x:72,y:286,r:-88,sx:1.42,sy:1.36},
-  27:{x:411,y:286,r:88,sx:1.42,sy:1.36},
-
-  18:{x:71,y:353,r:-90,sx:1.22,sy:1.22},
-  28:{x:411,y:353,r:90,sx:1.22,sy:1.22},
-
-  // MANDIBULAR / LOWER
-  48:{x:72,y:438,r:-90,sx:1.30,sy:1.34},
-  38:{x:411,y:438,r:90,sx:1.30,sy:1.34},
-
-  47:{x:78,y:503,r:-84,sx:1.36,sy:1.32},
-  37:{x:407,y:503,r:84,sx:1.36,sy:1.32},
-
-  46:{x:85,y:568,r:-78,sx:1.38,sy:1.32},
-  36:{x:395,y:563,r:78,sx:1.38,sy:1.32},
-
-  45:{x:100,y:626,r:-67,sx:1.17,sy:1.20},
-  35:{x:378,y:614,r:67,sx:1.17,sy:1.20},
-
-  44:{x:123,y:679,r:-55,sx:1.17,sy:1.20},
-  34:{x:360,y:663,r:55,sx:1.17,sy:1.20},
-
-  43:{x:155,y:715,r:-39,sx:1.16,sy:1.20},
-  33:{x:338,y:704,r:39,sx:1.16,sy:1.20},
-
-  42:{x:188,y:738,r:-22,sx:1.08,sy:1.10},
-  32:{x:307,y:733,r:22,sx:1.08,sy:1.10},
-
-  41:{x:222,y:747,r:-7,sx:1.10,sy:1.08},
-  31:{x:264,y:744,r:7,sx:1.10,sy:1.08}
+  // Compact arches: individually placed crowns follow the supplied reference.
+  11:{x:204,y:36,r:-2,sx:1.36,sy:1.45},
+  21:{x:260,y:36,r:2,sx:1.36,sy:1.45},
+  12:{x:157,y:48,r:-23,sx:1.48,sy:1.50},
+  22:{x:307,y:48,r:23,sx:1.48,sy:1.50},
+  13:{x:121,y:76,r:-36,sx:1.65,sy:1.48},
+  23:{x:343,y:76,r:36,sx:1.65,sy:1.48},
+  14:{x:91,y:116,r:-53,sx:1.35,sy:1.38},
+  24:{x:373,y:116,r:53,sx:1.35,sy:1.38},
+  15:{x:76,y:160,r:-70,sx:1.30,sy:1.34},
+  25:{x:388,y:160,r:70,sx:1.30,sy:1.34},
+  16:{x:68,y:214,r:-85,sx:1.65,sy:1.66},
+  26:{x:396,y:214,r:85,sx:1.65,sy:1.66},
+  17:{x:63,y:282,r:-88,sx:1.70,sy:1.68},
+  27:{x:401,y:282,r:88,sx:1.70,sy:1.68},
+  18:{x:63,y:348,r:-90,sx:1.72,sy:1.66},
+  28:{x:401,y:348,r:90,sx:1.72,sy:1.66},
+  48:{x:67,y:430,r:-90,sx:1.67,sy:1.64},
+  38:{x:397,y:430,r:90,sx:1.67,sy:1.64},
+  47:{x:70,y:495,r:-87,sx:1.70,sy:1.68},
+  37:{x:394,y:495,r:87,sx:1.70,sy:1.68},
+  46:{x:78,y:563,r:-79,sx:1.66,sy:1.64},
+  36:{x:386,y:563,r:79,sx:1.66,sy:1.64},
+  45:{x:95,y:620,r:-65,sx:1.40,sy:1.42},
+  35:{x:369,y:620,r:65,sx:1.40,sy:1.42},
+  44:{x:117,y:670,r:-49,sx:1.42,sy:1.40},
+  34:{x:347,y:670,r:49,sx:1.42,sy:1.40},
+  43:{x:150,y:710,r:-40,sx:1.57,sy:1.47},
+  33:{x:314,y:710,r:40,sx:1.57,sy:1.47},
+  42:{x:181,y:735,r:-22,sx:1.51,sy:1.37},
+  32:{x:283,y:735,r:22,sx:1.51,sy:1.37},
+  41:{x:215,y:740,r:-6,sx:1.80,sy:1.40},
+  31:{x:249,y:740,r:6,sx:1.80,sy:1.40}
 };
 
 function toothPosition(tooth){
@@ -3038,11 +3018,11 @@ function workTypeColor(type){
   if(!raw)return "#777774";
   const n=normalize(raw);
 
-  if(n.includes("coping")||n.includes("framework")||n.includes("cadru"))return "#4d8b83";
-  if(n.includes("pontic")||n.includes("corp de punte"))return "#b9224c";
-  if(n.includes("adjacent"))return "#eda817";
-  if(n.includes("antagon"))return "#e96709";
-  if(n.includes("anatomic crown")||n==="crown"||n.includes("coroana"))return "#8324a0";
+  if(n.includes("coping")||n.includes("framework")||n.includes("cadru"))return "#34756e";
+  if(n.includes("pontic")||n.includes("corp de punte"))return "#bd0043";
+  if(n.includes("adjacent"))return "#ffbe19";
+  if(n.includes("antagon"))return "#ff7900";
+  if(n.includes("anatomic crown")||n==="crown"||n.includes("coroana"))return "#a600a8";
   if(n.includes("veneer")||n.includes("fateta"))return "#4b7ab8";
   if(n.includes("implant")||n.includes("abutment"))return "#4d8e5d";
 
@@ -3058,7 +3038,7 @@ function lightenHex(hex,amount=28){
   return `#${vals.map(v=>v.toString(16).padStart(2,"0")).join("")}`;
 }
 
-function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false,surfaceId="toothSurface"){
+function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false){
   const kind=toothKind(tooth);
   const variant=toothVariant(tooth);
   const n=Number(tooth);
@@ -3070,8 +3050,8 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
   // that behaves much closer to a real odontogram — incisors taper, canines
   // have a clear cusp, premolars show two-cusp anatomy, and molars carry the
   // larger irregular lobes/fissures visible in the client's reference.
-  const stroke=selected?lightenHex(color,30):"#555553";
-  const line=selected?lightenHex(color,58):"#6f6f6c";
+  const stroke="#4d4d46";
+  const line="#4d4d46";
 
   let crown="";
   let anatomy="";
@@ -3239,139 +3219,49 @@ function toothGlyphMarkup(tooth,color="#d2d2d0",selected=false,interactive=false
 
   // ----------------------------- MOLARS ---------------------------
   else if(pos===6 && upper){
-    crown=`<path class="tooth-svg-shape" d="
-      M-16.6,-18.0
-      C-11.0,-22.3 -4.7,-22.5 0.2,-19.9
-      C5.8,-22.5 12.5,-21.3 17.4,-16.9
-      C21.7,-13.2 22.6,-7.0 20.0,-1.1
-      C22.9,4.5 21.1,11.0 16.8,15.7
-      C12.3,20.2 5.9,21.3 0.5,18.8
-      C-5.5,21.5 -12.1,19.9 -16.6,15.2
-      C-21.0,10.8 -22.1,4.6 -19.5,-0.8
-      C-22.4,-6.3 -20.9,-13.1 -16.6,-18.0 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-16,-19 C-10,-22 -4,-21 1,-20 C7,-22 16,-19 19,-14 C22,-9 20,-4 21,1 C22,7 20,15 15,18 C9,22 4,19 -1,20 C-8,22 -17,19 -19,13 C-21,8 -19,3 -21,-2 C-22,-8 -20,-15 -16,-19 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-13.4,-10.1 C-9.3,-8.0 -6.1,-4.9 -2.5,-1.2 C-6.0,2.3 -9.7,5.6 -13.2,9.5"></path>
-      <path class="tooth-anatomy" d="M13.9,-9.4 C9.9,-7.3 6.1,-4.5 2.4,-1.1 C5.9,2.5 9.6,5.3 13.5,9.0"></path>
-      <path class="tooth-anatomy" d="M-2.5,-1.2 C-0.7,-4.3 -0.6,-8.6 0.3,-13.6"></path>
-      <path class="tooth-anatomy" d="M2.4,-1.1 C0.7,2.3 0.7,7.2 0.3,13.8"></path>
-      <path class="tooth-cusp" d="M-12.1,-5.6 C-9.6,-11.6 -4.0,-13.4 -1.0,-8.1"></path>
-      <path class="tooth-cusp" d="M11.8,-5.2 C9.4,-11.0 4.5,-12.9 1.3,-7.8"></path>
-      <path class="tooth-cusp" d="M-11.7,6.2 C-8.7,11.7 -4.0,12.8 -1.1,8.1"></path>
-      <path class="tooth-cusp" d="M11.4,5.9 C8.6,11.3 4.2,12.6 1.4,8.0"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
   else if(pos===6){
-    crown=`<path class="tooth-svg-shape" d="
-      M-17.7,-17.3
-      C-12.2,-21.8 -5.7,-22.2 -0.6,-19.4
-      C4.8,-22.0 11.6,-21.2 16.9,-17.0
-      C21.1,-13.5 22.3,-7.6 20.4,-1.8
-      C23.3,3.8 21.6,10.7 17.2,15.2
-      C12.6,19.6 6.7,20.5 1.3,18.4
-      C-4.0,21.2 -10.8,20.0 -15.7,15.5
-      C-20.2,11.4 -21.8,5.2 -19.5,-0.3
-      C-22.1,-5.6 -21.1,-12.5 -17.7,-17.3 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-17,-18 C-11,-22 -4,-21 1,-20 C8,-21 16,-19 19,-13 C21,-8 19,-4 21,2 C23,8 19,16 13,18 C7,20 3,18 -2,20 C-8,22 -16,19 -19,13 C-22,6 -19,1 -21,-4 C-22,-9 -21,-14 -17,-18 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-13.7,-9.4 C-9.6,-7.6 -5.5,-4.8 -1.8,-1.1 C-5.1,2.3 -9.4,5.2 -13.4,8.9"></path>
-      <path class="tooth-anatomy" d="M13.9,-8.9 C10.3,-7.0 6.5,-4.4 2.5,-1.0 C5.7,2.5 9.8,5.3 13.7,8.7"></path>
-      <path class="tooth-anatomy" d="M-1.8,-1.1 C-0.1,-4.4 0.1,-8.4 0.5,-13.2"></path>
-      <path class="tooth-anatomy" d="M2.5,-1.0 C0.8,2.4 0.8,6.9 0.3,13.2"></path>
-      <path class="tooth-anatomy" d="M-13.4,8.9 C-8.8,9.9 -5.6,12.1 -3.4,15.4"></path>
-      <path class="tooth-cusp" d="M-11.9,-5.0 C-9.2,-10.7 -4.3,-12.6 -1.3,-7.6"></path>
-      <path class="tooth-cusp" d="M11.8,-4.9 C9.3,-10.3 4.4,-12.1 1.5,-7.4"></path>
-      <path class="tooth-cusp" d="M-11.5,5.8 C-8.8,10.8 -4.0,12.2 -1.2,7.9"></path>
-      <path class="tooth-cusp" d="M11.3,5.5 C8.8,10.4 4.4,11.8 1.7,7.8"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
   else if(pos===7 && upper){
-    crown=`<path class="tooth-svg-shape" d="
-      M-16.1,-16.9
-      C-10.9,-20.9 -5.0,-21.0 -0.4,-18.8
-      C4.6,-21.0 10.9,-20.2 15.7,-16.4
-      C19.9,-12.8 21.0,-7.1 19.1,-1.4
-      C21.2,4.1 19.5,10.1 15.4,14.4
-      C11.2,18.5 5.6,19.4 0.6,17.4
-      C-4.6,19.8 -10.8,18.5 -15.0,14.2
-      C-19.0,10.1 -20.4,4.7 -18.4,-0.6
-      C-20.7,-5.6 -19.7,-12.1 -16.1,-16.9 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-15,-18 C-9,-21 -3,-19 2,-20 C9,-21 16,-17 18,-12 C20,-6 18,-2 19,3 C21,9 17,16 12,18 C6,20 1,18 -4,19 C-11,20 -17,16 -18,10 C-20,5 -18,0 -20,-5 C-21,-10 -19,-15 -15,-18 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-12.5,-8.4 C-8.8,-6.6 -5.1,-4.2 -1.7,-0.9 C-4.8,2.0 -8.3,4.7 -12.0,8.0"></path>
-      <path class="tooth-anatomy" d="M12.7,-8.2 C9.2,-6.2 5.6,-4.0 2.0,-0.8 C5.2,2.3 8.8,4.7 12.2,7.9"></path>
-      <path class="tooth-anatomy" d="M-1.7,-0.9 C-0.2,-4.0 0.0,-7.7 0.2,-12.0"></path>
-      <path class="tooth-anatomy" d="M2.0,-0.8 C0.6,2.3 0.6,6.1 0.2,11.9"></path>
-      <path class="tooth-cusp" d="M-10.7,-4.8 C-8.4,-9.6 -4.2,-11.0 -1.4,-6.8"></path>
-      <path class="tooth-cusp" d="M10.7,-4.6 C8.4,-9.3 4.2,-10.7 1.4,-6.5"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
   else if(pos===7){
-    crown=`<path class="tooth-svg-shape" d="
-      M-16.3,-16.2
-      C-11.0,-20.2 -5.1,-20.5 -0.5,-18.0
-      C4.5,-20.4 10.7,-19.7 15.5,-15.9
-      C19.6,-12.4 20.8,-6.9 18.9,-1.4
-      C21.0,4.0 19.4,9.7 15.3,13.9
-      C11.1,18.0 5.7,18.9 0.8,17.0
-      C-4.2,19.3 -10.4,18.2 -14.8,13.9
-      C-18.9,9.9 -20.3,4.4 -18.2,-0.8
-      C-20.5,-5.7 -19.7,-11.8 -16.3,-16.2 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-15,-17 C-9,-20 -3,-19 2,-19 C9,-20 16,-16 18,-11 C20,-6 18,-1 19,4 C21,10 16,16 11,18 C5,20 0,18 -5,19 C-11,20 -17,15 -18,9 C-20,3 -18,-1 -20,-6 C-21,-11 -19,-15 -15,-17 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-12.5,-8.1 C-8.8,-6.4 -5.1,-4.1 -1.6,-0.8 C-4.8,2.1 -8.5,4.7 -12.1,7.9"></path>
-      <path class="tooth-anatomy" d="M12.6,-7.8 C9.1,-6.0 5.5,-3.8 2.0,-0.7 C5.1,2.2 8.6,4.6 12.0,7.6"></path>
-      <path class="tooth-anatomy" d="M-1.6,-0.8 C-0.1,-3.9 0.1,-7.5 0.3,-11.8"></path>
-      <path class="tooth-anatomy" d="M2.0,-0.7 C0.6,2.2 0.5,5.9 0.2,11.6"></path>
-      <path class="tooth-cusp" d="M-10.4,-4.5 C-8.1,-9.1 -4.0,-10.6 -1.4,-6.5"></path>
-      <path class="tooth-cusp" d="M10.4,-4.4 C8.2,-8.8 4.0,-10.4 1.4,-6.3"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
   else if(upper){
-    crown=`<path class="tooth-svg-shape" d="
-      M-14.6,-15.1
-      C-10.0,-18.8 -4.9,-19.0 -0.6,-16.9
-      C3.7,-19.0 9.2,-18.3 13.5,-15.2
-      C17.4,-12.3 19.0,-7.0 17.2,-1.7
-      C19.0,3.2 17.4,8.9 13.8,12.7
-      C10.1,16.8 5.2,17.9 0.8,15.9
-      C-3.9,18.0 -9.2,16.9 -13.0,12.8
-      C-16.7,8.9 -18.1,4.0 -16.3,-0.7
-      C-18.4,-5.2 -17.8,-10.7 -14.6,-15.1 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-13,-16 C-8,-19 -3,-17 2,-18 C9,-19 15,-15 17,-10 C19,-4 17,0 18,5 C19,11 14,16 9,17 C4,19 0,17 -5,18 C-11,18 -16,14 -17,8 C-18,3 -16,-1 -18,-6 C-19,-11 -16,-14 -13,-16 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-10.5,-7.3 C-7.1,-5.7 -4.2,-3.4 -1.2,-0.4 C-3.9,2.2 -7.0,4.5 -10.1,7.2"></path>
-      <path class="tooth-anatomy" d="M10.2,-7.1 C7.1,-5.3 4.3,-3.2 1.2,-0.3 C4.0,2.4 7.0,4.5 10.0,7.0"></path>
-      <path class="tooth-anatomy" d="M-1.2,-0.4 C0,-3.1 0,-6.4 0.2,-10.0"></path>
-      <path class="tooth-anatomy" d="M1.2,-0.3 C0.2,2.4 0.4,5.6 0,9.7"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
   else{
-    crown=`<path class="tooth-svg-shape" d="
-      M-15.0,-15.2
-      C-10.4,-18.9 -5.1,-19.2 -0.8,-17.0
-      C3.8,-19.1 9.5,-18.5 13.8,-15.0
-      C17.7,-11.8 18.8,-6.8 17.2,-1.6
-      C19.0,3.5 17.2,9.1 13.5,12.8
-      C9.8,16.5 5.1,17.5 0.9,15.8
-      C-3.6,17.8 -8.8,16.8 -12.6,13.1
-      C-16.4,9.4 -17.9,4.1 -16.0,-0.7
-      C-18.0,-5.4 -17.4,-10.8 -15.0,-15.2 Z"></path>`;
+    crown=`<path class="tooth-svg-shape" d="M-14,-16 C-9,-19 -3,-17 2,-18 C8,-19 15,-15 17,-10 C19,-4 17,1 18,6 C19,11 14,16 8,17 C3,18 -1,16 -6,17 C-12,18 -16,13 -17,7 C-18,2 -16,-2 -18,-7 C-19,-11 -17,-14 -14,-16 Z"></path>`;
     anatomy=`
-      <path class="tooth-anatomy" d="M-10.6,-7.2 C-7.2,-5.5 -4.1,-3.3 -1.3,-0.4 C-4.0,2.2 -7.1,4.4 -10.0,7.1"></path>
-      <path class="tooth-anatomy" d="M10.4,-7.0 C7.2,-5.3 4.2,-3.1 1.2,-0.3 C4.0,2.3 7.0,4.5 9.9,6.9"></path>
-      <path class="tooth-anatomy" d="M-1.3,-0.4 C-0.1,-3.0 0.0,-6.3 0.2,-9.9"></path>
-      <path class="tooth-anatomy" d="M1.2,-0.3 C0.2,2.3 0.3,5.5 0,9.6"></path>`;
+      <path class="tooth-anatomy" d="M-12,-14 C-14,-10 -10,-8 -11,-4 M-4,-16 C-5,-12 -1,-10 -3,-7 M5,-15 C3,-12 7,-9 5,-6 M13,-11 C10,-8 13,-5 11,-2"></path>
+      <path class="tooth-anatomy" d="M-16,1 C-12,-1 -10,2 -7,1 M7,2 C10,0 13,3 16,1 M-12,8 C-9,6 -6,9 -7,13 M1,8 C-1,11 3,13 1,16 M11,7 C8,10 12,12 9,15"></path>`;
   }
 
   return `
     <g class="tooth-glyph ${kind} ${variant}" style="--tooth-color:${color};--tooth-stroke:${stroke};--tooth-line:${line}">
       <g class="tooth-render"${!upper&&pos<=2?' transform="rotate(180)"':""}>
         ${crown}
-        ${crown.replace('class="tooth-svg-shape"',`class="tooth-enamel-light" fill="url(#${surfaceId})" aria-hidden="true"`)}
         ${anatomy}
       </g>
     </g>`;
-}
-
-function toothSurfaceDefs(id){
-  return `<radialGradient id="${id}" cx="38%" cy="30%" r="72%">
-    <stop offset="0" stop-color="#ffffff" stop-opacity=".82"></stop>
-    <stop offset=".38" stop-color="#ffffff" stop-opacity=".38"></stop>
-    <stop offset=".66" stop-color="#ffffff" stop-opacity=".08"></stop>
-    <stop offset=".86" stop-color="#555b62" stop-opacity=".16"></stop>
-    <stop offset="1" stop-color="#343a42" stop-opacity=".32"></stop>
-  </radialGradient>`;
 }
 
 function dentalChartSvg(selected=[],interactive=false,options={}){
@@ -3397,7 +3287,6 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
         <g class="${cls}" data-tooth="${tooth}" data-tooth-type="${escapeHtml(type)}"
           transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.rotation.toFixed(1)}) scale(${p.scaleX.toFixed(3)} ${p.scaleY.toFixed(3)})"
           ${interactive?'tabindex="0" role="button"':''} aria-label="Tooth ${tooth}${type?`, ${escapeHtml(type)}`:""}">
-          ${isSelected?'<circle class="active-tooth-halo" cx="0" cy="0" r="25"></circle>':""}
           ${toothGlyphMarkup(tooth,color,isSelected,interactive)}
         </g>`);
 
@@ -3419,17 +3308,6 @@ function dentalChartSvg(selected=[],interactive=false,options={}){
       : ``;
 
   return `<svg class="dental-chart-svg anatomical-chart reference-odontogram" viewBox="0 0 474 776" aria-label="FDI anatomical tooth chart">
-    <defs>
-      ${toothSurfaceDefs("toothSurface")}
-      <filter id="toothBevel" x="-35%" y="-35%" width="170%" height="170%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur"></feGaussianBlur>
-        <feSpecularLighting in="blur" surfaceScale="3.5" specularConstant=".52" specularExponent="14" lighting-color="#ffffff" result="spec">
-          <fePointLight x="-15" y="-20" z="36"></fePointLight>
-        </feSpecularLighting>
-        <feComposite in="spec" in2="SourceAlpha" operator="in" result="spec2"></feComposite>
-        <feBlend in="SourceGraphic" in2="spec2" mode="screen"></feBlend>
-      </filter>
-    </defs>
     ${dividers}
     ${groups.join("")}
     ${labels.join("")}
@@ -5500,19 +5378,8 @@ function positionOrderToothPopover(anchor=null){
 
 function toothPreviewSvg(tooth,color){
   return `<svg viewBox="-34 -34 68 68" aria-hidden="true">
-    <defs>
-      ${toothSurfaceDefs("toothPreviewSurface")}
-      <filter id="previewBevel" x="-35%" y="-35%" width="170%" height="170%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur"></feGaussianBlur>
-        <feSpecularLighting in="blur" surfaceScale="4" specularConstant=".7" specularExponent="17" lighting-color="#ffffff" result="spec">
-          <fePointLight x="-15" y="-20" z="35"></fePointLight>
-        </feSpecularLighting>
-        <feComposite in="spec" in2="SourceAlpha" operator="in" result="spec2"></feComposite>
-        <feBlend in="SourceGraphic" in2="spec2" mode="screen"></feBlend>
-      </filter>
-    </defs>
-    <g transform="scale(1.32)" filter="url(#previewBevel)">
-      ${toothGlyphMarkup(tooth,color,true,false,"toothPreviewSurface")}
+    <g transform="scale(1.32)">
+      ${toothGlyphMarkup(tooth,color,true,false)}
     </g>
   </svg>`;
 }

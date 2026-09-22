@@ -8398,59 +8398,55 @@ a,
 
 
 /* ==========================================================================\n   V18.3 — REFERENCE-CLOSER ODONTOGRAM GEOMETRY\n   ========================================================================== */
-.reference-odontogram .tooth-svg-shape{
-  stroke:var(--tooth-stroke,#666962)!important;
-  stroke-width:.9!important;
+.reference-odontogram .tooth-svg-shape,
+.tooth-popover-preview .tooth-svg-shape{
+  fill:var(--tooth-color,#d2d2d0)!important;
+  stroke:#4d4d46!important;
+  stroke-width:1.15!important;
   stroke-linejoin:round!important;
   filter:none!important;
 }
-.tooth-enamel-light{
-  stroke:none;
-  pointer-events:none;
-}
-.reference-odontogram .tooth-anatomy{
-  stroke:var(--tooth-line,#777a73)!important;
-  stroke-width:.75!important;
-  opacity:.55!important;
+.reference-odontogram .tooth-anatomy,
+.reference-odontogram .tooth-cusp,
+.tooth-popover-preview .tooth-anatomy,
+.tooth-popover-preview .tooth-cusp{
+  stroke:#4d4d46!important;
+  stroke-width:.85!important;
+  opacity:.9!important;
   stroke-linecap:round!important;
   stroke-linejoin:round!important;
 }
-.reference-odontogram .tooth-cusp{
-  stroke:var(--tooth-line,#777a73)!important;
-  stroke-width:.65!important;
-  opacity:.35!important;
-  stroke-linecap:round!important;
-}
-.reference-odontogram .tooth-highlight{
-  stroke:rgba(255,255,255,.85)!important;
-  stroke-width:1.05!important;
-  opacity:.72!important;
+.reference-odontogram .tooth-highlight,
+.tooth-popover-preview .tooth-highlight{
+  display:none;
 }
 .reference-odontogram .tooth-render{
-  filter:drop-shadow(0 1.5px 1.3px rgba(30,35,40,.18))!important;
+  filter:none!important;
+}
+.reference-odontogram .tooth-svg-group{
+  opacity:1!important;
 }
 .reference-odontogram .tooth-svg-group:not(.selected) .tooth-svg-shape{
-  fill:#d9dbd5!important;
-  stroke:#656963!important;
+  fill:#d2d2d0!important;
+  stroke:#666660!important;
 }
 .reference-odontogram .tooth-svg-group:not(.selected) .tooth-anatomy,
 .reference-odontogram .tooth-svg-group:not(.selected) .tooth-cusp{
-  opacity:.48!important;
-}
-.reference-odontogram .tooth-svg-group.selected .tooth-enamel-light{
-  opacity:.6;
+  stroke:#666660!important;
+  opacity:.9!important;
 }
 .reference-odontogram .tooth-svg-group.interactive:hover .tooth-svg-shape,
 .reference-odontogram .tooth-svg-group.interactive:focus .tooth-svg-shape{
-  stroke:#9b6a12!important;
-  stroke-width:1.8!important;
+  stroke:#292921!important;
+  stroke-width:2.2!important;
+  transform:none!important;
 }
 .reference-inside-label{
-  font-size:15px!important;
-  font-weight:700!important;
-  fill:#292d2b!important;
-  stroke:#fafbf7!important;
-  stroke-width:2.6px!important;
+  font-size:19px!important;
+  font-weight:500!important;
+  fill:#22221f!important;
+  stroke:#fff!important;
+  stroke-width:3px!important;
 }
 
 
@@ -8960,43 +8956,25 @@ body.dashboard-production-maximized .kanban-col{
   font-weight:950!important;
 }
 
-/* A tooth currently targeted by the open popup must remain unmistakable,
-   even before it becomes part of the saved selection. */
+/* Active editing uses a contour without enlarging tightly spaced crowns
+   or replacing the work-type color. */
 .order-tooth-chart .tooth-svg-group.batch-selected{
   opacity:1!important;
-  filter:drop-shadow(0 0 5px rgba(197,126,0,.95)) drop-shadow(0 0 12px rgba(244,185,66,.72))!important;
-}
-.order-tooth-chart .tooth-svg-group.batch-selected .tooth-enamel-light{
-  transform:scale(1.12);
-  opacity:.6;
+  filter:none!important;
+  animation:none!important;
 }
 .order-tooth-chart .tooth-svg-group.batch-selected .tooth-svg-shape{
-  fill:#f4b942!important;
-  stroke:#6d4300!important;
-  stroke-width:4px!important;
-  transform:scale(1.12)!important;
-}
-.order-tooth-chart .tooth-svg-group.batch-selected .tooth-svg-label{
-  fill:#17110a!important;
-  stroke:#fff3cd!important;
-  stroke-width:2.6px!important;
-  paint-order:stroke!important;
-  font-weight:950!important;
+  fill:var(--tooth-color,#d2d2d0)!important;
+  stroke:#292921!important;
+  stroke-width:3px!important;
+  stroke-dasharray:4 2;
+  transform:none!important;
 }
 .order-tooth-chart .tooth-number-label.batch-selected-label{
   fill:#17110a!important;
-  stroke:#fff3cd!important;
+  stroke:#fff!important;
   stroke-width:3.2px!important;
-  paint-order:stroke!important;
-  font-weight:950!important;
-}
-
-@media(prefers-reduced-motion:no-preference){
-  .order-tooth-chart .tooth-svg-group.batch-selected{animation:v1818-active-tooth-pulse 1.15s ease-in-out infinite alternate;}
-  @keyframes v1818-active-tooth-pulse{
-    from{filter:drop-shadow(0 0 4px rgba(197,126,0,.78)) drop-shadow(0 0 8px rgba(244,185,66,.55));}
-    to{filter:drop-shadow(0 0 7px rgba(197,126,0,1)) drop-shadow(0 0 16px rgba(244,185,66,.9));}
-  }
+  font-weight:800!important;
 }
 
 /* ==========================================================================
