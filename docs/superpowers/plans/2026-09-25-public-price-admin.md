@@ -1169,6 +1169,19 @@ git commit -m "feat(db): publish and restore the public price list"
 
 The migration embeds the same document as the fixture, and two copies drift. This test is the guard. Create `tests/app/public-price-seed.test.js`:
 
+> **Corrected during execution.** The original second test asserted
+> `/where not exists/i`, which requires two SQL keywords to be textually
+> ADJACENT. That is a formatting check wearing a correctness check's clothes,
+> and it did real damage in both directions: it would have PASSED on a migration
+> that dropped the `is not null` guard — the one failure this task forbids, since
+> `lab_organization_id` is NOT NULL and an unresolved lab must no-op rather than
+> raise — and it FAILED on correct SQL written in the clause order Step 3 below
+> suggests, which is what pushed the implementer into reshaping the SQL to satisfy
+> a regex. The two artifacts contradicted each other. The tests below assert the
+> two properties independently of clause order, and each was mutation-tested:
+> flipping `not exists` to `exists`, removing the guard, and deleting the
+> `is not null` clause each make a test fail.
+
 ```js
 const fs=require('node:fs');
 const path=require('node:path');
@@ -1185,8 +1198,14 @@ test('the seed migration embeds exactly the fixture document',()=>{
  assert.deepEqual(JSON.parse(match[1]),fixture);
 });
 
-test('the seed migration is idempotent by construction',()=>{
- assert.match(sql,/where not exists/i,'re-running the migration must not insert a second version');
+test('the seed migration will not insert a second version',()=>{
+ assert.match(sql,/not exists\s*\(\s*select 1\s+from public\.public_price_lists/i,
+  'the insert must be guarded by a NOT EXISTS check against the price list table');
+});
+
+test('the seed migration inserts nothing when the lab cannot be resolved',()=>{
+ assert.match(sql,/get_flowrise_lab_id\(\)\s+is not null/i,
+  'lab_organization_id is NOT NULL, so an unresolved lab must no-op rather than raise');
 });
 ```
 
