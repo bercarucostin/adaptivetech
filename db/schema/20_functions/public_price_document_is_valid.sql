@@ -22,14 +22,26 @@ declare
     v_amount numeric;
 begin
     if p_document is null or jsonb_typeof(p_document) <> 'object' then return false; end if;
-    if (p_document->>'schema') is distinct from '1' then return false; end if;
+    -- The bound is the number 1, not the string "1"; jsonb equality distinguishes them.
+    if p_document->'schema' is distinct from '1'::jsonb then return false; end if;
 
-    -- currency, 1..8 characters
+    -- currency: required string, 1..8 characters. `->>` returns text for any jsonb
+    -- type (an object, array or number all serialize to some text), so the length
+    -- check alone would accept a non-string; the type gate closes that.
+    if jsonb_typeof(p_document->'currency') is distinct from 'string' then return false; end if;
     if coalesce(length(p_document->>'currency'), 0) not between 1 and 8 then return false; end if;
 
-    -- the two notes may be absent or empty, but not long
-    if coalesce(length(p_document->>'intro_note'), 0) > 400 then return false; end if;
-    if coalesce(length(p_document->>'footnote'), 0) > 400 then return false; end if;
+    -- the two notes may be absent entirely, but if present must be a string (or
+    -- json null, which reads back as empty) and not long
+    if p_document ? 'intro_note' then
+        if jsonb_typeof(p_document->'intro_note') not in ('string', 'null') then return false; end if;
+        if coalesce(length(p_document->>'intro_note'), 0) > 400 then return false; end if;
+    end if;
+
+    if p_document ? 'footnote' then
+        if jsonb_typeof(p_document->'footnote') not in ('string', 'null') then return false; end if;
+        if coalesce(length(p_document->>'footnote'), 0) > 400 then return false; end if;
+    end if;
 
     -- A missing key makes `->` yield SQL NULL, so `jsonb_typeof(NULL) <> 'array'`
     -- is itself NULL -- and a NULL condition silently skips the branch instead
@@ -41,6 +53,8 @@ begin
     for v_group in select jsonb_array_elements(p_document->'groups') loop
         if jsonb_typeof(v_group) <> 'object' then return false; end if;
 
+        -- title: required string, 1..80 characters, unique within the document.
+        if jsonb_typeof(v_group->'title') is distinct from 'string' then return false; end if;
         v_title := v_group->>'title';
         if coalesce(length(v_title), 0) not between 1 and 80 then return false; end if;
         if v_title = any (v_titles) then return false; end if;
@@ -54,13 +68,21 @@ begin
             v_rows := v_rows + 1;
             if v_rows > 200 then return false; end if;
 
+            -- item: required string, 1..200 characters.
+            if jsonb_typeof(v_row->'item') is distinct from 'string' then return false; end if;
             if coalesce(length(v_row->>'item'), 0) not between 1 and 200 then return false; end if;
 
-            if v_row ? 'variant' and jsonb_typeof(v_row->'variant') <> 'null' then
+            -- variant and row currency: optional, but if the key is present at all
+            -- it must be a string of valid length -- an explicit null is rejected,
+            -- matching the browser mirror and the editor, which deletes the key
+            -- instead of ever writing null.
+            if v_row ? 'variant' then
+                if jsonb_typeof(v_row->'variant') <> 'string' then return false; end if;
                 if coalesce(length(v_row->>'variant'), 0) not between 1 and 60 then return false; end if;
             end if;
 
-            if v_row ? 'currency' and jsonb_typeof(v_row->'currency') <> 'null' then
+            if v_row ? 'currency' then
+                if jsonb_typeof(v_row->'currency') <> 'string' then return false; end if;
                 if coalesce(length(v_row->>'currency'), 0) not between 1 and 8 then return false; end if;
             end if;
 
@@ -71,7 +93,11 @@ begin
             if jsonb_typeof(v_row->'amount') is distinct from 'number' then return false; end if;
             v_amount := (v_row->>'amount')::numeric;
             if v_amount < 0 or v_amount > 1000000 then return false; end if;
-            if scale(v_amount) > 2 then return false; end if;
+            -- scale() reports the stored display scale, and jsonb preserves a
+            -- literal's trailing zeros, so 1.500 would fail scale(v_amount) > 2
+            -- even though it is a legitimate two-decimal price. Compare values
+            -- instead, matching the browser's Math.round(amount*100) check.
+            if v_amount <> round(v_amount, 2) then return false; end if;
         end loop;
     end loop;
 

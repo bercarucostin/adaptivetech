@@ -164,6 +164,13 @@ begin
             ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1000001}]}]}',          false, 'an implausible amount'),
             ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":{"item":"X"}}]}',                             false, 'rows that are not an array'),
             ('{"schema":1,"currency":"lei","groups":[{"title":"G"}]}',                                                 false, 'a group with no rows key'),
+            ('{"schema":"1","currency":"lei","groups":[{"title":"G","rows":[]}]}',                                     false, 'a schema written as text'),
+            ('{"schema":1,"currency":5,"groups":[{"title":"G","rows":[]}]}',                                           false, 'a currency that is a number'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":{"a":1},"rows":[]}]}',                                   false, 'a title that is an object'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":[1,2],"amount":1}]}]}',              false, 'an item that is an array'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1,"variant":null}]}]}', false, 'a variant that is explicitly null'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1.500}]}]}',            true,  'trailing zeros in a two-decimal amount'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1,"footnote":null}]}]}', true, 'a row footnote written as null'),
             ('[]',                                                                                                     false, 'an array instead of an object'),
             ('null',                                                                                                   false, 'a null document')
         ) as t(document, expected, description)
@@ -181,6 +188,7 @@ declare
         'groups', jsonb_build_array(jsonb_build_object('title', 'G',
             'rows', jsonb_build_array(jsonb_build_object('item', repeat('x', 201), 'amount', 1)))));
     v_many_rows jsonb;
+    v_many_rows_two_groups jsonb;
 begin
     if public.public_price_document_is_valid(v_long_item) then
         raise exception 'An item name of 201 characters was accepted';
@@ -194,6 +202,21 @@ begin
 
     if public.public_price_document_is_valid(v_many_rows) then
         raise exception 'A document with 201 rows was accepted';
+    end if;
+
+    -- The 200-row cap is document-wide, not per group: two groups of 101 rows
+    -- each (202 total) must be rejected just like 201 rows in one group.
+    select jsonb_build_object('schema', 1, 'currency', 'lei', 'groups', jsonb_build_array(
+             jsonb_build_object('title', 'G1', 'rows', (
+               select jsonb_agg(jsonb_build_object('item', 'Row ' || g, 'amount', 1))
+                 from generate_series(1, 101) as g)),
+             jsonb_build_object('title', 'G2', 'rows', (
+               select jsonb_agg(jsonb_build_object('item', 'Row ' || g, 'amount', 1))
+                 from generate_series(1, 101) as g))))
+      into v_many_rows_two_groups;
+
+    if public.public_price_document_is_valid(v_many_rows_two_groups) then
+        raise exception 'A document with 101+101 rows across two groups was accepted';
     end if;
 end $$;
 
