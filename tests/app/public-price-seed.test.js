@@ -13,6 +13,12 @@ test('the seed migration embeds exactly the fixture document',()=>{
  assert.deepEqual(JSON.parse(match[1]),fixture);
 });
 
-test('the seed migration is idempotent by construction',()=>{
- assert.match(sql,/where not exists/i,'re-running the migration must not insert a second version');
+test('the seed migration will not insert a second version',()=>{
+ assert.match(sql,/not exists\s*\(\s*select 1\s+from public\.public_price_lists/i,
+  'the insert must be guarded by a NOT EXISTS check against the price list table');
+});
+
+test('the seed migration inserts nothing when the lab cannot be resolved',()=>{
+ assert.match(sql,/get_flowrise_lab_id\(\)\s+is not null/i,
+  'lab_organization_id is NOT NULL, so an unresolved lab must no-op rather than raise');
 });

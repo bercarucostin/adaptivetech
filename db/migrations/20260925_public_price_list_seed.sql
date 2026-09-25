@@ -202,4 +202,6 @@ where not exists (
       select 1 from public.public_price_lists
        where lab_organization_id = public.get_flowrise_lab_id()
   )
+  -- lab_organization_id is NOT NULL on the table, so an unresolved lab must
+  -- produce no row rather than attempting to insert NULL and raising an error.
   and public.get_flowrise_lab_id() is not null;
