@@ -139,4 +139,79 @@ end $$;
 
 reset role;
 
+-- Document validation ------------------------------------------------------
+do $$
+declare
+    v_case record;
+begin
+    for v_case in
+        select * from (values
+            ('{"schema":1,"currency":"lei","intro_note":"","footnote":"","groups":[{"title":"G","rows":[{"item":"X","amount":200}]}]}', true,  'a minimal valid document'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[]}]}',                                      true,  'a group with no rows'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":199.5,"variant":"IVOCLAR","footnote":true,"currency":"EUR"}]}]}', true, 'every optional field'),
+            ('{"schema":2,"currency":"lei","groups":[{"title":"G","rows":[]}]}',                                      false, 'an unknown schema version'),
+            ('{"currency":"lei","groups":[{"title":"G","rows":[]}]}',                                                 false, 'a missing schema version'),
+            ('{"schema":1,"currency":"lei","groups":[]}',                                                             false, 'no groups'),
+            ('{"schema":1,"currency":"lei"}',                                                                         false, 'a missing groups key'),
+            ('{"schema":1,"currency":"","groups":[{"title":"G","rows":[]}]}',                                          false, 'an empty currency'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"","rows":[]}]}',                                        false, 'an empty group title'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[]},{"title":"G","rows":[]}]}',               false, 'duplicate group titles'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"","amount":1}]}]}',                 false, 'an empty item name'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":-1}]}]}',               false, 'a negative amount'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1.005}]}]}',            false, 'more than two decimals'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":"200"}]}]}',            false, 'an amount written as text'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X"}]}]}',                           false, 'a row with no amount'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1000001}]}]}',          false, 'an implausible amount'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":{"item":"X"}}]}',                             false, 'rows that are not an array'),
+            ('[]',                                                                                                     false, 'an array instead of an object'),
+            ('null',                                                                                                   false, 'a null document')
+        ) as t(document, expected, description)
+    loop
+        if public.public_price_document_is_valid(v_case.document::jsonb) <> v_case.expected then
+            raise exception 'Validator verdict wrong for %: expected %', v_case.description, v_case.expected;
+        end if;
+    end loop;
+end $$;
+
+do $$
+declare
+    v_long_item jsonb := jsonb_build_object(
+        'schema', 1, 'currency', 'lei',
+        'groups', jsonb_build_array(jsonb_build_object('title', 'G',
+            'rows', jsonb_build_array(jsonb_build_object('item', repeat('x', 201), 'amount', 1)))));
+    v_many_rows jsonb;
+begin
+    if public.public_price_document_is_valid(v_long_item) then
+        raise exception 'An item name of 201 characters was accepted';
+    end if;
+
+    select jsonb_build_object('schema', 1, 'currency', 'lei',
+             'groups', jsonb_build_array(jsonb_build_object('title', 'G', 'rows', jsonb_agg(
+                 jsonb_build_object('item', 'Row ' || g, 'amount', 1)))))
+      into v_many_rows
+      from generate_series(1, 201) as g;
+
+    if public.public_price_document_is_valid(v_many_rows) then
+        raise exception 'A document with 201 rows was accepted';
+    end if;
+end $$;
+
+-- The table refuses an invalid document even from a privileged writer -------
+do $$
+declare
+    v_lab uuid;
+begin
+    insert into public.organizations (name, slug, organization_type, active)
+    values ('Check Lab', 'check-lab-public-prices', 'lab', true)
+    returning id into v_lab;
+
+    begin
+        insert into public.public_price_lists (lab_organization_id, document, is_current)
+        values (v_lab, '{"schema":1,"currency":"lei","groups":[]}'::jsonb, false);
+        raise exception 'An invalid document was stored';
+    exception when check_violation then
+        null;
+    end;
+end $$;
+
 rollback;

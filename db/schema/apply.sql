@@ -136,6 +136,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/next_lab_work_order_id.sql
 \i db/schema/20_functions/organization_is_type.sql
 \i db/schema/20_functions/prepare_stage_reassignment.sql
+\i db/schema/20_functions/public_price_document_is_valid.sql
 \i db/schema/20_functions/record_technician_payment.sql
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
