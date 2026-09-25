@@ -111,17 +111,17 @@ test('a throwing onUnavailable does not reject the returned promise',async()=>{
 test('a cached entry whose document.groups is a string is treated as no cache and is removed',async()=>{
  const store=storage({flowrise_public_prices_v1:JSON.stringify({document:{schema:1,currency:'lei',groups:'should-be-array'}})});
  const shown=collect(),failed=collect();
- await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v9',document:doc('Net')}]),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
- assert.deepEqual(shown.seen,[doc('Net')]);
- assert.deepEqual(JSON.parse(store.map.get('flowrise_public_prices_v1')).document,doc('Net'));
+ await loadPriceList({url:'u',key:'k',fetch:()=>Promise.reject(new Error('offline')),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
+ assert.deepEqual(shown.seen,[]);
+ assert.equal(store.map.get('flowrise_public_prices_v1'),undefined);
 });
 
 test('a cached entry that is not valid JSON is removed from storage',async()=>{
  const store=storage({flowrise_public_prices_v1:'{not json'});
  const shown=collect(),failed=collect();
- await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v10',document:doc('Net')}]),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
- assert.deepEqual(shown.seen,[doc('Net')]);
- assert.deepEqual(JSON.parse(store.map.get('flowrise_public_prices_v1')).document,doc('Net'));
+ await loadPriceList({url:'u',key:'k',fetch:()=>Promise.reject(new Error('offline')),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
+ assert.deepEqual(shown.seen,[]);
+ assert.equal(store.map.get('flowrise_public_prices_v1'),undefined);
 });
 
 test('when the cache render throws and the network render succeeds, onUnavailable is never called',async()=>{
@@ -130,4 +130,12 @@ test('when the cache render throws and the network render succeeds, onUnavailabl
  const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v11',document:doc('Net')}]),storage:store,onDocument:(d)=>{if(d.groups[0].title==='Cached')throw new Error('cache');},onUnavailable:failed.fn});
  assert.deepEqual(got,doc('Net'));
  assert.equal(failed.seen.length,0);
+});
+
+test('when cache render throws and network returns the same document, the visitor is not left with nothing',async()=>{
+ const failed=collect();
+ const store=storage({flowrise_public_prices_v1:JSON.stringify({document:doc('Same')})});
+ const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v12',document:doc('Same')}]),storage:store,onDocument:(d)=>{throw new Error('render broke');},onUnavailable:failed.fn});
+ assert.deepEqual(got,doc('Same'));
+ assert.equal(failed.seen.length,1);
 });

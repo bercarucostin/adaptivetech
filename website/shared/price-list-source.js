@@ -82,11 +82,10 @@
       .then(function (rows) {
         var doc = rows && rows[0] && rows[0].document;
         if (!doc || !Array.isArray(doc.groups)) throw new Error('No current price list');
-        // Compared as serialized text, which is sound here because jsonb
-        // canonicalizes key order for a given key set and these rows are
-        // insert-only -- the same row always serializes identically. Against a
-        // plain json column this would re-render on every visit.
-        if (!cached || JSON.stringify(cached) !== JSON.stringify(doc)) {
+        // Render when the document changed, and also whenever nothing has
+        // reached the visitor yet -- a cache render that threw must not be able
+        // to skip the network render just because the document is identical.
+        if (!rendered || !cached || JSON.stringify(cached) !== JSON.stringify(doc)) {
           if (!render(doc)) unavailable(new Error('The price list could not be rendered'));
         }
         writeCache(storage, key, doc);
