@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "currency": "lei",
+  "intro_note": "Prețurile sunt exprimate în lei, per element, dacă nu se specifică altfel.",
+  "footnote": "La elementele prin înșurubare, PMMA și zirconiu, se adaugă costul elementelor din titan.",
+  "groups": [
+    {
+      "title": "Lucrări pe dinte natural",
+      "rows": [
+        {
+          "item": "Coroană ceramică stratificată, suport metalic CR-CO",
+          "amount": 200,
+          "variant": "IVOCLAR"
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport metalic CR-CO",
+          "amount": 180,
+          "variant": "NORITAKE"
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport zirconiu",
+          "amount": 350,
+          "variant": "IVOCLAR"
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport zirconiu",
+          "amount": 320,
+          "variant": "NORITAKE"
+        },
+        {
+          "item": "Coroană full zirconiu",
+          "amount": 400,
+          "variant": "IVOCLAR"
+        },
+        {
+          "item": "Coroană full zirconiu",
+          "amount": 280,
+          "variant": "YUCERA 4D"
+        },
+        {
+          "item": "Inlay / Onlay zirconiu",
+          "amount": 250
+        },
+        {
+          "item": "Inlay / Onlay",
+          "amount": 350,
+          "variant": "IVOCLAR E.max"
+        },
+        {
+          "item": "Fațete zirconiu",
+          "amount": 280
+        },
+        {
+          "item": "Fațete zirconiu",
+          "amount": 450,
+          "variant": "IVOCLAR E.max"
+        },
+        {
+          "item": "Gingie falsă (ceramică), per element",
+          "amount": 30
+        },
+        {
+          "item": "PMMA",
+          "amount": 80
+        },
+        {
+          "item": "Lucrare provizorie printată 3D",
+          "amount": 50
+        }
+      ]
+    },
+    {
+      "title": "Lucrări pe implant",
+      "rows": [
+        {
+          "item": "Coroană ceramică stratificată, suport CR-CO",
+          "amount": 270,
+          "variant": "IVOCLAR"
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport CR-CO",
+          "amount": 250,
+          "variant": "NORITAKE"
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport zirconiu",
+          "amount": 500,
+          "variant": "IVOCLAR",
+          "footnote": true
+        },
+        {
+          "item": "Coroană ceramică stratificată, suport zirconiu",
+          "amount": 380,
+          "variant": "NORITAKE",
+          "footnote": true
+        },
+        {
+          "item": "Coroană full zirconiu, prin înșurubare",
+          "amount": 450,
+          "variant": "IVOCLAR",
+          "footnote": true
+        },
+        {
+          "item": "Coroană full zirconiu, prin înșurubare",
+          "amount": 350,
+          "variant": "YUCERA 4D",
+          "footnote": true
+        },
+        {
+          "item": "PMMA, prin înșurubare",
+          "amount": 100,
+          "footnote": true
+        }
+      ]
+    },
+    {
+      "title": "Reabilitări totale",
+      "rows": [
+        {
+          "item": "All-on-4 / All-on-6 metalo-ceramică",
+          "amount": 4000,
+          "variant": "IVOCLAR"
+        },
+        {
+          "item": "All-on-4 / All-on-6 titan-zirconiu",
+          "amount": 5500,
+          "variant": "iBar"
+        },
+        {
+          "item": "All-on-4 / All-on-6 titan-zirconiu",
+          "amount": 6500,
+          "variant": "Toronto"
+        },
+        {
+          "item": "All-on-X provizorie, livrare în 24 de ore",
+          "amount": 1000
+        }
+      ]
+    },
+    {
+      "title": "Bonturi și reconstituiri",
+      "rows": [
+        {
+          "item": "Bont protetic personalizat CR-CO",
+          "amount": 200
+        },
+        {
+          "item": "Bont protetic personalizat titan",
+          "amount": 350
+        },
+        {
+          "item": "RCR CR-CO",
+          "amount": 70
+        },
+        {
+          "item": "RCR zirconiu",
+          "amount": 150
+        }
+      ]
+    },
+    {
+      "title": "Proteze și gutiere",
+      "rows": [
+        {
+          "item": "Proteză acrilică totală sau parțială simplă",
+          "amount": 650
+        },
+        {
+          "item": "Proteză elastică",
+          "amount": 800
+        },
+        {
+          "item": "Proteză scheletată, sisteme speciale",
+          "amount": 1400
+        },
+        {
+          "item": "Reparație proteză",
+          "amount": 100
+        },
+        {
+          "item": "Gutieră de albire sau bruxism, per arcadă",
+          "amount": 120
+        }
+      ]
+    }
+  ]
+}
