@@ -9843,7 +9843,7 @@ USING (requested_by_user_id=auth.uid() AND public.effective_lab_role(lab_organiz
 
 DROP POLICY IF EXISTS "current public price list is world readable" ON "public"."public_price_lists";
 
-CREATE POLICY "current public price list is world readable" ON "public"."public_price_lists" AS PERMISSIVE FOR SELECT TO "anon", "authenticated" USING ((is_current OR is_lab_management(lab_organization_id)));
+CREATE POLICY "current public price list is world readable" ON "public"."public_price_lists" AS PERMISSIVE FOR SELECT TO "anon", "authenticated" USING ((is_current OR public.is_lab_management(lab_organization_id)));
 -- END db/schema/30_policies/30_public_price_lists.sql
 
 
@@ -10018,8 +10018,17 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 
 -- The public price list is written only by publish_public_price_list and
 -- set_current_public_price_list, both SECURITY DEFINER. No browser role writes
--- it directly, and anon must not even execute the RPCs.
-revoke insert, update, delete on table public.public_price_lists from anon, authenticated;
+-- it directly. Task 4 revokes EXECUTE from anon on those RPCs; they do not
+-- exist yet in this commit.
+--
+-- REVOKE ALL, not just insert/update/delete: Supabase grants ALL on a table at
+-- creation time, and TRUNCATE is not subject to row-level security, so it is
+-- the one write verb RLS cannot cover. Since every row here is permanent
+-- audit history, TRUNCATE is the one privilege that must never survive.
+-- SELECT is then re-granted narrowly -- the world must read the current
+-- list, and nothing else.
+revoke all on table public.public_price_lists from anon, authenticated;
+grant select on table public.public_price_lists to anon, authenticated;
 -- END db/schema/40_grants.sql
 
 

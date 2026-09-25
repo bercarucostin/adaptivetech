@@ -43,6 +43,33 @@ begin
     end if;
 end $$;
 
+-- Exactly one policy, and it is read-only. Tasks 3 and 4 append to this same
+-- file; this guards the rule while they do, so a future write policy can't
+-- slip in unnoticed alongside the grants revoke.
+do $$
+declare
+    v_policy_count int;
+begin
+    select count(*)
+      into v_policy_count
+      from pg_policies
+     where schemaname = 'public'
+       and tablename = 'public_price_lists';
+
+    if v_policy_count <> 1 then
+        raise exception 'Expected exactly one policy on public_price_lists, found %', v_policy_count;
+    end if;
+
+    if exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'public_price_lists'
+          and cmd <> 'SELECT'
+    ) then
+        raise exception 'public_price_lists must not carry any write policy';
+    end if;
+end $$;
+
 -- Only one current list per lab, enforced by the database ------------------
 do $$
 declare
