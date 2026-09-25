@@ -1378,6 +1378,59 @@ test('the request asks only for the current list',async()=>{
  assert.match(calls[0][0],/is_current=eq\.true/);
  assert.equal(calls[0][1].headers.apikey,'pub-key');
 });
+
+test('a throwing onDocument on the cache path does not throw and the network document still renders',async()=>{
+ let rendered=[];
+ const onDoc=(d)=>{if(d.groups[0].title==='Cached')throw new Error('cache render');rendered.push(d);};
+ const store=storage({flowrise_public_prices_v1:JSON.stringify({document:doc('Cached')})});
+ const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v7',document:doc('Net')}]),storage:store,onDocument:onDoc,onUnavailable:()=>{}});
+ assert.deepEqual(got,doc('Net'));
+ assert.deepEqual(rendered,[doc('Net')]);
+});
+
+test('a throwing onDocument with no cache calls onUnavailable once and resolves',async()=>{
+ const failed=collect();
+ const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v8',document:doc('Net')}]),storage:storage(),onDocument:()=>{throw new Error('render broke');},onUnavailable:failed.fn});
+ assert.equal(failed.seen.length,1);
+ assert.deepEqual(failed.seen[0].message,'The price list could not be rendered');
+});
+
+test('a throwing onUnavailable does not reject the returned promise',async()=>{
+ const got=await loadPriceList({url:'u',key:'k',fetch:()=>Promise.reject(new Error('offline')),storage:storage(),onDocument:()=>{},onUnavailable:()=>{throw new Error('fallback broke');}});
+ assert.equal(got,null);
+});
+
+test('a cached entry whose document.groups is a string is treated as no cache and is removed',async()=>{
+ const store=storage({flowrise_public_prices_v1:JSON.stringify({document:{schema:1,currency:'lei',groups:'should-be-array'}})});
+ const shown=collect(),failed=collect();
+ await loadPriceList({url:'u',key:'k',fetch:()=>Promise.reject(new Error('offline')),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
+ assert.deepEqual(shown.seen,[]);
+ assert.equal(store.map.get('flowrise_public_prices_v1'),undefined);
+});
+
+test('a cached entry that is not valid JSON is removed from storage',async()=>{
+ const store=storage({flowrise_public_prices_v1:'{not json'});
+ const shown=collect(),failed=collect();
+ await loadPriceList({url:'u',key:'k',fetch:()=>Promise.reject(new Error('offline')),storage:store,onDocument:shown.fn,onUnavailable:failed.fn});
+ assert.deepEqual(shown.seen,[]);
+ assert.equal(store.map.get('flowrise_public_prices_v1'),undefined);
+});
+
+test('when the cache render throws and the network render succeeds, onUnavailable is never called',async()=>{
+ const failed=collect();
+ const store=storage({flowrise_public_prices_v1:JSON.stringify({document:doc('Cached')})});
+ const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v11',document:doc('Net')}]),storage:store,onDocument:(d)=>{if(d.groups[0].title==='Cached')throw new Error('cache');},onUnavailable:failed.fn});
+ assert.deepEqual(got,doc('Net'));
+ assert.equal(failed.seen.length,0);
+});
+
+test('when cache render throws and network returns the same document, the visitor is not left with nothing',async()=>{
+ const failed=collect();
+ const store=storage({flowrise_public_prices_v1:JSON.stringify({document:doc('Same')})});
+ const got=await loadPriceList({url:'u',key:'k',fetch:okFetch([{id:'v12',document:doc('Same')}]),storage:store,onDocument:(d)=>{throw new Error('render broke');},onUnavailable:failed.fn});
+ assert.deepEqual(got,doc('Same'));
+ assert.equal(failed.seen.length,1);
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1388,6 +1441,25 @@ Expected: FAIL — `Cannot find module '../../website/shared/price-list-source.j
 - [ ] **Step 3: Write the source module**
 
 Create `website/shared/price-list-source.js`:
+
+> **Corrected during execution.** The code below is what shipped. The original
+> guarded its `fetch` and `storage` collaborators with try/catch and tested the
+> throwing case for each, while leaving `onDocument` and `onUnavailable` — equally
+> caller-supplied — unguarded and untested. Review confirmed three defects by
+> probing the module: a throwing render on the cache path escaped `loadPriceList`
+> synchronously, before a promise existed, so no `.catch` could see it; a throwing
+> render in the success path landed in the `.catch` and called `onUnavailable` with
+> the render's own error while a valid document was in hand; and a throwing
+> `onUnavailable` produced an unhandled rejection. The weak gate `doc && doc.groups`
+> made the first reachable, since a corrupt cache carrying `groups: "x"` passed it
+> and then threw on `.forEach` in the renderer — leaving the public price section
+> empty with no fallback. Fixing those introduced a fourth: with renders guarded,
+> a failed cache render combined with an unchanged network document skipped both
+> callbacks entirely, so the visitor got neither prices nor the phone number and
+> nothing reported a problem. The shipped version enforces one contract — exactly
+> one of "the visitor saw prices" or "the visitor saw the fallback", never both and
+> never neither — verified across fifteen paths (five fetch outcomes × three cache
+> states).
 
 ```js
 // Fetches the current public price list, cache first.
@@ -1408,8 +1480,12 @@ Create `website/shared/price-list-source.js`:
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       var doc = parsed && parsed.document;
-      return doc && doc.groups ? doc : null;
+      if (doc && Array.isArray(doc.groups)) return doc;
+      // Unusable: drop it so the next visit does not repeat this.
+      storage.removeItem(key);
+      return null;
     } catch (err) {
+      try { storage.removeItem(key); } catch (e) { /* nothing to do */ }
       return null;
     }
   }
@@ -1426,9 +1502,39 @@ Create `website/shared/price-list-source.js`:
   function loadPriceList(options) {
     var key = options.cacheKey || DEFAULT_CACHE_KEY;
     var storage = options.storage;
-    var cached = readCache(storage, key);
+    var rendered = false;
+    var signalled = false;
 
-    if (cached) options.onDocument(cached);
+    // A renderer that throws must not take the page down, and must not be
+    // mistaken for a network failure -- those are different problems with
+    // different fallbacks.
+    function render(doc) {
+      try {
+        options.onDocument(doc);
+        rendered = true;
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    // Exactly one of render() or unavailable() reaches the visitor: prices
+    // already on screen from cache outrank a later failure, and a failed
+    // render with nothing on screen still earns the phone-number line.
+    function unavailable(err) {
+      if (rendered || signalled) return;
+      signalled = true;
+      try {
+        options.onUnavailable(err);
+      } catch (e) {
+        // The fallback renderer is broken too. There is nothing further to
+        // try, and throwing from here would reject a promise the contract
+        // says only ever resolves.
+      }
+    }
+
+    var cached = readCache(storage, key);
+    if (cached) render(cached);
 
     return options.fetch(options.url, {
       headers: { apikey: options.key, accept: 'application/json' }
@@ -1439,13 +1545,18 @@ Create `website/shared/price-list-source.js`:
       })
       .then(function (rows) {
         var doc = rows && rows[0] && rows[0].document;
-        if (!doc || !doc.groups) throw new Error('No current price list');
-        if (!cached || JSON.stringify(cached) !== JSON.stringify(doc)) options.onDocument(doc);
+        if (!doc || !Array.isArray(doc.groups)) throw new Error('No current price list');
+        // Render when the document changed, and also whenever nothing has
+        // reached the visitor yet -- a cache render that threw must not be able
+        // to skip the network render just because the document is identical.
+        if (!rendered || !cached || JSON.stringify(cached) !== JSON.stringify(doc)) {
+          if (!render(doc)) unavailable(new Error('The price list could not be rendered'));
+        }
         writeCache(storage, key, doc);
         return doc;
       })
       .catch(function (err) {
-        if (!cached) options.onUnavailable(err);
+        unavailable(err);
         return cached || null;
       });
   }
