@@ -1643,7 +1643,15 @@ Expected: FAIL on the first test — the hand-written rows are still there.
 
 - [ ] **Step 3: Replace the price markup**
 
-In `website/site/index.html`, inside `<section class="prices"><div class="wrap">`, keep `<h2>Prețuri</h2>` and delete everything between it and the closing `</div>` of `.wrap` — that is the `<p class="note-top">`, all five `<div class="group">` blocks and the `<p class="footnote">`. Replace them with:
+In `website/site/index.html`, inside `<section class="prices"><div class="wrap">`, keep `<h2>Prețuri</h2>` and delete everything between it and the closing `</div>` of `.wrap` — that is the `<p class="note-top">`, all five `<div class="group">` blocks and the `<p class="footnote">`. Replace them with the following. **Corrected during execution:** the original called
+`PriceListSource.loadPriceList(...)` without checking the global exists, so if either
+shared script failed to load the page threw a ReferenceError and the visitor got
+neither prices nor the phone number — defeating the never-neither contract Task 6
+was built to provide, since the module is never reached. The runbook in Step 8 has
+a human upload three files by hand to cPanel, which makes a missing file an
+ordinary mistake rather than a hypothetical. The shipped version guards both
+globals and reuses one named `unavailable()` for that case and for the module's
+own callback.
 
 ```html
         <div id="priceList"></div>
@@ -1672,25 +1680,37 @@ with:
     // a page whose whole job is to load fast.
     (function () {
       var container = document.getElementById('priceList');
+
+      function unavailable() {
+        var note = document.createElement('p');
+        note.className = 'note-top';
+        note.textContent = 'Lista de prețuri se încarcă — dacă nu apare, sună la 0766 494 063.';
+        container.appendChild(note);
+        container.removeAttribute('aria-busy');
+      }
+
+      // price-list.js and price-list-source.js are separate files, uploaded by
+      // hand to cPanel alongside this page. If either is missing, calling into it
+      // would throw right here and the visitor would get neither prices nor a
+      // phone number -- the one outcome this section must never produce.
+      if (!window.PriceList || !window.PriceListSource) {
+        unavailable();
+        return;
+      }
+
       var url = 'https://qlynvfltjgjgeipndior.supabase.co/rest/v1/public_price_lists'
         + '?select=id,document&is_current=eq.true&limit=1';
 
-      PriceListSource.loadPriceList({
+      window.PriceListSource.loadPriceList({
         url: url,
         key: 'sb_publishable_mjDZLRQbubpv2ZISx-bm0w_Ne0z0aY0',
         fetch: window.fetch.bind(window),
         storage: window.localStorage,
         onDocument: function (doc) {
-          PriceList.mount(PriceList.priceListTree(doc), container);
+          window.PriceList.mount(window.PriceList.priceListTree(doc), container);
           container.removeAttribute('aria-busy');
         },
-        onUnavailable: function () {
-          var note = document.createElement('p');
-          note.className = 'note-top';
-          note.textContent = 'Lista de prețuri se încarcă — dacă nu apare, sună la 0766 494 063.';
-          container.appendChild(note);
-          container.removeAttribute('aria-busy');
-        }
+        onUnavailable: unavailable
       });
     })();
   </script>
