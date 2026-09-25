@@ -3656,57 +3656,6 @@ function buildCaseReportFromOrderForm(){
 }
 
 
-function caseSheetSimpleToothShape(tooth){
-  const pos=Number(tooth)%10;
-  const upper=Number(tooth)<30;
-
-  if(pos===1){
-    return upper
-      ? `<path d="M-12,-16 Q-8,-19 0,-19 Q8,-19 12,-16 L10,11 Q7,16 0,17 Q-7,16 -10,11 Z"></path>`
-      : `<path d="M-9,-13 Q-6,-16 0,-16 Q6,-16 9,-13 L8,9 Q6,13 0,14 Q-6,13 -8,9 Z"></path>`;
-  }
-  if(pos===2){
-    return upper
-      ? `<path d="M-10,-14 Q-7,-17 0,-17 Q7,-17 10,-14 L9,10 Q6,14 0,15 Q-6,14 -9,10 Z"></path>`
-      : `<path d="M-8,-12 Q-5,-15 0,-15 Q5,-15 8,-12 L7,9 Q5,12 0,13 Q-5,12 -7,9 Z"></path>`;
-  }
-  if(pos===3){
-    return `<path d="M0,-18 Q9,-15 11,-7 L9,10 Q4,16 0,18 Q-5,15 -9,10 L-11,-7 Q-8,-15 0,-18 Z"></path>`;
-  }
-  if(pos===4||pos===5){
-    return `<path d="M-14,-13 Q-8,-18 0,-16 Q8,-18 14,-13 Q17,-6 14,1 Q17,9 10,14 Q2,17 -5,15 Q-13,17 -15,9 Q-18,1 -15,-6 Q-17,-10 -14,-13 Z"></path>`;
-  }
-  if(pos===6){
-    return `<path d="M-17,-14 Q-11,-19 -3,-17 Q5,-20 14,-16 Q19,-11 17,-3 Q20,5 15,12 Q9,18 1,16 Q-7,19 -14,15 Q-20,10 -17,2 Q-20,-6 -17,-14 Z"></path>`;
-  }
-  if(pos===7){
-    return `<path d="M-16,-14 Q-10,-18 -3,-17 Q5,-19 13,-15 Q18,-10 16,-3 Q19,5 14,11 Q9,17 1,16 Q-7,18 -13,14 Q-19,9 -16,2 Q-19,-6 -16,-14 Z"></path>`;
-  }
-  return `<path d="M-15,-13 Q-9,-18 -2,-16 Q5,-18 12,-14 Q17,-9 15,-2 Q18,5 13,11 Q8,16 1,15 Q-6,17 -12,13 Q-17,8 -15,1 Q-18,-6 -15,-13 Z"></path>`;
-}
-
-function caseSheetNumberChartSvg(selected=[]){
-  const selectedSet=new Set((selected||[]).map(Number));
-  const all=[...FDI_UPPER,...FDI_LOWER];
-
-  const teeth=all.map(tooth=>{
-    const p=toothPosition(tooth);
-    const isSelected=selectedSet.has(tooth);
-
-    return `
-      <g class="pdf-simple-tooth ${isSelected?"selected":""}"
-         transform="translate(${p.x} ${p.y}) rotate(${p.rotation}) scale(${p.scaleX*.86} ${p.scaleY*.86})">
-        ${caseSheetSimpleToothShape(tooth)}
-      </g>
-      <text class="pdf-simple-number ${isSelected?"selected":""}"
-            x="${p.x}" y="${p.y+5}" text-anchor="middle">${tooth}</text>`;
-  }).join("");
-
-  return `<svg class="case-sheet-number-chart" viewBox="0 0 474 776" aria-label="Schema dentară">
-    ${teeth}
-  </svg>`;
-}
-
 function renderPhysicalCaseSheet(order,draft){
   const selected=orderedSelectedTeeth(draft.selected);
   if(!selected.length){
@@ -3766,18 +3715,20 @@ function renderPhysicalCaseSheet(order,draft){
   .meta-item span{display:block;color:#777066;font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
   .meta-item strong{font-size:10pt}
   .chart-wrap{border:1px solid #ddd6cd;border-radius:8px;padding:4px;background:#f6f5f3}
-  .case-sheet-number-chart{width:100%;height:270px}
-  .pdf-simple-tooth path{fill:#f3f0eb;stroke:#aaa39b;stroke-width:1.2;vector-effect:non-scaling-stroke}
-  .pdf-simple-tooth.selected path{fill:#d8ab5c;stroke:#6b4c22;stroke-width:1.6}
-  .pdf-simple-number{fill:#6f675d;font-size:15px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
-  .pdf-simple-number.selected{fill:#17130e;font-size:17px;stroke:#f3d9a9;stroke-width:2.5px}
-  .dental-chart-svg{width:100%;height:225px}
-  .tooth-svg-shape{fill:#fff;stroke:#777;stroke-width:1.1}
-  .tooth-svg-group.selected .tooth-svg-shape{fill:#b18b54;stroke:#5c4322;stroke-width:1.5}
-  .tooth-svg-label{font-size:8.5px;font-weight:700;fill:#35322d}
-  .tooth-svg-group.selected .tooth-svg-label{fill:#111}
-  .arch-caption{font-size:9px;fill:#8a8176;font-weight:700;letter-spacing:.08em}
-  .midline{stroke:#ddd5ca;stroke-width:1;stroke-dasharray:3 4}
+  .chart-wrap{break-inside:avoid;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .chart-wrap .dental-chart-svg{display:block;width:100%;height:300px}
+  .tooth-svg-shape{fill:var(--tooth-color,#d2d2d0);stroke:#4d4d46;stroke-width:1.15;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  .tooth-anatomy,.tooth-cusp{fill:none;stroke:#4d4d46;stroke-width:.85;opacity:.9;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  .tooth-svg-group:not(.selected) .tooth-svg-shape{fill:#d2d2d0;stroke:#666660}
+  .tooth-svg-group:not(.selected) .tooth-anatomy,.tooth-svg-group:not(.selected) .tooth-cusp{stroke:#666660}
+  .reference-inside-label{font-size:19px;font-weight:500;fill:#22221f;stroke:#fff;stroke-width:3px;paint-order:stroke;stroke-linejoin:round}
+  .arch-center-letter{fill:#b4afa6;font-size:21px;font-weight:400}
+  .chart-divider{stroke:#e6e1d8;stroke-width:1;stroke-dasharray:4 4;opacity:.65}
+  .connection-hit{fill:none;stroke:none}
+  .connection-dot{fill:#fff;stroke:#8b9691;stroke-width:1.2}
+  .tooth-connection.checked .connection-dot{fill:#12b936;stroke:#079a27}
+  .connection-check{fill:none;stroke:#fff;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+  .tooth-connection:not(.checked) .connection-check{display:none}
   .section-title{font-size:11pt;font-weight:800;margin:13px 0 6px;border-bottom:1px solid #222;padding-bottom:5px}
   .summary-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:9px 0}
   .summary-strip div{border:1px solid #ddd6cd;border-radius:6px;padding:7px}
@@ -3826,7 +3777,7 @@ function renderPhysicalCaseSheet(order,draft){
     </div>
 
     <div class="chart-wrap">
-      ${caseSheetNumberChartSvg(selected)}
+      ${dentalChartSvg(selected,false,{details:draft.perTooth,colorByType:true,connections:draft.connections??[]})}
     </div>
   </div>
 
