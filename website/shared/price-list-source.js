@@ -16,8 +16,12 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       var doc = parsed && parsed.document;
-      return doc && doc.groups ? doc : null;
+      if (doc && Array.isArray(doc.groups)) return doc;
+      // Unusable: drop it so the next visit does not repeat this.
+      storage.removeItem(key);
+      return null;
     } catch (err) {
+      try { storage.removeItem(key); } catch (e) { /* nothing to do */ }
       return null;
     }
   }
@@ -34,9 +38,39 @@
   function loadPriceList(options) {
     var key = options.cacheKey || DEFAULT_CACHE_KEY;
     var storage = options.storage;
-    var cached = readCache(storage, key);
+    var rendered = false;
+    var signalled = false;
 
-    if (cached) options.onDocument(cached);
+    // A renderer that throws must not take the page down, and must not be
+    // mistaken for a network failure -- those are different problems with
+    // different fallbacks.
+    function render(doc) {
+      try {
+        options.onDocument(doc);
+        rendered = true;
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    // Exactly one of render() or unavailable() reaches the visitor: prices
+    // already on screen from cache outrank a later failure, and a failed
+    // render with nothing on screen still earns the phone-number line.
+    function unavailable(err) {
+      if (rendered || signalled) return;
+      signalled = true;
+      try {
+        options.onUnavailable(err);
+      } catch (e) {
+        // The fallback renderer is broken too. There is nothing further to
+        // try, and throwing from here would reject a promise the contract
+        // says only ever resolves.
+      }
+    }
+
+    var cached = readCache(storage, key);
+    if (cached) render(cached);
 
     return options.fetch(options.url, {
       headers: { apikey: options.key, accept: 'application/json' }
@@ -47,13 +81,19 @@
       })
       .then(function (rows) {
         var doc = rows && rows[0] && rows[0].document;
-        if (!doc || !doc.groups) throw new Error('No current price list');
-        if (!cached || JSON.stringify(cached) !== JSON.stringify(doc)) options.onDocument(doc);
+        if (!doc || !Array.isArray(doc.groups)) throw new Error('No current price list');
+        // Compared as serialized text, which is sound here because jsonb
+        // canonicalizes key order for a given key set and these rows are
+        // insert-only -- the same row always serializes identically. Against a
+        // plain json column this would re-render on every visit.
+        if (!cached || JSON.stringify(cached) !== JSON.stringify(doc)) {
+          if (!render(doc)) unavailable(new Error('The price list could not be rendered'));
+        }
         writeCache(storage, key, doc);
         return doc;
       })
       .catch(function (err) {
-        if (!cached) options.onUnavailable(err);
+        unavailable(err);
         return cached || null;
       });
   }
