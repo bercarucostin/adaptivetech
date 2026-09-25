@@ -178,8 +178,16 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 revoke all on table public.public_price_lists from anon, authenticated;
 grant select on table public.public_price_lists to anon, authenticated;
 
--- Supabase grants EXECUTE to PUBLIC on new functions, so anon inherits it.
--- Publishing is a signed-in action; reading the current list needs no function.
-revoke execute on function public.publish_public_price_list(jsonb, text, uuid) from anon;
-revoke execute on function public.set_current_public_price_list(uuid) from anon;
-revoke execute on function public.may_edit_public_prices() from anon;
+-- Supabase grants EXECUTE to PUBLIC on new functions by default, and anon holds
+-- that privilege *through* PUBLIC -- REVOKE ... FROM anon alone would not touch
+-- a PUBLIC grant. Revoke from PUBLIC (which also strips authenticated, since it
+-- inherits the same way) and re-grant to authenticated explicitly. Publishing
+-- and restoring are signed-in actions; reading the current list needs no function.
+revoke all on function public.publish_public_price_list(jsonb, text, uuid) from public, anon;
+grant execute on function public.publish_public_price_list(jsonb, text, uuid) to authenticated;
+
+revoke all on function public.set_current_public_price_list(uuid) from public, anon;
+grant execute on function public.set_current_public_price_list(uuid) to authenticated;
+
+revoke all on function public.may_edit_public_prices() from public, anon;
+grant execute on function public.may_edit_public_prices() to authenticated;

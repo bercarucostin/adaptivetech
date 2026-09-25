@@ -7556,11 +7556,15 @@ $function$
 --
 -- p_expected_current is the version the editor had loaded. When it no longer
 -- matches, the publish raises instead of overwriting: two managers editing at the
--- same time must not lose each other's work silently. The SELECT ... FOR UPDATE
--- is what makes that check race-free -- a concurrent publish blocks there, and
--- when it proceeds the row it waited for no longer qualifies as current.
+-- same time must not lose each other's work silently. A per-lab advisory
+-- transaction lock (taken right after the management gate, before either the
+-- current row or the document is looked at) is what makes that check race-free:
+-- it fully serializes publishes and restores for a lab, so a waiter is never
+-- left mid-race with a stale, NULL-defaulting view of "current". The
+-- SELECT ... FOR UPDATE that follows is then just the ordinary read of the row
+-- to compare against p_expected_current.
 
-CREATE OR REPLACE FUNCTION public.publish_public_price_list(p_document jsonb, p_note text DEFAULT NULL::text, p_expected_current uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.publish_public_price_list(p_document jsonb, p_note text, p_expected_current uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -7579,18 +7583,18 @@ begin
         raise exception 'Doar administratorii sau managerii pot publica prețurile publice.';
     end if;
 
+    -- Serialize every publish and restore for this lab. Without it, a waiter that
+    -- acquires the row lock after a concurrent publish commits sees neither the
+    -- demoted row nor the new one, and a null expectation then passes a check that
+    -- exists precisely to stop one manager overwriting another. With the lock in
+    -- place, every race for this lab resolves into the friendly stale-version
+    -- message below rather than a raw unique-violation on the one-current index.
+    perform pg_advisory_xact_lock(hashtextextended('public_price_lists:' || v_lab::text, 0));
+
     if not public.public_price_document_is_valid(p_document) then
         raise exception 'Lista de prețuri nu are un format valid.';
     end if;
 
-    -- Known race, accepted: when no current row exists yet (first-ever publish
-    -- for this lab), this locks nothing, so two concurrent first publishes can
-    -- both see v_current as NULL, both pass the expected-version check below,
-    -- and both attempt an insert with is_current = true. The partial unique
-    -- index public_price_lists_one_current rejects the second insert, so data
-    -- integrity holds either way -- the loser just gets a raw unique-violation
-    -- error instead of the friendly one below. Acceptable for a first publish,
-    -- which happens once per lab.
     select id
       into v_current
       from public.public_price_lists
@@ -8420,8 +8424,12 @@ begin
     end if;
 
     if not public.is_lab_management(v_lab) then
-        raise exception 'Doar administratorii sau managerii pot publica prețurile publice.';
+        raise exception 'Doar administratorii sau managerii pot modifica prețurile publice.';
     end if;
+
+    -- Serialize every publish and restore for this lab; see publish_public_price_list
+    -- for why a raw row lock alone is not enough to make concurrent writers safe.
+    perform pg_advisory_xact_lock(hashtextextended('public_price_lists:' || v_lab::text, 0));
 
     select true
       into v_exists
@@ -8442,7 +8450,8 @@ begin
 
     update public.public_price_lists
        set is_current = true
-     where id = p_version_id;
+     where id = p_version_id
+       and lab_organization_id = v_lab;
 
     return p_version_id;
 end;
@@ -10300,11 +10309,19 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 revoke all on table public.public_price_lists from anon, authenticated;
 grant select on table public.public_price_lists to anon, authenticated;
 
--- Supabase grants EXECUTE to PUBLIC on new functions, so anon inherits it.
--- Publishing is a signed-in action; reading the current list needs no function.
-revoke execute on function public.publish_public_price_list(jsonb, text, uuid) from anon;
-revoke execute on function public.set_current_public_price_list(uuid) from anon;
-revoke execute on function public.may_edit_public_prices() from anon;
+-- Supabase grants EXECUTE to PUBLIC on new functions by default, and anon holds
+-- that privilege *through* PUBLIC -- REVOKE ... FROM anon alone would not touch
+-- a PUBLIC grant. Revoke from PUBLIC (which also strips authenticated, since it
+-- inherits the same way) and re-grant to authenticated explicitly. Publishing
+-- and restoring are signed-in actions; reading the current list needs no function.
+revoke all on function public.publish_public_price_list(jsonb, text, uuid) from public, anon;
+grant execute on function public.publish_public_price_list(jsonb, text, uuid) to authenticated;
+
+revoke all on function public.set_current_public_price_list(uuid) from public, anon;
+grant execute on function public.set_current_public_price_list(uuid) to authenticated;
+
+revoke all on function public.may_edit_public_prices() from public, anon;
+grant execute on function public.may_edit_public_prices() to authenticated;
 -- END db/schema/40_grants.sql
 
 

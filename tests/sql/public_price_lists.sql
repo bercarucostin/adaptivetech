@@ -258,8 +258,14 @@ begin
     if v_definition not ilike '%p_expected_current%' then
         raise exception 'publish_public_price_list must refuse a stale expected version';
     end if;
+    if v_definition not ilike '%coalesce(v_current::text%' then
+        raise exception 'publish_public_price_list must compare the current version with a null-safe comparison';
+    end if;
     if v_definition not ilike '%for update%' then
         raise exception 'publish_public_price_list must lock the current row so two publishes serialize';
+    end if;
+    if v_definition not ilike '%pg_advisory_xact_lock%' then
+        raise exception 'publish_public_price_list must serialize publishes per lab with an advisory lock';
     end if;
     if v_definition not ilike '%auth.uid()%' then
         raise exception 'publish_public_price_list must record who published';
@@ -267,8 +273,17 @@ begin
 
     select pg_get_functiondef('public.set_current_public_price_list(uuid)'::regprocedure)
       into v_definition;
+    if v_definition not ilike '%security definer%' then
+        raise exception 'set_current_public_price_list must be SECURITY DEFINER';
+    end if;
     if v_definition not ilike '%is_lab_management%' then
         raise exception 'set_current_public_price_list must gate on is_lab_management';
+    end if;
+    if v_definition not ilike '%pg_advisory_xact_lock%' then
+        raise exception 'set_current_public_price_list must serialize restores per lab with an advisory lock';
+    end if;
+    if v_definition ilike '%insert into%' then
+        raise exception 'set_current_public_price_list must restore in place, never copy the version';
     end if;
 
     select pg_get_functiondef('public.may_edit_public_prices()'::regprocedure)
@@ -295,6 +310,9 @@ begin
     end;
 
     begin
+        -- The uuid is the Anon Lab organization id seeded above, not a real
+        -- version id -- deliberately arbitrary, since the call must die at the
+        -- privilege check before the argument is ever interpreted as a version.
         perform public.set_current_public_price_list('00000000-0000-4000-8000-0000000a1101'::uuid);
         raise exception 'An anonymous caller restored a price list';
     exception when insufficient_privilege then
