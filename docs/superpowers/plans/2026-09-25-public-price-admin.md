@@ -655,6 +655,23 @@ Expected: FAIL — `function public.public_price_document_is_valid(jsonb) does n
 
 Create `db/schema/20_functions/public_price_document_is_valid.sql`:
 
+> **Corrected during execution.** The SQL below is what shipped, not what this
+> plan originally specified. Two bugs were found while implementing it, both of
+> the same family — jsonb operators returning NULL or serialized text where a
+> type error would be expected — and neither was catchable here, since this
+> environment cannot execute SQL. First: `jsonb_typeof(key) <> 'array'` silently
+> accepts an ABSENT key, because `->` yields SQL NULL, the comparison yields
+> NULL, and PL/pgSQL skips a NULL-conditioned branch; a document with no
+> `groups`, or a row with no `amount`, was judged valid, and the latter would
+> print "NaN lei" on the public page. Fixed with `is distinct from`. Second:
+> `->>` returns serialized JSON text for an object or array, so every length
+> check accepted non-strings — `{"title":{"a":1}}` passed a 1..80 bound as 8
+> characters. Fixed with a `jsonb_typeof` gate before each length check. Also
+> `scale()` rejected `1.500`, a legitimate two-decimal price, so precision is
+> now checked with `round(v_amount, 2)`. The verdict table in Step 1 gained
+> seven cases covering the type gates and a two-group over-cap fixture; see
+> `tests/sql/public_price_lists.sql` for what shipped.
+
 ```sql
 -- Flowrise Supabase function: public.public_price_document_is_valid(p_document jsonb)
 -- Structural validation for a published public price list. The browser editor
@@ -680,27 +697,45 @@ declare
     v_amount numeric;
 begin
     if p_document is null or jsonb_typeof(p_document) <> 'object' then return false; end if;
-    if (p_document->>'schema') is distinct from '1' then return false; end if;
+    -- The bound is the number 1, not the string "1"; jsonb equality distinguishes them.
+    if p_document->'schema' is distinct from '1'::jsonb then return false; end if;
 
-    -- currency, 1..8 characters
+    -- currency: required string, 1..8 characters. `->>` returns text for any jsonb
+    -- type (an object, array or number all serialize to some text), so the length
+    -- check alone would accept a non-string; the type gate closes that.
+    if jsonb_typeof(p_document->'currency') is distinct from 'string' then return false; end if;
     if coalesce(length(p_document->>'currency'), 0) not between 1 and 8 then return false; end if;
 
-    -- the two notes may be absent or empty, but not long
-    if coalesce(length(p_document->>'intro_note'), 0) > 400 then return false; end if;
-    if coalesce(length(p_document->>'footnote'), 0) > 400 then return false; end if;
+    -- the two notes may be absent entirely, but if present must be a string (or
+    -- json null, which reads back as empty) and not long
+    if p_document ? 'intro_note' then
+        if jsonb_typeof(p_document->'intro_note') not in ('string', 'null') then return false; end if;
+        if coalesce(length(p_document->>'intro_note'), 0) > 400 then return false; end if;
+    end if;
 
-    if jsonb_typeof(p_document->'groups') <> 'array' then return false; end if;
+    if p_document ? 'footnote' then
+        if jsonb_typeof(p_document->'footnote') not in ('string', 'null') then return false; end if;
+        if coalesce(length(p_document->>'footnote'), 0) > 400 then return false; end if;
+    end if;
+
+    -- A missing key makes `->` yield SQL NULL, so `jsonb_typeof(NULL) <> 'array'`
+    -- is itself NULL -- and a NULL condition silently skips the branch instead
+    -- of rejecting the document. `is distinct from` treats a missing key as a
+    -- real mismatch, so it is rejected as intended.
+    if jsonb_typeof(p_document->'groups') is distinct from 'array' then return false; end if;
     if jsonb_array_length(p_document->'groups') = 0 then return false; end if;
 
     for v_group in select jsonb_array_elements(p_document->'groups') loop
         if jsonb_typeof(v_group) <> 'object' then return false; end if;
 
+        -- title: required string, 1..80 characters, unique within the document.
+        if jsonb_typeof(v_group->'title') is distinct from 'string' then return false; end if;
         v_title := v_group->>'title';
         if coalesce(length(v_title), 0) not between 1 and 80 then return false; end if;
         if v_title = any (v_titles) then return false; end if;
         v_titles := v_titles || v_title;
 
-        if jsonb_typeof(v_group->'rows') <> 'array' then return false; end if;
+        if jsonb_typeof(v_group->'rows') is distinct from 'array' then return false; end if;
 
         for v_row in select jsonb_array_elements(v_group->'rows') loop
             if jsonb_typeof(v_row) <> 'object' then return false; end if;
@@ -708,13 +743,21 @@ begin
             v_rows := v_rows + 1;
             if v_rows > 200 then return false; end if;
 
+            -- item: required string, 1..200 characters.
+            if jsonb_typeof(v_row->'item') is distinct from 'string' then return false; end if;
             if coalesce(length(v_row->>'item'), 0) not between 1 and 200 then return false; end if;
 
-            if v_row ? 'variant' and jsonb_typeof(v_row->'variant') <> 'null' then
+            -- variant and row currency: optional, but if the key is present at all
+            -- it must be a string of valid length -- an explicit null is rejected,
+            -- matching the browser mirror and the editor, which deletes the key
+            -- instead of ever writing null.
+            if v_row ? 'variant' then
+                if jsonb_typeof(v_row->'variant') <> 'string' then return false; end if;
                 if coalesce(length(v_row->>'variant'), 0) not between 1 and 60 then return false; end if;
             end if;
 
-            if v_row ? 'currency' and jsonb_typeof(v_row->'currency') <> 'null' then
+            if v_row ? 'currency' then
+                if jsonb_typeof(v_row->'currency') <> 'string' then return false; end if;
                 if coalesce(length(v_row->>'currency'), 0) not between 1 and 8 then return false; end if;
             end if;
 
@@ -722,10 +765,14 @@ begin
                 return false;
             end if;
 
-            if jsonb_typeof(v_row->'amount') <> 'number' then return false; end if;
+            if jsonb_typeof(v_row->'amount') is distinct from 'number' then return false; end if;
             v_amount := (v_row->>'amount')::numeric;
             if v_amount < 0 or v_amount > 1000000 then return false; end if;
-            if scale(v_amount) > 2 then return false; end if;
+            -- scale() reports the stored display scale, and jsonb preserves a
+            -- literal's trailing zeros, so 1.500 would fail scale(v_amount) > 2
+            -- even though it is a legitimate two-decimal price. Compare values
+            -- instead, matching the browser's Math.round(amount*100) check.
+            if v_amount <> round(v_amount, 2) then return false; end if;
         end loop;
     end loop;
 
