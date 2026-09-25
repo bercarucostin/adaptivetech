@@ -163,6 +163,7 @@ begin
             ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X"}]}]}',                           false, 'a row with no amount'),
             ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[{"item":"X","amount":1000001}]}]}',          false, 'an implausible amount'),
             ('{"schema":1,"currency":"lei","groups":[{"title":"G","rows":{"item":"X"}}]}',                             false, 'rows that are not an array'),
+            ('{"schema":1,"currency":"lei","groups":[{"title":"G"}]}',                                                 false, 'a group with no rows key'),
             ('[]',                                                                                                     false, 'an array instead of an object'),
             ('null',                                                                                                   false, 'a null document')
         ) as t(document, expected, description)

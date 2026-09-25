@@ -7448,7 +7448,11 @@ begin
     if coalesce(length(p_document->>'intro_note'), 0) > 400 then return false; end if;
     if coalesce(length(p_document->>'footnote'), 0) > 400 then return false; end if;
 
-    if jsonb_typeof(p_document->'groups') <> 'array' then return false; end if;
+    -- A missing key makes `->` yield SQL NULL, so `jsonb_typeof(NULL) <> 'array'`
+    -- is itself NULL -- and a NULL condition silently skips the branch instead
+    -- of rejecting the document. `is distinct from` treats a missing key as a
+    -- real mismatch, so it is rejected as intended.
+    if jsonb_typeof(p_document->'groups') is distinct from 'array' then return false; end if;
     if jsonb_array_length(p_document->'groups') = 0 then return false; end if;
 
     for v_group in select jsonb_array_elements(p_document->'groups') loop
@@ -7459,7 +7463,7 @@ begin
         if v_title = any (v_titles) then return false; end if;
         v_titles := v_titles || v_title;
 
-        if jsonb_typeof(v_group->'rows') <> 'array' then return false; end if;
+        if jsonb_typeof(v_group->'rows') is distinct from 'array' then return false; end if;
 
         for v_row in select jsonb_array_elements(v_group->'rows') loop
             if jsonb_typeof(v_row) <> 'object' then return false; end if;
@@ -7481,7 +7485,7 @@ begin
                 return false;
             end if;
 
-            if jsonb_typeof(v_row->'amount') <> 'number' then return false; end if;
+            if jsonb_typeof(v_row->'amount') is distinct from 'number' then return false; end if;
             v_amount := (v_row->>'amount')::numeric;
             if v_amount < 0 or v_amount > 1000000 then return false; end if;
             if scale(v_amount) > 2 then return false; end if;
