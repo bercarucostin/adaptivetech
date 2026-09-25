@@ -17,10 +17,15 @@
 
 FROM caddy:2-alpine
 
-# Two roots, one per hostname. They share nothing: the landing page is
-# self-contained, and the app carries its own css, js and assets.
+# Two roots, one per hostname. They share exactly one file: the price-list
+# renderer, which the landing page uses to draw the published list and the admin
+# panel uses to preview it before publishing. Copying it into both roots is what
+# keeps the preview honest -- one source, no second copy to drift.
 COPY website/site /srv/site
 COPY website/app  /srv/app
+COPY website/shared/price-list.js        /srv/site/price-list.js
+COPY website/shared/price-list-source.js /srv/site/price-list-source.js
+COPY website/shared/price-list.js        /srv/app/public-prices/price-list.js
 
 # Caddy validates this at startup; a syntax error stops the container rather
 # than serving a half-configured site.

@@ -192,3 +192,67 @@ Order matters, and MX comes first:
    mailboxes.
 3. Only then repoint `www` and the apex at this box, add both hostnames in
    Coolify, and set `N8N_PROXY_HOPS=3`.
+
+## Publishing the landing page before the cutover
+
+`www` and the apex are still served by Hostico from cPanel, so a change to
+`website/site/index.html` reaches visitors only when the file is uploaded there.
+The prices are no longer part of that: they live in Supabase and are published
+from https://app.flowrisedental.ro/public-prices/ without touching this file.
+
+When the page itself changes, upload three files to the cPanel document root:
+
+    index.html
+    price-list.js          (from website/shared/)
+    price-list-source.js   (from website/shared/)
+
+**Diff before you overwrite.** The repository copy is supposed to be
+byte-identical to what Hostico serves, but nothing enforces that, and a
+difference means somebody edited the live page directly:
+
+    curl -s https://www.flowrisedental.ro/ > /tmp/live.html
+    diff /tmp/live.html website/site/index.html
+
+Reconcile any difference before uploading. After the DNS cutover this section
+stops applying: the page is then baked into the Caddy image and publishes with a
+redeploy.
+
+### Before touching a database that ran an earlier version of this work
+
+The schema in `db/schema/apply.sql` adds a `CHECK` constraint on the stored
+document, and `ALTER TABLE ... ADD CONSTRAINT ... CHECK` validates every
+existing row against it. If any row already in `public.public_price_lists`
+fails the validator, `apply.sql` aborts partway through. Before applying the
+schema to a database that ran an earlier version of this work, confirm there
+is nothing to abort on:
+
+    select count(*) from public.public_price_lists
+    where not public.public_price_document_is_valid(document);
+
+This must return 0. If it does not, fix or remove the offending row before
+running `apply.sql`.
+
+### The publish RPCs' locking and privileges are unverified against a real database
+
+The advisory lock that serializes two managers publishing the same lab's
+price list at once, and the `revoke all ... from public, anon` /
+`grant execute ... to authenticated` privilege pairs on the publish RPCs, were
+reasoned from Postgres semantics on paper only — there is no `psql`, no
+`DATABASE_URL` and no Docker in the environment this work was built in, so
+none of it has actually been executed. Before this is trusted in production,
+ideally before the Task 9 acceptance pass, run a real two-session test against
+a disposable Supabase instance: two managers publishing at the same time, and
+a publish against a stale version, and confirm the lock and the grants behave
+the way the schema comments claim.
+
+### The generated Supabase SQL has not been re-verified by the real tool
+
+`tools/build-supabase-editor-sql.py` cannot run on the machine this was built
+on — its `python` is a Windows Store stub that exits "Permission denied" on
+invocation. `db/schema/apply.supabase.sql` was instead regenerated with a
+node port of the tool kept in this run's scratch directory, and the output
+was verified byte-identical against the committed python-generated file
+before any schema change went in. Anyone with a working Python should still
+run the real `tools/build-supabase-editor-sql.py` once and confirm it
+produces a zero diff against the committed file, so the node port is never
+the only thing that has checked this.
