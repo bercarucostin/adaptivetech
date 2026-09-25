@@ -238,4 +238,85 @@ begin
     end;
 end $$;
 
+-- Publishing contract ------------------------------------------------------
+do $$
+declare
+    v_definition text;
+begin
+    select pg_get_functiondef('public.publish_public_price_list(jsonb,text,uuid)'::regprocedure)
+      into v_definition;
+
+    if v_definition not ilike '%security definer%' then
+        raise exception 'publish_public_price_list must be SECURITY DEFINER';
+    end if;
+    if v_definition not ilike '%is_lab_management%' then
+        raise exception 'publish_public_price_list must gate on is_lab_management';
+    end if;
+    if v_definition not ilike '%public_price_document_is_valid%' then
+        raise exception 'publish_public_price_list must validate the document';
+    end if;
+    if v_definition not ilike '%p_expected_current%' then
+        raise exception 'publish_public_price_list must refuse a stale expected version';
+    end if;
+    if v_definition not ilike '%for update%' then
+        raise exception 'publish_public_price_list must lock the current row so two publishes serialize';
+    end if;
+    if v_definition not ilike '%auth.uid()%' then
+        raise exception 'publish_public_price_list must record who published';
+    end if;
+
+    select pg_get_functiondef('public.set_current_public_price_list(uuid)'::regprocedure)
+      into v_definition;
+    if v_definition not ilike '%is_lab_management%' then
+        raise exception 'set_current_public_price_list must gate on is_lab_management';
+    end if;
+
+    select pg_get_functiondef('public.may_edit_public_prices()'::regprocedure)
+      into v_definition;
+    if v_definition not ilike '%is_lab_management%'
+       or v_definition not ilike '%get_flowrise_lab_id%' then
+        raise exception 'may_edit_public_prices must wrap is_lab_management(get_flowrise_lab_id())';
+    end if;
+end $$;
+
+-- An unauthenticated caller cannot publish or restore ---------------------
+-- Role switches are statements: inside a DO block the switch does not reliably
+-- hold, and a test that quietly runs as the owner passes while proving nothing.
+set local role anon;
+
+do $$
+begin
+    begin
+        perform public.publish_public_price_list(
+            '{"schema":1,"currency":"lei","groups":[{"title":"G","rows":[]}]}'::jsonb, null, null);
+        raise exception 'An anonymous caller published a price list';
+    exception when insufficient_privilege then
+        null;
+    end;
+
+    begin
+        perform public.set_current_public_price_list('00000000-0000-4000-8000-0000000a1101'::uuid);
+        raise exception 'An anonymous caller restored a price list';
+    exception when insufficient_privilege then
+        null;
+    end;
+end $$;
+
+reset role;
+
+-- A signed-in user who is not lab management gets false, not an error ------
+set local role authenticated;
+
+do $$
+declare
+    v_can boolean;
+begin
+    select public.may_edit_public_prices() into v_can;
+    if v_can then
+        raise exception 'may_edit_public_prices answered true with no identity';
+    end if;
+end $$;
+
+reset role;
+
 rollback;

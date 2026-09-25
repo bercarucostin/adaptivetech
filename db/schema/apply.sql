@@ -132,11 +132,13 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/is_lab_management.sql
 \i db/schema/20_functions/is_lab_technician.sql
 \i db/schema/20_functions/is_org_member.sql
+\i db/schema/20_functions/may_edit_public_prices.sql
 \i db/schema/20_functions/mutate_calendar_event.sql
 \i db/schema/20_functions/next_lab_work_order_id.sql
 \i db/schema/20_functions/organization_is_type.sql
 \i db/schema/20_functions/prepare_stage_reassignment.sql
 \i db/schema/20_functions/public_price_document_is_valid.sql
+\i db/schema/20_functions/publish_public_price_list.sql
 \i db/schema/20_functions/record_technician_payment.sql
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
@@ -146,6 +148,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/sanitize_tooth_details.sql
 \i db/schema/20_functions/save_my_work_order_case.sql
 \i db/schema/20_functions/save_work_order_clinical_case.sql
+\i db/schema/20_functions/set_current_public_price_list.sql
 \i db/schema/20_functions/set_stage_payment_status.sql
 \i db/schema/20_functions/set_updated_at.sql
 \i db/schema/20_functions/set_work_order_lock.sql

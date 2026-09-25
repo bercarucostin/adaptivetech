@@ -7217,6 +7217,27 @@ $function$
 -- Identity arguments: p_org uuid
 -- END db/schema/20_functions/is_org_member.sql
 
+-- BEGIN db/schema/20_functions/may_edit_public_prices.sql
+-- Flowrise Supabase function: public.may_edit_public_prices()
+-- Whether the caller may edit the public price list. A convenience for the admin
+-- panel, which needs the answer before it renders an editor; it introduces no new
+-- permission concept and role_permissions is untouched.
+
+CREATE OR REPLACE FUNCTION public.may_edit_public_prices()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+    select coalesce(public.is_lab_management(public.get_flowrise_lab_id()), false);
+$function$
+;
+
+-- Security definer: True
+-- Return type: boolean
+-- Identity arguments:
+-- END db/schema/20_functions/may_edit_public_prices.sql
+
 -- BEGIN db/schema/20_functions/mutate_calendar_event.sql
 CREATE OR REPLACE FUNCTION public.mutate_calendar_event(
     p_action text,p_event_id bigint DEFAULT NULL,p_fields jsonb DEFAULT '{}'::jsonb,p_request_key text DEFAULT NULL
@@ -7527,6 +7548,78 @@ $function$
 -- Return type: boolean
 -- Identity arguments: p_document jsonb
 -- END db/schema/20_functions/public_price_document_is_valid.sql
+
+-- BEGIN db/schema/20_functions/publish_public_price_list.sql
+-- Flowrise Supabase function: public.publish_public_price_list(p_document jsonb, p_note text, p_expected_current uuid)
+-- Publishes a new version of the public price list and makes it the current one,
+-- in one transaction, so a visitor can never read a half-updated list.
+--
+-- p_expected_current is the version the editor had loaded. When it no longer
+-- matches, the publish raises instead of overwriting: two managers editing at the
+-- same time must not lose each other's work silently. The SELECT ... FOR UPDATE
+-- is what makes that check race-free -- a concurrent publish blocks there, and
+-- when it proceeds the row it waited for no longer qualifies as current.
+
+CREATE OR REPLACE FUNCTION public.publish_public_price_list(p_document jsonb, p_note text DEFAULT NULL::text, p_expected_current uuid DEFAULT NULL::uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    v_lab uuid := public.get_flowrise_lab_id();
+    v_current uuid;
+    v_id uuid;
+begin
+    if v_lab is null then
+        raise exception 'Laboratorul nu este configurat.';
+    end if;
+
+    if not public.is_lab_management(v_lab) then
+        raise exception 'Doar administratorii sau managerii pot publica prețurile publice.';
+    end if;
+
+    if not public.public_price_document_is_valid(p_document) then
+        raise exception 'Lista de prețuri nu are un format valid.';
+    end if;
+
+    -- Known race, accepted: when no current row exists yet (first-ever publish
+    -- for this lab), this locks nothing, so two concurrent first publishes can
+    -- both see v_current as NULL, both pass the expected-version check below,
+    -- and both attempt an insert with is_current = true. The partial unique
+    -- index public_price_lists_one_current rejects the second insert, so data
+    -- integrity holds either way -- the loser just gets a raw unique-violation
+    -- error instead of the friendly one below. Acceptable for a first publish,
+    -- which happens once per lab.
+    select id
+      into v_current
+      from public.public_price_lists
+     where lab_organization_id = v_lab
+       and is_current
+       for update;
+
+    if coalesce(v_current::text, '') <> coalesce(p_expected_current::text, '') then
+        raise exception 'Lista a fost modificată de altcineva. Reîncarcă pagina înainte de a publica.';
+    end if;
+
+    update public.public_price_lists
+       set is_current = false
+     where lab_organization_id = v_lab
+       and is_current;
+
+    insert into public.public_price_lists (lab_organization_id, document, is_current, note, created_by)
+    values (v_lab, p_document, true, nullif(btrim(coalesce(p_note, '')), ''), auth.uid())
+    returning id into v_id;
+
+    return v_id;
+end;
+$function$
+;
+
+-- Security definer: True
+-- Return type: uuid
+-- Identity arguments: p_document jsonb, p_note text, p_expected_current uuid
+-- END db/schema/20_functions/publish_public_price_list.sql
 
 -- BEGIN db/schema/20_functions/record_technician_payment.sql
 CREATE OR REPLACE FUNCTION public.record_technician_payment(
@@ -8306,6 +8399,60 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.save_work_order_clinical_case(uuid,bigint,jsonb) FROM public,authenticated;
 -- END db/schema/20_functions/save_work_order_clinical_case.sql
+
+-- BEGIN db/schema/20_functions/set_current_public_price_list.sql
+-- Flowrise Supabase function: public.set_current_public_price_list(p_version_id uuid)
+-- Restores an earlier published version by making it current again. It does not
+-- copy or rewrite the version -- history stays exactly as it was published.
+
+CREATE OR REPLACE FUNCTION public.set_current_public_price_list(p_version_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    v_lab uuid := public.get_flowrise_lab_id();
+    v_exists boolean;
+begin
+    if v_lab is null then
+        raise exception 'Laboratorul nu este configurat.';
+    end if;
+
+    if not public.is_lab_management(v_lab) then
+        raise exception 'Doar administratorii sau managerii pot publica prețurile publice.';
+    end if;
+
+    select true
+      into v_exists
+      from public.public_price_lists
+     where id = p_version_id
+       and lab_organization_id = v_lab
+       for update;
+
+    if not coalesce(v_exists, false) then
+        raise exception 'Versiunea cerută nu există.';
+    end if;
+
+    update public.public_price_lists
+       set is_current = false
+     where lab_organization_id = v_lab
+       and is_current
+       and id <> p_version_id;
+
+    update public.public_price_lists
+       set is_current = true
+     where id = p_version_id;
+
+    return p_version_id;
+end;
+$function$
+;
+
+-- Security definer: True
+-- Return type: uuid
+-- Identity arguments: p_version_id uuid
+-- END db/schema/20_functions/set_current_public_price_list.sql
 
 -- BEGIN db/schema/20_functions/set_stage_payment_status.sql
 CREATE OR REPLACE FUNCTION public.set_stage_payment_status(
@@ -10152,6 +10299,12 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 -- list, and nothing else.
 revoke all on table public.public_price_lists from anon, authenticated;
 grant select on table public.public_price_lists to anon, authenticated;
+
+-- Supabase grants EXECUTE to PUBLIC on new functions, so anon inherits it.
+-- Publishing is a signed-in action; reading the current list needs no function.
+revoke execute on function public.publish_public_price_list(jsonb, text, uuid) from anon;
+revoke execute on function public.set_current_public_price_list(uuid) from anon;
+revoke execute on function public.may_edit_public_prices() from anon;
 -- END db/schema/40_grants.sql
 
 
