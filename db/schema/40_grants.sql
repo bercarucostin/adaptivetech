@@ -163,3 +163,8 @@ REVOKE SELECT ON public.lab_work_order_items FROM public, anon;
 GRANT SELECT ON public.lab_work_order_items TO authenticated;
 REVOKE SELECT ON public.lab_work_order_price_lines FROM public, anon;
 GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
+
+-- The public price list is written only by publish_public_price_list and
+-- set_current_public_price_list, both SECURITY DEFINER. No browser role writes
+-- it directly, and anon must not even execute the RPCs.
+revoke insert, update, delete on table public.public_price_lists from anon, authenticated;

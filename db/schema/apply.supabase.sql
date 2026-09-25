@@ -1714,6 +1714,56 @@ CREATE TABLE IF NOT EXISTS public.ai_operation_requests (
 ALTER TABLE public.ai_operation_requests ENABLE ROW LEVEL SECURITY;
 -- END db/schema/10_tables/29_ai_operation_requests.sql
 
+-- BEGIN db/schema/10_tables/30_public_price_lists.sql
+-- public_price_lists — table, constraints and indexes
+-- The versioned price list published on the public landing page. One row per
+-- published version; rows are never updated except to move is_current, and never
+-- deleted, so the table is its own audit trail.
+-- Every statement is idempotent, so the file is safe to re-run.
+
+CREATE TABLE IF NOT EXISTS "public"."public_price_lists" (
+    "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+    "lab_organization_id" uuid NOT NULL,
+    "document" jsonb NOT NULL,
+    "is_current" boolean NOT NULL DEFAULT false,
+    "note" text,
+    "created_by" uuid,
+    "created_at" timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "public"."public_price_lists" ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'public_price_lists_pkey' AND conrelid = 'public.public_price_lists'::regclass) THEN
+        ALTER TABLE "public"."public_price_lists" ADD CONSTRAINT "public_price_lists_pkey" PRIMARY KEY (id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'public_price_lists_lab_organization_id_fkey' AND conrelid = 'public.public_price_lists'::regclass) THEN
+        ALTER TABLE "public"."public_price_lists" ADD CONSTRAINT "public_price_lists_lab_organization_id_fkey" FOREIGN KEY (lab_organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+-- SET NULL rather than CASCADE: a departed employee's profile must never take
+-- published price history with it.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'public_price_lists_created_by_fkey' AND conrelid = 'public.public_price_lists'::regclass) THEN
+        ALTER TABLE "public"."public_price_lists" ADD CONSTRAINT "public_price_lists_created_by_fkey" FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS public_price_lists_pkey ON public.public_price_lists USING btree (id);
+
+-- One current list per lab, enforced rather than trusted to the RPC.
+CREATE UNIQUE INDEX IF NOT EXISTS public_price_lists_one_current ON public.public_price_lists USING btree (lab_organization_id) WHERE is_current;
+
+CREATE INDEX IF NOT EXISTS public_price_lists_history ON public.public_price_lists USING btree (lab_organization_id, created_at DESC);
+-- END db/schema/10_tables/30_public_price_lists.sql
+
 
 -- == 20 functions ==
 
@@ -9782,6 +9832,20 @@ FOR SELECT TO authenticated
 USING (requested_by_user_id=auth.uid() AND public.effective_lab_role(lab_organization_id) IN ('admin','manager','technician'));
 -- END db/schema/30_policies/29_ai_operation_requests.sql
 
+-- BEGIN db/schema/30_policies/30_public_price_lists.sql
+-- public_price_lists — RLS policies
+-- Every statement is idempotent, so the file is safe to re-run.
+--
+-- One SELECT policy and no write policy at all. Writes arrive only through
+-- publish_public_price_list and set_current_public_price_list, which are
+-- SECURITY DEFINER, and 40_grants.sql revokes write privileges from both
+-- browser roles as a second, independent barrier.
+
+DROP POLICY IF EXISTS "current public price list is world readable" ON "public"."public_price_lists";
+
+CREATE POLICY "current public price list is world readable" ON "public"."public_price_lists" AS PERMISSIVE FOR SELECT TO "anon", "authenticated" USING ((is_current OR is_lab_management(lab_organization_id)));
+-- END db/schema/30_policies/30_public_price_lists.sql
+
 
 -- == 40 grants ==
 
@@ -9951,6 +10015,11 @@ REVOKE SELECT ON public.lab_work_order_items FROM public, anon;
 GRANT SELECT ON public.lab_work_order_items TO authenticated;
 REVOKE SELECT ON public.lab_work_order_price_lines FROM public, anon;
 GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
+
+-- The public price list is written only by publish_public_price_list and
+-- set_current_public_price_list, both SECURITY DEFINER. No browser role writes
+-- it directly, and anon must not even execute the RPCs.
+revoke insert, update, delete on table public.public_price_lists from anon, authenticated;
 -- END db/schema/40_grants.sql
 
 

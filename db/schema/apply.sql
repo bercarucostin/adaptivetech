@@ -51,6 +51,7 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/27_work_order_financial_audit.sql
 \i db/schema/10_tables/28_ai_operation_previews.sql
 \i db/schema/10_tables/29_ai_operation_requests.sql
+\i db/schema/10_tables/30_public_price_lists.sql
 
 \echo == 20 functions ==
 \i db/schema/20_functions/00_per_tooth_rpc_cutover.sql
@@ -191,6 +192,7 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/27_work_order_financial_audit.sql
 \i db/schema/30_policies/28_ai_operation_previews.sql
 \i db/schema/30_policies/29_ai_operation_requests.sql
+\i db/schema/30_policies/30_public_price_lists.sql
 
 \echo == 40 grants ==
 \i db/schema/40_grants.sql
