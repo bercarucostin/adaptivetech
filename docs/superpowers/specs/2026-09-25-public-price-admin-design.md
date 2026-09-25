@@ -56,7 +56,7 @@ One published price list is one JSON document:
 `variant` is optional; when present the renderer prefixes it with `—` exactly as
 the current markup does. A row may carry its own `currency`, otherwise the list
 currency applies. `footnote: true` emits the `†` marker after the item name, the
-convention four rows already use. Display order is array order, so reordering
+convention five rows already use, all of them in the implant group. Display order is array order, so reordering
 requires no ordering column and no bookkeeping across rows.
 
 ## Storage
@@ -203,10 +203,11 @@ session does not discard unsaved work.
 
 ## Seeding and visual parity
 
-Version 1 is transcribed from the current markup: five groups, every row, both
-notes, and the four rows carrying `†`. A test feeds that document through the
-renderer and asserts the result matches today's markup, which is what guarantees
-the page looks unchanged the moment it starts fetching.
+Version 1 is transcribed from the current markup: five groups, 33 rows, 17 of them
+carrying a material variant, five carrying `†`, both notes, and `lei` throughout.
+A test feeds that document through the renderer and asserts the result matches
+today's markup, which is what guarantees the page looks unchanged the moment it
+starts fetching.
 
 Before the landing page is uploaded, the live cPanel file is diffed against
 `website/site/index.html`. They are supposed to be identical; a difference means
