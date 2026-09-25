@@ -1898,6 +1898,68 @@ test('more than 200 rows is refused',()=>{
 test('a valid document produces no errors',()=>{
  assert.deepEqual(D.validate(sample()),[]);
 });
+
+test('currency as a number is rejected',()=>{
+ const doc={schema:1,currency:123,groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='currency'),`expected an error at currency, got ${JSON.stringify(errors)}`);
+});
+
+test('group title as an object is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:{},rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.title'),`expected an error at groups.0.title, got ${JSON.stringify(errors)}`);
+});
+
+test('row item as an array is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:[],amount:1}]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.rows.0.item'),`expected an error at groups.0.rows.0.item, got ${JSON.stringify(errors)}`);
+});
+
+test('row footnote as a string is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:'yes'}]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.rows.0.footnote'),`expected an error at groups.0.rows.0.footnote, got ${JSON.stringify(errors)}`);
+});
+
+test('row footnote as true and null are valid',()=>{
+ const doc1={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:true}]}]};
+ assert.deepEqual(D.validate(doc1).filter(e=>e.path==='groups.0.rows.0.footnote'),[]);
+ const doc2={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:null}]}]};
+ assert.deepEqual(D.validate(doc2).filter(e=>e.path==='groups.0.rows.0.footnote'),[]);
+});
+
+test('intro_note as a number is rejected',()=>{
+ const doc={schema:1,currency:'lei',intro_note:42,groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='intro_note'),`expected an error at intro_note, got ${JSON.stringify(errors)}`);
+});
+
+test('intro_note as null is valid',()=>{
+ const doc={schema:1,currency:'lei',intro_note:null,groups:[{title:'A',rows:[]}]};
+ assert.deepEqual(D.validate(doc).filter(e=>e.path==='intro_note'),[]);
+});
+
+test('group titled constructor is not a false duplicate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'constructor',rows:[]}]};
+ const errors=D.validate(doc);
+ const titleErrors=errors.filter(e=>e.path==='groups.0.title' && e.message.includes('Două grupuri'));
+ assert.deepEqual(titleErrors,[],`constructor should not be flagged as duplicate, got ${JSON.stringify(errors)}`);
+});
+
+test('group titled __proto__ is not a false duplicate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'__proto__',rows:[]}]};
+ const errors=D.validate(doc);
+ const titleErrors=errors.filter(e=>e.path==='groups.0.title' && e.message.includes('Două grupuri'));
+ assert.deepEqual(titleErrors,[],`__proto__ should not be flagged as duplicate, got ${JSON.stringify(errors)}`);
+});
+
+test('schema as the string "1" is rejected',()=>{
+ const doc={schema:'1',currency:'lei',groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='schema'),`expected an error at schema, got ${JSON.stringify(errors)}`);
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1908,6 +1970,21 @@ Expected: FAIL — `Cannot find module '../../website/app/public-prices/document
 - [ ] **Step 3: Write the document model**
 
 Create `website/app/public-prices/document.js`:
+
+> **Corrected during execution.** The code below is what shipped. The original
+> `validate()` was written before the SQL validator was hardened, and ended up
+> more permissive than the authority it is supposed to mirror: a `currency` that
+> was a number, a `title` that was an object, an `item` that was an array and a
+> row `footnote` of any type all passed in the browser and were rejected by the
+> database — so the form would go green and the publish would fail with one
+> generic sentence naming no row, which is exactly what this mirror exists to
+> prevent. It also tracked seen titles in a plain object, so a group titled
+> `constructor`, `toString` or `__proto__` was falsely reported as a duplicate on
+> its FIRST occurrence — the one divergence running the dangerous direction,
+> blocking a publish the database would have accepted. The shipped version adds
+> type gates and uses `Object.create(null)`; a twenty-case differential probe
+> confirms it now agrees with the SQL validator on every rule, including the real
+> 33-row seed document.
 
 ```js
 // The editor's document model: every editing operation as a pure function, and a
@@ -2019,7 +2096,9 @@ Create `website/app/public-prices/document.js`:
 
   function validate(doc) {
     var errors = [];
-    var titles = {};
+    // Use Object.create(null) to avoid prototype chain collisions: titles like
+    // "constructor", "toString", or "__proto__" would otherwise be falsely flagged duplicates.
+    var titles = Object.create(null);
     var rows = 0;
     var add = function (path, message) { errors.push({ path: path, message: message }); };
     var textWithin = function (value, min, max) {
@@ -2029,9 +2108,24 @@ Create `website/app/public-prices/document.js`:
 
     if (!doc || typeof doc !== 'object') { add('', 'Documentul lipsește.'); return errors; }
     if (doc.schema !== 1) add('schema', 'Versiune de document necunoscută.');
-    if (!textWithin(doc.currency, 1, 8)) add('currency', 'Moneda este obligatorie (maximum 8 caractere).');
-    if (!textWithin(doc.intro_note || '', 0, 400)) add('intro_note', 'Nota introductivă depășește 400 de caractere.');
-    if (!textWithin(doc.footnote || '', 0, 400)) add('footnote', 'Nota de subsol depășește 400 de caractere.');
+
+    if (typeof doc.currency !== 'string') {
+      add('currency', 'Moneda trebuie să fie text.');
+    } else if (!textWithin(doc.currency, 1, 8)) {
+      add('currency', 'Moneda este obligatorie (maximum 8 caractere).');
+    }
+
+    if ('intro_note' in doc && doc.intro_note !== null && typeof doc.intro_note !== 'string') {
+      add('intro_note', 'Nota introductivă trebuie să fie text.');
+    } else if (!textWithin(doc.intro_note || '', 0, 400)) {
+      add('intro_note', 'Nota introductivă depășește 400 de caractere.');
+    }
+
+    if ('footnote' in doc && doc.footnote !== null && typeof doc.footnote !== 'string') {
+      add('footnote', 'Nota de subsol trebuie să fie text.');
+    } else if (!textWithin(doc.footnote || '', 0, 400)) {
+      add('footnote', 'Nota de subsol depășește 400 de caractere.');
+    }
 
     if (!Array.isArray(doc.groups) || doc.groups.length === 0) {
       add('groups', 'Lista trebuie să aibă cel puțin un grup.');
@@ -2039,7 +2133,9 @@ Create `website/app/public-prices/document.js`:
     }
 
     doc.groups.forEach(function (group, gi) {
-      if (!textWithin(group.title, 1, 80)) {
+      if (typeof group.title !== 'string') {
+        add('groups.' + gi + '.title', 'Titlul grupului trebuie să fie text.');
+      } else if (!textWithin(group.title, 1, 80)) {
         add('groups.' + gi + '.title', 'Titlul grupului este obligatoriu (maximum 80 de caractere).');
       } else if (titles[group.title]) {
         add('groups.' + gi + '.title', 'Două grupuri nu pot avea același titlu.');
@@ -2056,9 +2152,18 @@ Create `website/app/public-prices/document.js`:
         var at = 'groups.' + gi + '.rows.' + ri;
         rows += 1;
 
-        if (!textWithin(row.item, 1, 200)) add(at + '.item', 'Denumirea este obligatorie (maximum 200 de caractere).');
+        if (typeof row.item !== 'string') {
+          add(at + '.item', 'Denumirea trebuie să fie text.');
+        } else if (!textWithin(row.item, 1, 200)) {
+          add(at + '.item', 'Denumirea este obligatorie (maximum 200 de caractere).');
+        }
+
         if ('variant' in row && !textWithin(row.variant, 1, 60)) add(at + '.variant', 'Varianta poate avea maximum 60 de caractere.');
         if ('currency' in row && !textWithin(row.currency, 1, 8)) add(at + '.currency', 'Moneda poate avea maximum 8 caractere.');
+
+        if ('footnote' in row && row.footnote !== true && row.footnote !== false && row.footnote !== null) {
+          add(at + '.footnote', 'Nota rândului trebuie să fie adevărat, fals, sau absent.');
+        }
 
         var amount = row.amount;
         if (typeof amount !== 'number' || !isFinite(amount)) {
