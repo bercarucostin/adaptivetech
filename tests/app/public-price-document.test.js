@@ -79,3 +79,65 @@ test('more than 200 rows is refused',()=>{
 test('a valid document produces no errors',()=>{
  assert.deepEqual(D.validate(sample()),[]);
 });
+
+test('currency as a number is rejected',()=>{
+ const doc={schema:1,currency:123,groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='currency'),`expected an error at currency, got ${JSON.stringify(errors)}`);
+});
+
+test('group title as an object is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:{},rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.title'),`expected an error at groups.0.title, got ${JSON.stringify(errors)}`);
+});
+
+test('row item as an array is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:[],amount:1}]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.rows.0.item'),`expected an error at groups.0.rows.0.item, got ${JSON.stringify(errors)}`);
+});
+
+test('row footnote as a string is rejected',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:'yes'}]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='groups.0.rows.0.footnote'),`expected an error at groups.0.rows.0.footnote, got ${JSON.stringify(errors)}`);
+});
+
+test('row footnote as true and null are valid',()=>{
+ const doc1={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:true}]}]};
+ assert.deepEqual(D.validate(doc1).filter(e=>e.path==='groups.0.rows.0.footnote'),[]);
+ const doc2={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,footnote:null}]}]};
+ assert.deepEqual(D.validate(doc2).filter(e=>e.path==='groups.0.rows.0.footnote'),[]);
+});
+
+test('intro_note as a number is rejected',()=>{
+ const doc={schema:1,currency:'lei',intro_note:42,groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='intro_note'),`expected an error at intro_note, got ${JSON.stringify(errors)}`);
+});
+
+test('intro_note as null is valid',()=>{
+ const doc={schema:1,currency:'lei',intro_note:null,groups:[{title:'A',rows:[]}]};
+ assert.deepEqual(D.validate(doc).filter(e=>e.path==='intro_note'),[]);
+});
+
+test('group titled constructor is not a false duplicate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'constructor',rows:[]}]};
+ const errors=D.validate(doc);
+ const titleErrors=errors.filter(e=>e.path==='groups.0.title' && e.message.includes('Două grupuri'));
+ assert.deepEqual(titleErrors,[],`constructor should not be flagged as duplicate, got ${JSON.stringify(errors)}`);
+});
+
+test('group titled __proto__ is not a false duplicate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'__proto__',rows:[]}]};
+ const errors=D.validate(doc);
+ const titleErrors=errors.filter(e=>e.path==='groups.0.title' && e.message.includes('Două grupuri'));
+ assert.deepEqual(titleErrors,[],`__proto__ should not be flagged as duplicate, got ${JSON.stringify(errors)}`);
+});
+
+test('schema as the string "1" is rejected',()=>{
+ const doc={schema:'1',currency:'lei',groups:[{title:'A',rows:[]}]};
+ const errors=D.validate(doc);
+ assert.ok(errors.some(e=>e.path==='schema'),`expected an error at schema, got ${JSON.stringify(errors)}`);
+});

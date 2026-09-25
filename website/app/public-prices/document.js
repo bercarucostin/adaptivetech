@@ -107,7 +107,9 @@
 
   function validate(doc) {
     var errors = [];
-    var titles = {};
+    // Use Object.create(null) to avoid prototype chain collisions: titles like
+    // "constructor", "toString", or "__proto__" would otherwise be falsely flagged duplicates.
+    var titles = Object.create(null);
     var rows = 0;
     var add = function (path, message) { errors.push({ path: path, message: message }); };
     var textWithin = function (value, min, max) {
@@ -117,9 +119,24 @@
 
     if (!doc || typeof doc !== 'object') { add('', 'Documentul lipsește.'); return errors; }
     if (doc.schema !== 1) add('schema', 'Versiune de document necunoscută.');
-    if (!textWithin(doc.currency, 1, 8)) add('currency', 'Moneda este obligatorie (maximum 8 caractere).');
-    if (!textWithin(doc.intro_note || '', 0, 400)) add('intro_note', 'Nota introductivă depășește 400 de caractere.');
-    if (!textWithin(doc.footnote || '', 0, 400)) add('footnote', 'Nota de subsol depășește 400 de caractere.');
+
+    if (typeof doc.currency !== 'string') {
+      add('currency', 'Moneda trebuie să fie text.');
+    } else if (!textWithin(doc.currency, 1, 8)) {
+      add('currency', 'Moneda este obligatorie (maximum 8 caractere).');
+    }
+
+    if ('intro_note' in doc && doc.intro_note !== null && typeof doc.intro_note !== 'string') {
+      add('intro_note', 'Nota introductivă trebuie să fie text.');
+    } else if (!textWithin(doc.intro_note || '', 0, 400)) {
+      add('intro_note', 'Nota introductivă depășește 400 de caractere.');
+    }
+
+    if ('footnote' in doc && doc.footnote !== null && typeof doc.footnote !== 'string') {
+      add('footnote', 'Nota de subsol trebuie să fie text.');
+    } else if (!textWithin(doc.footnote || '', 0, 400)) {
+      add('footnote', 'Nota de subsol depășește 400 de caractere.');
+    }
 
     if (!Array.isArray(doc.groups) || doc.groups.length === 0) {
       add('groups', 'Lista trebuie să aibă cel puțin un grup.');
@@ -127,7 +144,9 @@
     }
 
     doc.groups.forEach(function (group, gi) {
-      if (!textWithin(group.title, 1, 80)) {
+      if (typeof group.title !== 'string') {
+        add('groups.' + gi + '.title', 'Titlul grupului trebuie să fie text.');
+      } else if (!textWithin(group.title, 1, 80)) {
         add('groups.' + gi + '.title', 'Titlul grupului este obligatoriu (maximum 80 de caractere).');
       } else if (titles[group.title]) {
         add('groups.' + gi + '.title', 'Două grupuri nu pot avea același titlu.');
@@ -144,9 +163,18 @@
         var at = 'groups.' + gi + '.rows.' + ri;
         rows += 1;
 
-        if (!textWithin(row.item, 1, 200)) add(at + '.item', 'Denumirea este obligatorie (maximum 200 de caractere).');
+        if (typeof row.item !== 'string') {
+          add(at + '.item', 'Denumirea trebuie să fie text.');
+        } else if (!textWithin(row.item, 1, 200)) {
+          add(at + '.item', 'Denumirea este obligatorie (maximum 200 de caractere).');
+        }
+
         if ('variant' in row && !textWithin(row.variant, 1, 60)) add(at + '.variant', 'Varianta poate avea maximum 60 de caractere.');
         if ('currency' in row && !textWithin(row.currency, 1, 8)) add(at + '.currency', 'Moneda poate avea maximum 8 caractere.');
+
+        if ('footnote' in row && row.footnote !== true && row.footnote !== false && row.footnote !== null) {
+          add(at + '.footnote', 'Nota rândului trebuie să fie adevărat, fals, sau absent.');
+        }
 
         var amount = row.amount;
         if (typeof amount !== 'number' || !isFinite(amount)) {
