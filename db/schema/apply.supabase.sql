@@ -6720,6 +6720,67 @@ $function$
 ;
 -- END db/schema/20_functions/get_patient_case.sql
 
+-- BEGIN db/schema/20_functions/get_public_price_list_history.sql
+-- Flowrise Supabase function: public.get_public_price_list_history()
+-- The published version history of the public price list, newest first, with the
+-- publisher's name resolved.
+--
+-- It exists because the name cannot be read from the browser. The only policy on
+-- public.profiles is `for select to authenticated using (id = auth.uid())`, so a
+-- PostgREST embed of profiles:created_by returns a row only when the signed-in
+-- manager is the publisher. Every version somebody else published came back with
+-- a null profile and lost its attribution silently -- the exact case the history
+-- exists for, and one that looks correct in testing, because a tester sees their
+-- own publishes.
+--
+-- SECURITY DEFINER rather than a wider profiles policy: the whole application
+-- authorizes on profiles, and widening it to serve one admin panel is the larger
+-- blast radius. This reads two columns of it, for management of one lab only.
+
+CREATE OR REPLACE FUNCTION public.get_public_price_list_history()
+ RETURNS TABLE(id uuid, document jsonb, is_current boolean, note text, created_at timestamp with time zone, published_by text)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    v_lab uuid := public.get_flowrise_lab_id();
+begin
+    if v_lab is null then
+        raise exception 'Laboratorul nu este configurat.';
+    end if;
+
+    if not public.is_lab_management(v_lab) then
+        raise exception 'Doar administratorii sau managerii pot vedea istoricul prețurilor publice.';
+    end if;
+
+    -- Every column is alias-qualified: with RETURNS TABLE the output names are
+    -- plpgsql variables, so a bare `id` or `note` here would be ambiguous.
+    return query
+        select l.id,
+               l.document,
+               l.is_current,
+               l.note,
+               l.created_at,
+               -- display_name first, username as the fallback, null when nobody is
+               -- recorded. nullif on each so a blank display_name falls through to
+               -- the username instead of rendering as an empty author.
+               -- username is citext; cast it explicitly rather than leaning on the
+               -- implicit citext->text cast to resolve btrim().
+               coalesce(nullif(btrim(p.display_name), ''), nullif(btrim(p.username::text), ''))::text
+          from public.public_price_lists l
+          left join public.profiles p on p.id = l.created_by
+         where l.lab_organization_id = v_lab
+         order by l.created_at desc, l.id desc;
+end;
+$function$
+;
+
+-- Security definer: True
+-- Return type: TABLE(id uuid, document jsonb, is_current boolean, note text, created_at timestamp with time zone, published_by text)
+-- Identity arguments:
+-- END db/schema/20_functions/get_public_price_list_history.sql
+
 -- BEGIN db/schema/20_functions/get_work_order_financial_history.sql
 CREATE OR REPLACE FUNCTION public.get_work_order_financial_history(
     p_lab uuid,
@@ -10302,8 +10363,7 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 
 -- The public price list is written only by publish_public_price_list and
 -- set_current_public_price_list, both SECURITY DEFINER. No browser role writes
--- it directly. Task 4 revokes EXECUTE from anon on those RPCs; they do not
--- exist yet in this commit.
+-- it directly, and the EXECUTE pairs on those RPCs are further down this file.
 --
 -- REVOKE ALL, not just insert/update/delete: Supabase grants ALL on a table at
 -- creation time, and TRUNCATE is not subject to row-level security, so it is
@@ -10312,7 +10372,22 @@ GRANT SELECT ON public.lab_work_order_price_lines TO authenticated;
 -- SELECT is then re-granted narrowly -- the world must read the current
 -- list, and nothing else.
 revoke all on table public.public_price_lists from anon, authenticated;
-grant select on table public.public_price_lists to anon, authenticated;
+grant select on table public.public_price_lists to authenticated;
+
+-- ...and "nothing else" has to mean columns, not just rows. The row policy lets
+-- anon read the current version, but a table-level SELECT grant covers every
+-- column of it, so GET /rest/v1/public_price_lists?select=* handed an anonymous
+-- caller `note` -- management's internal "what changed" changelog -- and
+-- created_by. The published list being public justifies `document`; it does not
+-- justify the commentary about it.
+--
+-- PostgREST honours column privileges, and the landing page asks only for
+-- select=id,document, so nothing legitimate loses anything. authenticated keeps
+-- the whole row: the history RPC runs as definer, but the row policy already
+-- restricts non-current versions to lab management.
+revoke select on table public.public_price_lists from anon;
+grant select (id, lab_organization_id, document, is_current, created_at)
+  on table public.public_price_lists to anon;
 
 -- Supabase grants EXECUTE to PUBLIC on new functions by default, and anon holds
 -- that privilege *through* PUBLIC -- REVOKE ... FROM anon alone would not touch
@@ -10327,6 +10402,21 @@ grant execute on function public.set_current_public_price_list(uuid) to authenti
 
 revoke all on function public.may_edit_public_prices() from public, anon;
 grant execute on function public.may_edit_public_prices() to authenticated;
+
+-- The version history names who published each version, which the browser cannot
+-- read for itself: the only policy on profiles is `id = auth.uid()`, so a
+-- PostgREST embed sees a name only when the viewer is the publisher. The RPC is
+-- SECURITY DEFINER and asserts is_lab_management itself, so EXECUTE must not
+-- reach anon.
+revoke all on function public.get_public_price_list_history() from public, anon;
+grant execute on function public.get_public_price_list_history() to authenticated;
+
+-- The validator is pure and reads only its argument, so an anonymous call leaks
+-- nothing -- but this file is meant to be the one place a privilege can be
+-- audited, and a function that silently keeps the default PUBLIC grant makes that
+-- claim untrue. Paired like the rest.
+revoke all on function public.public_price_document_is_valid(jsonb) from public, anon;
+grant execute on function public.public_price_document_is_valid(jsonb) to authenticated;
 -- END db/schema/40_grants.sql
 
 

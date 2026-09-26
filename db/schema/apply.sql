@@ -121,6 +121,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/get_my_work_orders.sql
 \i db/schema/20_functions/get_my_work_orders_v188.sql
 \i db/schema/20_functions/get_patient_case.sql
+\i db/schema/20_functions/get_public_price_list_history.sql
 \i db/schema/20_functions/get_work_order_financial_history.sql
 \i db/schema/20_functions/get_work_order_price_lines.sql
 \i db/schema/20_functions/get_work_order_reference_data.sql
