@@ -141,3 +141,60 @@ test('schema as the string "1" is rejected',()=>{
  const errors=D.validate(doc);
  assert.ok(errors.some(e=>e.path==='schema'),`expected an error at schema, got ${JSON.stringify(errors)}`);
 });
+
+// Regression: the old two-decimal check multiplied first
+// (Math.round(amount*100) !== amount*100), and binary floating point put the
+// product a hair off an integer for roughly one valid price in ten -- 32.05*100
+// is 3204.9999999999995. Every such price disabled the publish button on a
+// document the database would have accepted, with nothing the manager could do
+// about it.
+test('two-decimal prices the old float comparison falsely rejected are valid',()=>{
+ for(const amount of [32.02,32.05,32.09,32.12,199.5,1004.99,7000]){
+  const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount}]}]};
+  assert.deepEqual(D.validate(doc),[],`${amount} should be a valid price`);
+ }
+});
+
+test('more than two decimals is still rejected',()=>{
+ for(const amount of [32.055,0.005,1.001,99.999,0.125]){
+  const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount}]}]};
+  assert.ok(D.validate(doc).some(e=>e.path==='groups.0.rows.0.amount'),`${amount} should be rejected`);
+ }
+});
+
+test('no valid two-decimal price between 0 and 7000 is falsely rejected',()=>{
+ let falsely=0;
+ for(let cents=0;cents<=700000;cents++){
+  const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:cents/100}]}]};
+  if(D.validate(doc).length)falsely++;
+ }
+ assert.equal(falsely,0,`${falsely} valid two-decimal prices were falsely rejected`);
+});
+
+test('variant as a number is rejected, matching the SQL type gate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,variant:123}]}]};
+ assert.ok(D.validate(doc).some(e=>e.path==='groups.0.rows.0.variant'),
+  `expected an error at groups.0.rows.0.variant, got ${JSON.stringify(D.validate(doc))}`);
+});
+
+test('a row currency that is a number is rejected, matching the SQL type gate',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1,currency:5}]}]};
+ assert.ok(D.validate(doc).some(e=>e.path==='groups.0.rows.0.currency'),
+  `expected an error at groups.0.rows.0.currency, got ${JSON.stringify(D.validate(doc))}`);
+});
+
+test('a corrupt group reports an error instead of throwing',()=>{
+ for(const group of [null,undefined,'A',7]){
+  const doc={schema:1,currency:'lei',groups:[group]};
+  let errors;
+  assert.doesNotThrow(()=>{errors=D.validate(doc);},`validate threw on a group of ${JSON.stringify(group)}`);
+  assert.ok(errors.some(e=>e.path==='groups.0'),`expected an error at groups.0, got ${JSON.stringify(errors)}`);
+ }
+});
+
+test('a corrupt row reports an error instead of throwing',()=>{
+ const doc={schema:1,currency:'lei',groups:[{title:'A',rows:[null]}]};
+ let errors;
+ assert.doesNotThrow(()=>{errors=D.validate(doc);},'validate threw on a null row');
+ assert.ok(errors.some(e=>e.path==='groups.0.rows.0'),`expected an error at groups.0.rows.0, got ${JSON.stringify(errors)}`);
+});

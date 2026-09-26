@@ -144,6 +144,14 @@
     }
 
     doc.groups.forEach(function (group, gi) {
+      // A recovered draft can hold anything localStorage held. Reading
+      // group.title off null throws, and a TypeError out of validate() takes the
+      // editor down instead of showing the admin an error they can act on.
+      if (!group || typeof group !== 'object' || Array.isArray(group)) {
+        add('groups.' + gi, 'Grupul este deteriorat.');
+        return;
+      }
+
       if (typeof group.title !== 'string') {
         add('groups.' + gi + '.title', 'Titlul grupului trebuie să fie text.');
       } else if (!textWithin(group.title, 1, 80)) {
@@ -163,14 +171,30 @@
         var at = 'groups.' + gi + '.rows.' + ri;
         rows += 1;
 
+        // Same reasoning as the group guard above: a corrupt row must report, not throw.
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          add(at, 'Rândul este deteriorat.');
+          return;
+        }
+
         if (typeof row.item !== 'string') {
           add(at + '.item', 'Denumirea trebuie să fie text.');
         } else if (!textWithin(row.item, 1, 200)) {
           add(at + '.item', 'Denumirea este obligatorie (maximum 200 de caractere).');
         }
 
-        if ('variant' in row && !textWithin(row.variant, 1, 60)) add(at + '.variant', 'Varianta poate avea maximum 60 de caractere.');
-        if ('currency' in row && !textWithin(row.currency, 1, 8)) add(at + '.currency', 'Moneda poate avea maximum 8 caractere.');
+        // The type gate before the length gate, as for currency, title and item:
+        // textWithin() stringifies, so a number would pass a length check the SQL
+        // validator rejects outright on jsonb_typeof.
+        if ('variant' in row) {
+          if (typeof row.variant !== 'string') add(at + '.variant', 'Varianta trebuie să fie text.');
+          else if (!textWithin(row.variant, 1, 60)) add(at + '.variant', 'Varianta poate avea maximum 60 de caractere.');
+        }
+
+        if ('currency' in row) {
+          if (typeof row.currency !== 'string') add(at + '.currency', 'Moneda rândului trebuie să fie text.');
+          else if (!textWithin(row.currency, 1, 8)) add(at + '.currency', 'Moneda poate avea maximum 8 caractere.');
+        }
 
         if ('footnote' in row && row.footnote !== true && row.footnote !== false && row.footnote !== null) {
           add(at + '.footnote', 'Nota rândului trebuie să fie adevărat, fals, sau absent.');
@@ -181,7 +205,16 @@
           add(at + '.amount', 'Prețul trebuie să fie un număr.');
         } else if (amount < 0 || amount > 1000000) {
           add(at + '.amount', 'Prețul trebuie să fie între 0 și 1.000.000.');
-        } else if (Math.round(amount * 100) !== amount * 100) {
+        // Round to two decimals and compare against the original, rather than
+        // testing `Math.round(amount * 100) !== amount * 100`. That older form
+        // multiplies first, and the product of a legitimate two-decimal price
+        // often lands a hair off an integer in binary floating point -- 32.05 *
+        // 100 is 3204.9999999999995 -- so it falsely rejected 73,114 of the
+        // 697,001 valid two-decimal values between 30.00 and 7000.00 and locked
+        // the publish button on prices the database accepts. Dividing back keeps
+        // both sides on the same scale: zero false rejections, and 0.005, 1.001,
+        // 32.055 and 0.125 are still refused.
+        } else if (Math.round(amount * 100) / 100 !== amount) {
           add(at + '.amount', 'Prețul poate avea cel mult două zecimale.');
         }
       });

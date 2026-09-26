@@ -7534,7 +7534,12 @@ begin
             -- scale() reports the stored display scale, and jsonb preserves a
             -- literal's trailing zeros, so 1.500 would fail scale(v_amount) > 2
             -- even though it is a legitimate two-decimal price. Compare values
-            -- instead, matching the browser's Math.round(amount*100) check.
+            -- instead. round() on numeric is exact, so this is the authority; the
+            -- browser mirror in website/app/public-prices/document.js expresses
+            -- the same rule as Math.round(amount * 100) / 100 !== amount, which is
+            -- the closest a binary float gets to it. Do not "align" this check
+            -- with a multiply-then-compare form -- that is the shape that falsely
+            -- rejected roughly one valid price in ten in the browser.
             if v_amount <> round(v_amount, 2) then return false; end if;
         end loop;
     end loop;
