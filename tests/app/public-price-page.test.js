@@ -23,7 +23,9 @@ function makeElement(id){
 // Runs the loader script exactly as extracted from the page, against a stub DOM.
 // withModules=false leaves window.PriceList/PriceListSource undefined, simulating
 // one of the two <script src> files failing to load on the cPanel upload.
-function runLoader(withModules){
+// options.withFetch=false leaves window.fetch undefined, which the loader binds
+// and which therefore belongs in the same guard.
+function runLoader(withModules,options){
  const priceEl=makeElement('priceList');
  const yEl=makeElement('y');
  const elements={priceList:priceEl,y:yEl};
@@ -37,7 +39,8 @@ function runLoader(withModules){
    return el;
   }
  };
- const sandbox={document:documentStub,localStorage:{},fetch:function(){}};
+ const sandbox={document:documentStub,localStorage:{}};
+ if(!options||options.withFetch!==false)sandbox.fetch=function(){};
  sandbox.window=sandbox;
  if(withModules){
   sandbox.window.PriceList={
@@ -95,4 +98,14 @@ test('with both shared scripts present the loader calls PriceListSource with the
  assert.ok(calls.loadPriceList,'PriceListSource.loadPriceList should have been called');
  assert.match(calls.loadPriceList.url,/is_current=eq\.true/);
  assert.equal(typeof calls.loadPriceList.onUnavailable,'function');
+});
+
+// The guard has to cover fetch too: the loader binds window.fetch, and binding
+// undefined throws exactly where a missing module would, leaving the section
+// empty with aria-busy set -- the one outcome this page must never produce.
+test('a missing fetch falls back to the phone number instead of throwing',()=>{
+ const {priceEl}=runLoader(true,{withFetch:false});
+ assert.equal(priceEl.children.length,1,'exactly one fallback node should be appended');
+ assert.match(priceEl.children[0].textContent,/0766 494 063/);
+ assert.equal('aria-busy' in priceEl.attributes,false,'aria-busy should be cleared even on the fallback path');
 });

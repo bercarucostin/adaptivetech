@@ -111,13 +111,24 @@
     // "constructor", "toString", or "__proto__" would otherwise be falsely flagged duplicates.
     var titles = Object.create(null);
     var rows = 0;
-    var add = function (path, message) { errors.push({ path: path, message: message }); };
+    // `fatal` marks a document the editor cannot even draw: renderGroups() reads
+    // group.title and iterates group.rows, so a group that is not an object, or
+    // rows that are not an array, throw there however carefully validate() reports
+    // them. Ordinary errors -- a blank item name, a price with three decimals --
+    // are not fatal: rendering them next to the offending field is the whole point
+    // of validating in the browser. editor.js uses the flag to decide whether a
+    // recovered draft is worth restoring at all.
+    var add = function (path, message, fatal) {
+      var error = { path: path, message: message };
+      if (fatal) error.fatal = true;
+      errors.push(error);
+    };
     var textWithin = function (value, min, max) {
       var length = value === null || value === undefined ? 0 : String(value).length;
       return length >= min && length <= max;
     };
 
-    if (!doc || typeof doc !== 'object') { add('', 'Documentul lipsește.'); return errors; }
+    if (!doc || typeof doc !== 'object') { add('', 'Documentul lipsește.', true); return errors; }
     if (doc.schema !== 1) add('schema', 'Versiune de document necunoscută.');
 
     if (typeof doc.currency !== 'string') {
@@ -139,7 +150,9 @@
     }
 
     if (!Array.isArray(doc.groups) || doc.groups.length === 0) {
-      add('groups', 'Lista trebuie să aibă cel puțin un grup.');
+      // Fatal only when groups is not an array: renderGroups() iterates it. An
+      // empty array is invalid but perfectly renderable.
+      add('groups', 'Lista trebuie să aibă cel puțin un grup.', !Array.isArray(doc.groups));
       return errors;
     }
 
@@ -148,7 +161,7 @@
       // group.title off null throws, and a TypeError out of validate() takes the
       // editor down instead of showing the admin an error they can act on.
       if (!group || typeof group !== 'object' || Array.isArray(group)) {
-        add('groups.' + gi, 'Grupul este deteriorat.');
+        add('groups.' + gi, 'Grupul este deteriorat.', true);
         return;
       }
 
@@ -163,7 +176,7 @@
       }
 
       if (!Array.isArray(group.rows)) {
-        add('groups.' + gi + '.rows', 'Grupul este deteriorat.');
+        add('groups.' + gi + '.rows', 'Grupul este deteriorat.', true);
         return;
       }
 
@@ -173,7 +186,7 @@
 
         // Same reasoning as the group guard above: a corrupt row must report, not throw.
         if (!row || typeof row !== 'object' || Array.isArray(row)) {
-          add(at, 'Rândul este deteriorat.');
+          add(at, 'Rândul este deteriorat.', true);
           return;
         }
 

@@ -533,7 +533,11 @@
       // hand to cPanel alongside this page. If either is missing, calling into it
       // would throw right here and the visitor would get neither prices nor a
       // phone number -- the one outcome this section must never produce.
-      if (!window.PriceList || !window.PriceListSource) {
+      //
+      // window.fetch belongs in the same guard: the call below binds it, and
+      // binding undefined throws exactly like the missing modules would, leaving
+      // the section empty with aria-busy still set.
+      if (!window.PriceList || !window.PriceListSource || !window.fetch) {
         unavailable();
         return;
       }

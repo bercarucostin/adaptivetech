@@ -40,7 +40,21 @@
       headers: { 'content-type': 'application/json', apikey: config.publishableKey },
       body: JSON.stringify({ identifier: $('identifier').value, password: $('password').value })
     })
-      .then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); })
+      // Read the body as text and guard the parse, the way app.js does against
+      // this same endpoint. response.json() on a gateway's 502 HTML page rejects
+      // with "Unexpected token '<'", and that string is what the manager would
+      // have been shown as the reason their password did not work.
+      .then(function (response) {
+        return response.text().then(function (text) {
+          var body = null;
+          try {
+            body = text ? JSON.parse(text) : null;
+          } catch (err) {
+            body = { message: 'Serverul a răspuns neașteptat. Încearcă din nou.' };
+          }
+          return { ok: response.ok, body: body };
+        });
+      })
       .then(function (result) {
         if (!result.ok || !result.body || !result.body.session) {
           throw new Error((result.body && result.body.message) || 'Autentificare eșuată.');
@@ -90,11 +104,15 @@
     });
   }
 
+  // An RPC rather than a PostgREST select with a profiles embed. The only policy
+  // on profiles is `id = auth.uid()`, so the embed returned a profile only for
+  // versions the signed-in manager published themselves and silently dropped the
+  // name from everyone else's -- the exact case attribution is for. The RPC is
+  // SECURITY DEFINER, asserts lab management itself, resolves published_by, and
+  // returns the versions newest first, so no client-side ordering is needed.
   function loadHistory() {
     return client
-      .from('public_price_lists')
-      .select('id,document,is_current,note,created_at,created_by,profiles:created_by(display_name,username)')
-      .order('created_at', { ascending: false })
+      .rpc('get_public_price_list_history')
       .then(function (result) {
         if (result.error) throw result.error;
         state.history = result.data || [];
@@ -109,7 +127,17 @@
     try {
       var raw = window.localStorage.getItem(DRAFT_KEY);
       var parsed = raw ? JSON.parse(raw) : null;
-      return parsed && parsed.doc && parsed.doc.groups ? parsed : null;
+      if (!parsed || !parsed.doc || !parsed.doc.groups) return null;
+      // A draft is whatever localStorage happened to hold, which need not be a
+      // document of this shape at all. Ordinary errors are fine and wanted --
+      // showing them next to the field they came from is why the browser
+      // validates -- but a draft the editor cannot draw must be dropped, or
+      // renderGroups() throws on load and the manager gets a dead page instead of
+      // the published list. That is what the validator's `fatal` marks. A
+      // validator that throws outright lands in the catch below, same outcome.
+      var problems = window.PriceDocument.validate(parsed.doc);
+      if (problems.some(function (problem) { return problem.fatal; })) return null;
+      return parsed;
     } catch (err) { return null; }
   }
 
@@ -253,6 +281,34 @@
   $('addGroup').addEventListener('click', function () { apply(window.PriceDocument.addGroup(state.doc)); });
 
   // ---- validation, preview, publish -------------------------------------
+
+  // Deep and key-order-insensitive: a document that came back from the database
+  // or out of localStorage has been through JSON and need not carry its keys in
+  // emptyDocument()'s order.
+  function sameDocument(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    var keys = Object.keys(a);
+    if (keys.length !== Object.keys(b).length) return false;
+    return keys.every(function (key) {
+      return Object.prototype.hasOwnProperty.call(b, key) && sameDocument(a[key], b[key]);
+    });
+  }
+
+  // On an unseeded database the panel opens on emptyDocument(), which validates
+  // clean -- so Publică was enabled on a document whose only content is a group
+  // titled "Grup nou" with no rows, and publishing it would put a bare heading on
+  // the public page.
+  //
+  // A UI guard, deliberately not a validation rule: the SQL validator allows an
+  // empty rows array by design, and a browser-only "must have at least one row"
+  // rule would recreate exactly the browser/database divergence that made the
+  // publish button unusable over two-decimal prices.
+  function isUntouchedEmptyDocument() {
+    return sameDocument(state.doc, window.PriceDocument.emptyDocument());
+  }
+
   function renderErrors() {
     var errors = window.PriceDocument.validate(state.doc);
     var list = $('errors');
@@ -263,7 +319,7 @@
       list.appendChild(li);
     });
     list.hidden = errors.length === 0;
-    $('publish').disabled = errors.length > 0;
+    $('publish').disabled = errors.length > 0 || isUntouchedEmptyDocument();
     return errors;
   }
 
@@ -274,7 +330,7 @@
   });
 
   $('publish').addEventListener('click', function () {
-    if (renderErrors().length) return;
+    if (renderErrors().length || isUntouchedEmptyDocument()) return;
     $('publish').disabled = true;
     status('Se publică…');
 
@@ -307,7 +363,7 @@
     state.history.forEach(function (row) {
       var li = document.createElement('li');
       var left = document.createElement('span');
-      var who = row.profiles && (row.profiles.display_name || row.profiles.username);
+      var who = row.published_by;
       var when = new Date(row.created_at).toLocaleString('ro-RO');
       left.appendChild(document.createTextNode(when + (who ? ' · ' + who : '') + (row.note ? ' · ' + row.note : '')));
       left.className = 'when';
@@ -337,8 +393,19 @@
   }
 
   // A reload with a live session should land in the editor, not the login form.
+  // Failing closed is correct -- if may_edit_public_prices() cannot be reached,
+  // nobody gets an editor -- but failing closed silently left a signed-in manager
+  // staring at a blank login form with no idea why, so say something.
   client.auth.getSession().then(function (result) {
-    if (result.data && result.data.session) start().catch(function () { show('signInView'); });
-    else show('signInView');
+    if (result.data && result.data.session) {
+      start().catch(function () {
+        show('signInView');
+        var error = $('signInError');
+        error.textContent = 'Nu am putut verifica drepturile de editare. Autentifică-te din nou.';
+        error.hidden = false;
+      });
+    } else {
+      show('signInView');
+    }
   });
 })();

@@ -198,3 +198,31 @@ test('a corrupt row reports an error instead of throwing',()=>{
  assert.doesNotThrow(()=>{errors=D.validate(doc);},'validate threw on a null row');
  assert.ok(errors.some(e=>e.path==='groups.0.rows.0'),`expected an error at groups.0.rows.0, got ${JSON.stringify(errors)}`);
 });
+
+// editor.js decides from this flag whether a recovered localStorage draft is
+// restorable. A blank item name must stay restorable -- showing it inline is the
+// point -- while a document renderGroups() cannot draw must not be.
+test('only unrenderable corruption is marked fatal',()=>{
+ const fatalCases=[
+  {schema:1,currency:'lei',groups:[null]},
+  {schema:1,currency:'lei',groups:[{title:'A',rows:null}]},
+  {schema:1,currency:'lei',groups:[{title:'A',rows:[null]}]},
+  {schema:1,currency:'lei',groups:'not an array'},
+  null,
+ ];
+ for(const doc of fatalCases){
+  const errors=D.validate(doc);
+  assert.ok(errors.some(e=>e.fatal),'expected a fatal error for '+JSON.stringify(doc)+', got '+JSON.stringify(errors));
+ }
+ const restorable=[
+  {schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'',amount:1}]}]},
+  {schema:1,currency:'lei',groups:[{title:'A',rows:[{item:'x',amount:1.005}]}]},
+  {schema:1,currency:'lei',groups:[{title:'',rows:[]}]},
+  {schema:1,currency:'lei',groups:[]},
+ ];
+ for(const doc of restorable){
+  const errors=D.validate(doc);
+  assert.ok(errors.length>0,'expected errors for '+JSON.stringify(doc));
+  assert.equal(errors.some(e=>e.fatal),false,JSON.stringify(doc)+' is renderable and must not be fatal, got '+JSON.stringify(errors));
+ }
+});
