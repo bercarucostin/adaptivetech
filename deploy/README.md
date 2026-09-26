@@ -177,9 +177,12 @@ worth reading the execution in n8n before assuming it is safe.
 
 ## The DNS cutover, when you get to it
 
-The landing page in `website/site/index.html` is byte-identical to what
-Hostico serves today, so the move is like-for-like — visitors see the same
-page.
+The landing page in `website/site/index.html` was byte-identical to what
+Hostico serves until this branch replaced its hand-written price rows with a
+container the browser fills from Supabase. So the repository copy and the
+live page **differ until the upload in the next section has happened** — do
+that first, confirm `www` still renders the same prices, and the cutover is
+then the like-for-like move it was meant to be.
 
 Order matters, and MX comes first:
 
@@ -206,16 +209,55 @@ When the page itself changes, upload three files to the cPanel document root:
     price-list.js          (from website/shared/)
     price-list-source.js   (from website/shared/)
 
-**Diff before you overwrite.** The repository copy is supposed to be
-byte-identical to what Hostico serves, but nothing enforces that, and a
-difference means somebody edited the live page directly:
+**Seed the price list before you upload that page.** This is the step that
+can take the whole price list off the public site, and nothing in the repo
+performs it for you — there is no migration runner here, and
+`db/schema/apply.sql` does **not** include `db/migrations/`. Applying the
+schema creates an empty `public.public_price_lists`; the page that fetches
+from it then finds no current version and renders one line —
+"Lista de prețuri se încarcă — dacă nu apare, sună la 0766 494 063." — in
+place of the entire price list. In that order:
+
+1. Apply the schema:
+
+       psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema/apply.sql
+
+2. Then run the seed, which inserts version 1 — the list transcribed from
+   the page as it stands:
+
+       psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+         -f db/migrations/20260925_public_price_list_seed.sql
+
+   It is idempotent: it inserts only when the lab has no price list at all,
+   so re-running it against a database that already has history changes
+   nothing and is safe.
+
+3. Then confirm there is exactly one row and it is the current one:
+
+       select count(*), bool_or(is_current) from public.public_price_lists;
+
+   Expect `1 | t`. A count of 0 means the seed found no lab — check that
+   `public.get_flowrise_lab_id()` resolves — and `f` means nothing is
+   published, which the page renders as the phone-number line.
+
+4. **Only then upload `index.html`**, after the diff below. That upload is the
+   moment visitors start depending on the database, so everything above it has
+   to be true first. The two `price-list*.js` files can go up at any point;
+   they do nothing until the page references them, and having them in place
+   early means the page works the instant it lands.
+
+**Diff before you overwrite.** The repository copy and the live page are no
+longer expected to match: this branch removed the hand-written price rows, so
+the price section is *supposed* to differ. Everything else should not, and a
+difference elsewhere means somebody edited the live page directly:
 
     curl -s https://www.flowrisedental.ro/ > /tmp/live.html
     diff /tmp/live.html website/site/index.html
 
-Reconcile any difference before uploading. After the DNS cutover this section
-stops applying: the page is then baked into the Caddy image and publishes with a
-redeploy.
+Reconcile any difference outside the price section before uploading. Once the
+upload is done the two are identical again, and stay that way. After the DNS
+cutover this section stops applying: the page is then baked into the Caddy
+image and publishes with a redeploy.
 
 ### Before touching a database that ran an earlier version of this work
 
