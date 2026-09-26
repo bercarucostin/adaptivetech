@@ -5,6 +5,14 @@ body { margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", 
 .bar h1 { font-size: 1.1rem; margin: 0; letter-spacing: .02em; }
 .who { display: flex; align-items: center; gap: .75rem; color: var(--muted); font-size: .9rem; }
 main { max-width: 900px; margin: 0 auto; padding: 1.25rem; display: grid; gap: 1rem; }
+/* [hidden] is only a browser default of display:none, so ANY class that sets
+   display beats it. .card and .who both do, which left "Acces restricționat",
+   the preview card and the signed-in bar on screen permanently -- the denied
+   card even rendering above the editor for a manager who is allowed in. Keep
+   this ahead of everything that sets display, and never remove it: the panel
+   drives visibility entirely through el.hidden. */
+[hidden] { display: none !important; }
+
 .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; display: grid; gap: .75rem; }
 .card h2 { font-size: .95rem; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 label { display: grid; gap: .3rem; font-size: .85rem; color: var(--muted); }

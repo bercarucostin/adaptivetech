@@ -547,3 +547,30 @@ test('a failure after the gate passes hides the signed-in bar along with the edi
   assert.equal(elements.who.hidden, true, 'the signed-in bar must not stay above the login form');
   assert.match(elements.signInError.textContent, /Nu am putut verifica drepturile/);
 });
+
+// The panel drives every view change through el.hidden, but [hidden] is only a
+// browser default of display:none, so any class that also sets display silently
+// beats it. That shipped: .card and .who both set display, which pinned "Acces
+// restricționat", the preview card and the signed-in bar on screen permanently
+// -- the denied card rendering directly above the editor for a manager who was
+// allowed in, found during the acceptance pass.
+//
+// This is cascade behaviour, so there is no DOM here to assert against and no
+// honest behavioural test without a browser. What this does instead is find
+// every element the markup hides that also carries a class, and require the
+// stylesheet to neutralise [hidden] with !important -- which beats any later
+// display rule regardless of order, including on a class added in future.
+test('every element the panel hides survives a class that sets display', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../website/app/public-prices/index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../../website/app/public-prices/editor.css'), 'utf8');
+
+  const hiddenWithClass = [...html.matchAll(/<[a-z]+[^>]*\bhidden\b[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => /\bclass="/.test(tag));
+
+  assert.ok(hiddenWithClass.length > 0,
+    'expected at least one hidden element carrying a class; if the markup changed, this guard needs rewriting rather than deleting');
+
+  assert.match(css, /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/,
+    'editor.css must neutralise [hidden] with !important, or a class that sets display keeps hidden elements on screen');
+});
