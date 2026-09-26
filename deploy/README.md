@@ -232,13 +232,21 @@ place of the entire price list. In that order:
    so re-running it against a database that already has history changes
    nothing and is safe.
 
-3. Then confirm there is exactly one row and it is the current one:
+3. Then confirm that exactly one version is published and current:
 
        select count(*), bool_or(is_current) from public.public_price_lists;
 
-   Expect `1 | t`. A count of 0 means the seed found no lab — check that
-   `public.get_flowrise_lab_id()` resolves — and `f` means nothing is
-   published, which the page renders as the phone-number line.
+   On a fresh database expect exactly `1 | t`. On one that already has
+   published history the count is however many versions exist — the seed
+   inserted nothing, as intended — and `bool_or` must still be true. The
+   property that matters either way is that **exactly one row is current**,
+   which this reports directly:
+
+       select count(*) from public.public_price_lists where is_current;
+
+   A count of 0 from the first query means the seed found no lab — check that
+   `public.get_flowrise_lab_id()` resolves — and a `bool_or` of `f` means
+   nothing is published, which the page renders as the phone-number line.
 
 4. **Only then upload `index.html`**, after the diff below. That upload is the
    moment visitors start depending on the database, so everything above it has

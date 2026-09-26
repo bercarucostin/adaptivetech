@@ -400,6 +400,9 @@
     if (result.data && result.data.session) {
       start().catch(function () {
         show('signInView');
+        // show() toggles the three view sections only, so the signed-in bar would
+        // otherwise stay above the login form with the manager's email in it.
+        $('who').hidden = true;
         var error = $('signInError');
         error.textContent = 'Nu am putut verifica drepturile de editare. Autentifică-te din nou.';
         error.hidden = false;

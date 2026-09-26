@@ -361,12 +361,20 @@ reset role;
 -- lab, and identity switched with set_config('request.jwt.claim.sub', ...),
 -- which auth.uid() reads and which -- unlike `set local role` -- does hold
 -- inside a DO block. All of it rolls back.
+--
+-- Both spellings of the claim are set at every switch. Supabase's auth.uid()
+-- reads the flat legacy 'request.jwt.claim.sub' first and falls back to the
+-- 'sub' key of the 'request.jwt.claims' JSON, but that function lives in the
+-- Supabase-managed auth schema rather than in this repo, so which variant a
+-- given project has cannot be verified from here. Setting both costs a line and
+-- removes the dependence.
 do $$
 declare
     v_lab uuid := gen_random_uuid();
     v_manager uuid := gen_random_uuid();
     v_second uuid := gen_random_uuid();
     v_tech uuid := gen_random_uuid();
+    v_nobody uuid := gen_random_uuid();
     v_doc1 jsonb := '{"schema":1,"currency":"lei","groups":[{"title":"Prima","rows":[{"item":"Coroana","amount":200}]}]}';
     v_doc2 jsonb := '{"schema":1,"currency":"lei","groups":[{"title":"A doua","rows":[{"item":"Coroana","amount":32.05}]}]}';
     v_v1 uuid;
@@ -400,12 +408,16 @@ begin
     insert into public.organization_memberships (organization_id, user_id, role)
     values (v_lab, v_manager, 'Manager'), (v_lab, v_second, 'Manager'), (v_lab, v_tech, 'Technician');
 
-    if public.get_flowrise_lab_id() <> v_lab then
+    -- `is distinct from`, not `<>`: an unresolved lab returns NULL, `NULL <> uuid`
+    -- is NULL rather than true, and the branch would be skipped in exactly the case
+    -- this guard exists to catch. Same trap the validator fixed twice.
+    if public.get_flowrise_lab_id() is distinct from v_lab then
         raise exception 'Fixture lab is not the one get_flowrise_lab_id() resolves';
     end if;
 
     -- 1. A signed-in technician is refused by the function itself -----------
     perform set_config('request.jwt.claim.sub', v_tech::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_tech::text)::text, true);
 
     if public.may_edit_public_prices() then
         raise exception 'may_edit_public_prices answered true for a technician';
@@ -439,6 +451,7 @@ begin
 
     -- 2. A manager publishes, and the result is exactly one current version --
     perform set_config('request.jwt.claim.sub', v_manager::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_manager::text)::text, true);
 
     if not public.may_edit_public_prices() then
         raise exception 'may_edit_public_prices answered false for a manager';
@@ -490,11 +503,23 @@ begin
         raise exception 'After the second publish % versions are current, expected 1', v_count;
     end if;
 
+    -- created_at defaults to now(), which is transaction_timestamp(), and this whole
+    -- file is one transaction -- so both versions carry an identical timestamp and
+    -- the RPC's `order by created_at desc, id desc` falls through to comparing
+    -- random uuids. The newest-first assertion below would then be a coin flip that
+    -- blames the RPC for a bug it does not have. Age the first version deliberately
+    -- so the ordering has something real to sort on. The RPC's ORDER BY is correct
+    -- and is not the thing under test here.
+    update public.public_price_lists
+       set created_at = created_at - interval '1 hour'
+     where id = v_v1;
+
     -- 5. The history names the OTHER account ---------------------------------
     --    This is what the profiles policy made impossible from the browser: the
     --    only policy on profiles is `id = auth.uid()`, so a PostgREST embed gave
     --    the viewer a name for their own publishes and null for everyone else's.
     perform set_config('request.jwt.claim.sub', v_manager::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_manager::text)::text, true);
 
     select count(*) into v_count from public.get_public_price_list_history();
     if v_count <> 2 then
@@ -529,6 +554,15 @@ begin
     values (v_lab, v_doc1, false, 'fara autor', null)
     returning id into v_orphan;
 
+    -- Presence and nullness are asserted separately. `select ... into v_name` leaves
+    -- v_name NULL both when the name is genuinely null and when no row came back at
+    -- all, so checking only for null would pass if the RPC dropped the row entirely.
+    select count(*) into v_count
+      from public.get_public_price_list_history() h where h.id = v_orphan;
+    if v_count <> 1 then
+        raise exception 'The version with no created_by is missing from the history: % rows', v_count;
+    end if;
+
     select h.published_by into v_name from public.get_public_price_list_history() h where h.id = v_orphan;
     if v_name is not null then
         raise exception 'A version with no created_by was attributed to %', v_name;
@@ -560,6 +594,7 @@ begin
 
     -- 7. And a technician cannot undo any of it ------------------------------
     perform set_config('request.jwt.claim.sub', v_tech::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_tech::text)::text, true);
 
     v_failed := false;
     begin
@@ -581,7 +616,12 @@ begin
         raise exception 'The refused restore still moved is_current';
     end if;
 
-    perform set_config('request.jwt.claim.sub', '', true);
+    -- Leave no usable identity behind. A uuid that matches no profile, rather than
+    -- an empty string: '' only resolves to "nobody" if auth.uid() wraps it in
+    -- nullif, which is one more thing about the auth schema this repo cannot check.
+    -- per_tooth_work_orders.sql clears it the same way.
+    perform set_config('request.jwt.claim.sub', v_nobody::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', v_nobody::text)::text, true);
 end $$;
 
 -- anon reads the published list, not management's notes about it ------------

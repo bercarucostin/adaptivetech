@@ -521,6 +521,29 @@ test('gate: an error from may_edit_public_prices never opens the editor, and exp
   assert.equal(elements.signInView.hidden, false, 'the panel falls back to the sign-in view');
   assert.equal(elements.signInError.hidden, false, 'a blank login form with no message is the defect');
   assert.match(elements.signInError.textContent, /Nu am putut verifica drepturile/);
+  assert.equal(elements.who.hidden, true, 'the signed-in bar must not linger above the login form');
   assert.equal(calls.rpc.some(c => c.name === 'get_public_price_list_history'), false,
     'the history must not be loaded when the gate could not be evaluated');
+});
+
+test('a failure after the gate passes hides the signed-in bar along with the editor', async () => {
+  // The path where this actually bit: may_edit_public_prices succeeds, so start()
+  // has already set $('who').hidden = false and put the manager's email in it, and
+  // then loadHistory() rejects. show() toggles the three view sections only, so
+  // without hiding it the signed-in bar sat above the login form.
+  const { elements } = loadEditor({
+    session: { access_token: 'x' },
+    rpc: {
+      may_edit_public_prices: allow,
+      get_public_price_list_history: function () {
+        return { data: null, error: { message: 'Laboratorul nu este configurat.' } };
+      }
+    }
+  });
+  await flush();
+
+  assert.equal(elements.editorView.hidden, true, 'the editor must not open');
+  assert.equal(elements.signInView.hidden, false);
+  assert.equal(elements.who.hidden, true, 'the signed-in bar must not stay above the login form');
+  assert.match(elements.signInError.textContent, /Nu am putut verifica drepturile/);
 });
