@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ro">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Prețuri publice — Flowrise Dental</title>
+  <link rel="stylesheet" href="editor.css" />
+</head>
+
+<body>
+  <header class="bar">
+    <h1>Prețuri publice</h1>
+    <div class="who" id="who" hidden><span id="whoName"></span><button type="button" id="signOut">Ieși</button></div>
+  </header>
+
+  <main>
+    <section id="signInView">
+      <form id="signInForm" class="card" autocomplete="on">
+        <h2>Autentificare</h2>
+        <label>Nickname sau email<input type="text" id="identifier" name="username" autocomplete="username" required /></label>
+        <label>Parolă<input type="password" id="password" name="password" autocomplete="current-password" required /></label>
+        <p class="error" id="signInError" hidden></p>
+        <button type="submit" id="signInButton">Intră</button>
+      </form>
+    </section>
+
+    <section id="deniedView" class="card" hidden>
+      <h2>Acces restricționat</h2>
+      <p>Doar administratorii sau managerii laboratorului pot modifica prețurile publice.</p>
+    </section>
+
+    <section id="editorView" hidden>
+      <div class="card">
+        <h2>Lista publicată</h2>
+        <p class="hint">Modificările devin publice abia după ce apeși <strong>Publică</strong>.</p>
+        <label>Monedă<input type="text" id="currency" maxlength="8" /></label>
+        <label>Notă introductivă<textarea id="introNote" maxlength="400" rows="2"></textarea></label>
+        <label>Notă de subsol (marcată cu †)<textarea id="footnote" maxlength="400" rows="2"></textarea></label>
+      </div>
+
+      <div id="groups"></div>
+      <button type="button" id="addGroup" class="wide">+ Grup nou</button>
+
+      <div class="card">
+        <h2>Publicare</h2>
+        <ul class="errors" id="errors" hidden></ul>
+        <label>Ce s-a schimbat (opțional)<input type="text" id="publishNote" maxlength="200" /></label>
+        <div class="actions">
+          <button type="button" id="preview">Previzualizează</button>
+          <button type="button" id="publish" class="primary">Publică</button>
+        </div>
+        <p class="status" id="status" hidden></p>
+      </div>
+
+      <div class="card" id="previewCard" hidden>
+        <h2>Previzualizare</h2>
+        <p class="hint">Exact ce vor vedea vizitatorii pe pagina publică.</p>
+        <div class="prices"><div id="previewList"></div></div>
+      </div>
+
+      <div class="card">
+        <h2>Istoric</h2>
+        <ul class="history" id="history"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../supabase-config.js"></script>
+  <script src="price-list.js"></script>
+  <script src="document.js"></script>
+  <script src="editor.js"></script>
+</body>
+
+</html>
