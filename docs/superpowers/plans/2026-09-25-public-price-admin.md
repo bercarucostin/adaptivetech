@@ -2361,6 +2361,29 @@ button:disabled { opacity: .5; cursor: default; }
 
 Create `website/app/public-prices/editor.js`:
 
+> **Corrected during execution, and this one was fatal.** The original login
+> chain checked `result.body.email` from the `login-with-identifier` edge
+> function. That function returns `{ok, session:{access_token, refresh_token,
+> ...}, profile:{id, username, display_name, legacy_user_id, email}}` — there is
+> no top-level `email`; it is nested under `profile`. So the guard threw
+> `Autentificare eșuată.` on every attempt and **the panel could never have been
+> logged into at all.** Even corrected to `profile.email`, it then called
+> `signInWithPassword` a second time, re-authenticating with a password the edge
+> function had already used, when that function hands back a session ready to
+> install. The shipped code checks `body.session` and calls
+> `client.auth.setSession(...)`. Found by reading the edge function before
+> dispatching the task, not by testing — which is why
+> `tests/app/public-prices-editor.test.js` now guards it.
+>
+> Also corrected: the three top-level fields bound `input` and called `apply()`,
+> which re-rendered and rewrote the value of the field being typed into. They now
+> bind `change`, matching the row inputs.
+>
+> Also added, against this plan's own text: the plan left the panel with no
+> automated tests and its verification entirely manual. Six `node:vm` tests now
+> cover the permission gate failing closed, login installing the returned session,
+> and publish sending all three RPC arguments.
+
 ```js
 // The public price editor. Its own login, because the app stores its Supabase
 // session in sessionStorage and that does not cross tabs; and its own small
@@ -2406,13 +2429,18 @@ Create `website/app/public-prices/editor.js`:
     })
       .then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); })
       .then(function (result) {
-        if (!result.ok || !result.body || !result.body.email) {
+        if (!result.ok || !result.body || !result.body.session) {
           throw new Error((result.body && result.body.message) || 'Autentificare eșuată.');
         }
-        return client.auth.signInWithPassword({ email: result.body.email, password: $('password').value });
+        // The edge function already signed in; install the session it returned
+        // rather than authenticating a second time with the same password.
+        return client.auth.setSession({
+          access_token: result.body.session.access_token,
+          refresh_token: result.body.session.refresh_token
+        });
       })
       .then(function (result) {
-        if (result.error) throw new Error('Nickname/email sau parolă incorectă.');
+        if (result.error) throw new Error('Sesiunea nu a putut fi creată.');
         return start();
       })
       .catch(function (err) {
@@ -2491,8 +2519,10 @@ Create `website/app/public-prices/editor.js`:
   }
 
   function field(el, handler) {
-    // input rather than change: the error list should follow the typing.
-    el.addEventListener('input', handler);
+    // change rather than input: apply() re-renders and rewrites the value of
+    // the very field being typed into, which would fight the caret on every
+    // keystroke. The row inputs below use change for the same reason.
+    el.addEventListener('change', handler);
   }
 
   function render() {
