@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flowrise Dental Studio</title>
-  <link rel="stylesheet" href="styles.css?v=18.41" />
+  <link rel="stylesheet" href="styles.css?v=18.42" />
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -20,7 +20,9 @@
         <label>Password
           <input id="loginPassword" type="password" autocomplete="current-password" required />
         </label>
-        <button id="loginBtn" class="primary-btn full" type="submit">Autentificare</button>
+        <div id="loginCaptcha" class="login-captcha"></div>
+        <p id="loginSecurityStatus" class="login-security-status" role="status"></p>
+        <button id="loginBtn" class="primary-btn full" type="submit" disabled>Autentificare</button>
       </form>
 
       <div id="loginError" class="login-error"></div>
@@ -73,7 +75,7 @@
 
         <div class="top-actions">
           <div id="connectionBadge" class="connection-badge">Se conectează...</div>
-          <button id="loadOlderBtn" class="secondary-btn" type="button" title="By default only orders with Deadline in the last 45 days are loaded">Încarcă mai vechi</button>
+          <button id="loadOlderBtn" class="secondary-btn" type="button" title="Resetează intervalul de recepție">Ultimele 90 zile</button>
           <button id="toggleOldBtn" class="secondary-btn" type="button" title="Old = deadline before today and status Finished, Shipped, List Sent or Paid">Ascunde vechi</button>
           <button id="refreshBtn" class="secondary-btn">↻ Reîmprospătează</button>
           <button id="newOrderBtn" class="primary-btn" type="button" onclick="openNewOrder()">+ Lucrare nouă</button>
@@ -82,7 +84,7 @@
 
       <div class="refresh-meta">
         <span id="lastRefresh">Neactualizat încă</span>
-        <span id="datasetScope">Implicit: ultimele 45 de zile după termen</span>
+        <span id="datasetScope">Implicit: ultimele 90 de zile după recepție</span>
         <span>Actualizare automată: 5 min</span>
       </div>
 
@@ -496,6 +498,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=18.41"></script>
+  <script src="login-security.js?v=18.42"></script>
+  <script src="dashboard-data.js?v=18.42"></script>
+  <script src="dashboard-ui.js?v=18.42"></script>
+  <script src="app.js?v=18.42"></script>
 </body>
 </html>

@@ -52,6 +52,7 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/28_ai_operation_previews.sql
 \i db/schema/10_tables/29_ai_operation_requests.sql
 \i db/schema/10_tables/30_public_price_lists.sql
+\i db/schema/10_tables/login_rate_limits.sql
 
 \echo == 20 functions ==
 \i db/schema/20_functions/00_per_tooth_rpc_cutover.sql
@@ -96,6 +97,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/chat_send_message.sql
 \i db/schema/20_functions/chat_users_can_share_thread.sql
 \i db/schema/20_functions/connected_clinic_for_lab.sql
+\i db/schema/20_functions/consume_login_rate_limit.sql
 \i db/schema/20_functions/create_technician_work_order.sql
 \i db/schema/20_functions/create_work_order.sql
 \i db/schema/20_functions/current_legacy_user_id.sql
@@ -125,6 +127,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/get_work_order_financial_history.sql
 \i db/schema/20_functions/get_work_order_price_lines.sql
 \i db/schema/20_functions/get_work_order_reference_data.sql
+\i db/schema/20_functions/get_work_orders_page.sql
 \i db/schema/20_functions/has_org_role.sql
 \i db/schema/20_functions/has_role_permission.sql
 \i db/schema/20_functions/is_active_org_member.sql

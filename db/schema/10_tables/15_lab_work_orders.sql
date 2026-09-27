@@ -86,6 +86,10 @@ ALTER TABLE public.lab_work_orders
     ADD COLUMN IF NOT EXISTS price_migrated boolean NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
+CREATE INDEX IF NOT EXISTS lab_work_orders_active_reception_idx
+    ON public.lab_work_orders (lab_organization_id, (coalesce(data_receptie,created_at)), id DESC)
+    WHERE archived_at IS NULL;
+
 UPDATE public.lab_work_orders
 SET model_not_applicable = coalesce(model_not_applicable,false),
     modelare_not_applicable = coalesce(modelare_not_applicable,false),

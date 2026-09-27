@@ -28,8 +28,30 @@
   }
 
   // ---- sign in -----------------------------------------------------------
+  var signingIn = false;
+  var captcha = null;
+  $('signInButton').disabled = true;
+  function updateSecurity(security) {
+    $('signInButton').disabled = signingIn || !security.ready;
+    $('signInSecurity').textContent = security.error || (security.ready ? '' : 'Completează verificarea de securitate.');
+    $('signInSecurity').hidden = security.ready && !security.error;
+  }
+  if (window.LoginSecurity) {
+    captcha = window.LoginSecurity.create({
+      siteKey: config.turnstileSiteKey,
+      container: $('signInCaptcha'),
+      onStateChange: updateSecurity
+    });
+    updateSecurity(captcha.state);
+    captcha.load();
+  } else {
+    updateSecurity({ ready: false, error: 'Verificarea de securitate nu este disponibilă. Reîncarcă pagina.' });
+  }
   $('signInForm').addEventListener('submit', function (event) {
     event.preventDefault();
+    if (signingIn || !captcha || !captcha.getToken()) return;
+    var captchaToken = captcha.getToken();
+    signingIn = true;
     var button = $('signInButton');
     var error = $('signInError');
     error.hidden = true;
@@ -38,7 +60,7 @@
     fetch(config.projectUrl + '/functions/v1/' + config.loginFunction, {
       method: 'POST',
       headers: { 'content-type': 'application/json', apikey: config.publishableKey },
-      body: JSON.stringify({ identifier: $('identifier').value, password: $('password').value })
+      body: JSON.stringify({ identifier: $('identifier').value, password: $('password').value, captchaToken: captchaToken })
     })
       // Read the body as text and guard the parse, the way app.js does against
       // this same endpoint. response.json() on a gateway's 502 HTML page rejects
@@ -51,6 +73,11 @@
             body = text ? JSON.parse(text) : null;
           } catch (err) {
             body = { message: 'Serverul a răspuns neașteptat. Încearcă din nou.' };
+          }
+          if (response.status === 429) {
+            var retry = response.headers && response.headers.get('Retry-After');
+            var seconds = /^\d+$/.test(retry || '') ? Number(retry) : Math.ceil((Date.parse(retry) - Date.now()) / 1000);
+            body = { message: 'Prea multe încercări. ' + (Number.isFinite(seconds) && seconds > 0 ? 'Încearcă din nou peste ' + seconds + ' secunde.' : 'Încearcă din nou mai târziu.') };
           }
           return { ok: response.ok, body: body };
         });
@@ -74,7 +101,7 @@
         error.textContent = err.message;
         error.hidden = false;
       })
-      .then(function () { button.disabled = false; });
+      .then(function () { signingIn = false; captcha.reset(); updateSecurity(captcha.state); });
   });
 
   $('signOut').addEventListener('click', function () {

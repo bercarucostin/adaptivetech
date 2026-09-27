@@ -1,0 +1,26 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const { PGlite } = await import(process.env.PGLITE_MODULE_PATH || '/tmp/tooth-pglite/package/dist/index.js');
+test('SQL limiter limits shared attempts, resets expired buckets, cleans up, and denies public access',async()=>{
+ const db=new PGlite();
+ await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;');
+ const path='db/migrations/20260927_login_rate_limit.sql';
+ assert.ok(fs.existsSync(path),'login limiter migration exists');
+ await db.exec(fs.readFileSync(path,'utf8'));
+ const call=()=>db.query("select * from public.consume_login_rate_limit('account',repeat('a',64))");
+ const results=await Promise.all(Array.from({length:15},call));
+ assert.equal(results.filter(r=>r.rows[0].allowed).length,10);
+ assert.ok(results[10].rows[0].retry_after>0);
+ await db.exec("UPDATE public.login_rate_limits SET window_start=now()-interval '20 minutes', expires_at=now()-interval '5 minutes'");
+ assert.equal((await call()).rows[0].allowed,true);
+ await db.exec("INSERT INTO public.login_rate_limits VALUES ('account',repeat('b',64),now()-interval '20 minutes',1,now()-interval '5 minutes')");
+ await call();
+ assert.equal((await db.query('select count(*)::int n from public.login_rate_limits')).rows[0].n,1);
+ await db.exec('SET ROLE anon');
+ await assert.rejects(call(),/permission denied/);
+ await assert.rejects(db.query('select * from public.login_rate_limits'),/permission denied/);
+ await db.exec('RESET ROLE; SET ROLE service_role');
+ assert.equal((await call()).rows[0].allowed,true);
+ await db.close();
+});

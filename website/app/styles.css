@@ -9304,3 +9304,19 @@ body.dashboard-production-maximized .kanban-col{
 }
 
 .tooth-connection:not(.checked) .connection-check{display:none;}
+/* Server-backed date scopes and bounded lists. */
+.dashboard-presets{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.dashboard-presets .secondary-btn{padding:7px 12px;font-size:12px}
+.dashboard-dataset-note{margin:12px 0;color:#74695b;font-size:13px;line-height:1.5}
+.dashboard-server-summary{margin:12px 0 18px}
+.dashboard-pagination{display:flex;align-items:center;justify-content:center;gap:18px;padding:18px 0;color:#74695b;font-size:13px}
+.dashboard-pagination button:disabled{opacity:.45;cursor:not-allowed}
+.login-captcha{display:flex;justify-content:center;min-height:0}
+.login-security-status{font-size:12px;line-height:1.5;color:#74695b;text-align:center;margin:8px 0}
+@media(max-width:600px){.dashboard-pagination{gap:8px}.dashboard-pagination .secondary-btn{padding:8px 10px}.dashboard-presets{gap:6px}}
+@media(max-width:600px){
+  .date-range-filter-card,.date-range-filter-body,.date-range-group,.date-range-group label{min-width:0;max-width:100%}
+  .date-range-group{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .range-date-input{min-width:0;grid-template-columns:minmax(0,1fr) 30px}
+  .dashboard-server-summary .kpi-value{overflow-wrap:anywhere}
+}

@@ -14,7 +14,7 @@ const editorJsSrc = fs.readFileSync(path.join(__dirname, '../../website/app/publ
 
 const REQUIRED_IDS = [
   'who', 'whoName', 'signOut', 'signInView', 'signInForm', 'identifier', 'password',
-  'signInError', 'signInButton', 'deniedView', 'editorView', 'currency', 'introNote',
+  'signInError', 'signInButton', 'signInCaptcha', 'signInSecurity', 'deniedView', 'editorView', 'currency', 'introNote',
   'footnote', 'groups', 'addGroup', 'errors', 'publishNote', 'preview', 'publish',
   'status', 'previewCard', 'previewList', 'history'
 ];
@@ -89,7 +89,8 @@ function loadEditor(options) {
   var elements = {};
   REQUIRED_IDS.forEach(function (id) { elements[id] = makeElement(id); });
 
-  var calls = { rpc: [], from: [], setSession: [], signInWithPassword: [], fetch: [] };
+  var captchaCallbacks;
+  var calls = { captchaResets: 0, rpc: [], from: [], setSession: [], signInWithPassword: [], fetch: [] };
 
   var client = {
     auth: {
@@ -144,8 +145,10 @@ function loadEditor(options) {
     FLOWRISE_SUPABASE: {
       projectUrl: 'https://example.supabase.co',
       publishableKey: 'sb_publishable_test',
-      loginFunction: 'login-with-identifier'
+      loginFunction: 'login-with-identifier',
+      turnstileSiteKey: options.missingCaptchaConfig ? '' : 'test-key'
     },
+    turnstile: { render: function (_, callbacks) { captchaCallbacks = callbacks; if (!options.pendingCaptcha) callbacks.callback('captcha-test-token'); return 1; }, reset: function () { calls.captchaResets++; } },
     supabase: { createClient: function () { return client; } },
     PriceList: { priceListTree: function () { return []; }, mount: function () {} }
   };
@@ -154,6 +157,7 @@ function loadEditor(options) {
 
   var ctx = vm.createContext(sandbox);
   vm.runInContext(documentJsSrc, ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../website/app/login-security.js'), 'utf8'), ctx);
   vm.runInContext(editorJsSrc, ctx);
 
   return { elements: elements, client: client, calls: calls };
@@ -500,7 +504,7 @@ test('login: an HTML error page yields a readable Romanian message, not a JSON p
   assert.ok(!/<html/i.test(elements.signInError.textContent),
     `the raw HTML body reached the manager: ${elements.signInError.textContent}`);
   assert.match(elements.signInError.textContent, /Serverul a răspuns neașteptat/);
-  assert.equal(elements.signInButton.disabled, false, 'the button must be usable again');
+  assert.equal(elements.signInButton.disabled, true, 'the button waits for a fresh CAPTCHA after submission');
 });
 
 // ---- 8. Fail closed, and say so --------------------------------------------
@@ -573,4 +577,29 @@ test('every element the panel hides survives a class that sets display', () => {
 
   assert.match(css, /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/,
     'editor.css must neutralise [hidden] with !important, or a class that sets display keeps hidden elements on screen');
+});
+
+
+test('login: missing CAPTCHA configuration and pending challenge block requests', async () => {
+  for (const options of [{missingCaptchaConfig:true}, {pendingCaptcha:true}]) {
+    const {elements,calls} = loadEditor(options);
+    await flush();
+    assert.equal(elements.signInButton.disabled,true);
+    elements.signInForm.dispatch('submit',{preventDefault(){}});
+    await flush();
+    assert.equal(calls.fetch.length,0);
+    if(options.missingCaptchaConfig) assert.match(elements.signInSecurity.textContent,/configurat/);
+  }
+});
+
+test('login: sends CAPTCHA, resets it and displays server throttle retry delay', async () => {
+  const {elements,calls} = loadEditor({fetch:()=>Promise.resolve({ok:false,status:429,headers:{get:()=> '75'},text:()=>Promise.resolve('{}')})});
+  await flush();
+  elements.signInForm.dispatch('submit',{preventDefault(){}});
+  await flush();
+  assert.equal(JSON.parse(calls.fetch[0][1].body).captchaToken,'captcha-test-token');
+  assert.equal(calls.captchaResets,1);
+  assert.equal(elements.signInButton.disabled,true);
+  assert.match(elements.signInError.textContent,/75/);
+  assert.equal(calls.setSession.length,0);
 });

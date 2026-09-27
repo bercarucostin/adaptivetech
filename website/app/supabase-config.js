@@ -10,6 +10,9 @@ window.FLOWRISE_SUPABASE = {
   // Public unauthenticated Edge Function used only to resolve nickname -> Supabase identity.
   // Deploy with JWT verification disabled. Password verification is still performed by Supabase Auth.
   loginFunction: "login-with-identifier",
+  // Required before deploying v18.42: public Cloudflare Turnstile site key.
+  // Configure its secret in Supabase Auth CAPTCHA settings, never in this file.
+  turnstileSiteKey: "0x4AAAAAAFFL9iWjfd20FstQ",
   adminUsersFunction: "admin-users",
 
   // Current Free-plan UI cap.

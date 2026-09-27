@@ -11,6 +11,16 @@ const REQUEST_TIMEOUT_MS=600000;
 const $=id=>document.getElementById(id);
 
 const loginScreen=$("loginScreen"),appShell=$("appShell"),loginForm=$("loginForm"),loginUser=$("loginUser"),loginPassword=$("loginPassword"),loginBtn=$("loginBtn"),loginError=$("loginError");
+let loginBusy=false;
+const loginSecurity=window.LoginSecurity.create({
+  siteKey:window.FLOWRISE_SUPABASE?.turnstileSiteKey,
+  container:$("loginCaptcha"),
+  onStateChange:state=>{
+    loginBtn.disabled=loginBusy||!state.ready;
+    const message=$("loginSecurityStatus");
+    if(message)message.textContent=state.error||(state.ready?"Verificare de securitate finalizată.":"Finalizează verificarea de securitate pentru autentificare.");
+  }
+});
 const pageTitle=$("pageTitle"),pageSubtitle=$("pageSubtitle"),content=$("content"),connectionBadge=$("connectionBadge"),loadOlderBtn=$("loadOlderBtn"),toggleOldBtn=$("toggleOldBtn"),refreshBtn=$("refreshBtn"),newOrderBtn=$("newOrderBtn"),exportBtn=$("exportBtn"),lastRefresh=$("lastRefresh"),datasetScope=$("datasetScope"),logoutBtn=$("logoutBtn");
 const userName=$("userName"),userRole=$("userRole"),userAvatar=$("userAvatar"),aiMode=$("aiMode");
 const modalBackdrop=$("modalBackdrop"),modalTitle=$("modalTitle"),modalSubtitle=$("modalSubtitle"),closeModalBtn=$("closeModalBtn"),cancelModalBtn=$("cancelModalBtn"),orderForm=$("orderForm"),orderId=$("orderId"),dueDate=$("dueDate"),receptionDate=$("receptionDate"),status=$("status"),patient=$("patient"),patientSuggestions=$("patientSuggestions"),partner=$("partner"),partnerSuggestions=$("partnerSuggestions"),contract=$("contract"),discount=$("discount"),myStage=$("myStage");
@@ -147,7 +157,7 @@ function billingScopeLabel(scope){
   if(value.startsWith("tooth:"))return `Dinte ${value.slice(6)}`;
   return value||"—";
 }
-function money(v){return new Intl.NumberFormat("ro-RO",{style:"currency",currency:"RON",maximumFractionDigits:0}).format(num(v));}
+function money(v){return v===null?"—":new Intl.NumberFormat("ro-RO",{style:"currency",currency:"RON",maximumFractionDigits:0}).format(num(v));}
 function technicianMoney(v){return v===null?"Cost neconfigurat":money(v);}
 function fmtDate(d){
   if(!d)return "—";
@@ -434,21 +444,10 @@ function isOldOrder(o){
 function displayedOrders(){return hideOldOrders?orders.filter(o=>!isOldOrder(o)):orders;}
 function updateDatasetScope(){
   if(!loadOlderBtn||!datasetScope)return;
-  const returned=Number(workOrderScope?.returned??orders.length);
-  const total=Number(workOrderScope?.total??returned);
-  const hidden=Math.max(0,total-returned);
-
-  if(includeOlderOrders){
-    loadOlderBtn.textContent="Ultimele 45 zile";
-    loadOlderBtn.title="Revino la fereastra implicită de 45 de zile";
-    loadOlderBtn.classList.add("active-toggle");
-    datasetScope.textContent=`Istoric complet încărcat · ${returned} lucrări`;
-  }else{
-    loadOlderBtn.textContent=hidden>0?`Încarcă mai vechi (${hidden})`:"Încarcă mai vechi";
-    loadOlderBtn.title="Încarcă lucrări cu termen mai vechi de 45 de zile";
-    loadOlderBtn.classList.remove("active-toggle");
-    datasetScope.textContent=`Default: last 45 days by Deadline · ${returned} loaded${hidden>0?` · ${hidden} older not loaded`:""}`;
-  }
+  loadOlderBtn.textContent="Ultimele 90 zile";
+  loadOlderBtn.title="Resetează recepția la ultimele 90 de zile și elimină filtrul de livrare";
+  loadOlderBtn.classList.remove("active-toggle");
+  datasetScope.textContent=`${Number(workOrderScope?.returned||0)} lucrări pe pagină · ${Number(workOrderScope?.total||0)} în intervalul filtrat`;
 }
 
 function updateOldToggle(){
@@ -523,6 +522,8 @@ async function supabaseIdentifierLogin(identifier,password){
   if(!supabaseConfigured()||!supabaseClient){
     throw new Error("Autentificarea nu este configurată corect.");
   }
+  const captchaToken=loginSecurity.getToken();
+  if(!captchaToken)throw new Error("Finalizează verificarea de securitate înainte de autentificare.");
 
   const fn=String(SUPABASE_CONFIG.loginFunction||"login-with-identifier").trim();
   const endpoint=`${String(SUPABASE_CONFIG.projectUrl).replace(/\/+$/,"")}/functions/v1/${encodeURIComponent(fn)}`;
@@ -538,7 +539,7 @@ async function supabaseIdentifierLogin(identifier,password){
         "Content-Type":"application/json",
         "apikey":SUPABASE_CONFIG.publishableKey
       },
-      body:JSON.stringify({identifier,password}),
+      body:JSON.stringify({identifier,password,captchaToken}),
       signal:controller.signal,
       cache:"no-store"
     });
@@ -548,6 +549,12 @@ async function supabaseIdentifierLogin(identifier,password){
     try{payload=text?JSON.parse(text):null;}catch{payload={message:text};}
 
     if(!response.ok){
+      if(response.status===429){
+        const retry=response.headers.get("Retry-After");
+        const delay=retry&&/^\d+$/.test(retry)?Number(retry):Math.ceil((Date.parse(retry)-Date.now())/1000);
+        const seconds=Number.isFinite(delay)?Math.max(1,delay):60;
+        throw new Error(`Prea multe încercări. Reîncearcă peste ${seconds} secunde.`);
+      }
       throw new Error(payload?.message||payload?.error||"Credentiale invalide.");
     }
 
@@ -566,6 +573,7 @@ async function supabaseIdentifierLogin(identifier,password){
 
     return {session,profile};
   }finally{
+    loginSecurity.reset();
     clearTimeout(timer);
     activeControllers.delete(controller);
   }
@@ -722,10 +730,13 @@ function showLogin(){
   loginScreen.classList.remove("hidden");
   loginPassword.value="";
   loginError.textContent="";
+  loginSecurity.load();
 }
 
 loginForm.addEventListener("submit",async e=>{
   e.preventDefault();
+  if(loginBusy)return;
+  loginBusy=true;
   loginBtn.disabled=true;
   loginError.textContent="";
   showLoading("Autentificare","Verific accesul și pregătesc spațiul de lucru...");
@@ -739,12 +750,13 @@ loginForm.addEventListener("submit",async e=>{
     await initializeApp({showLoader:false});
     showApp();
   }catch(err){
-    loginError.textContent=err.message;
     clearAuth();
     showLogin();
+    loginError.textContent=err.message;
   }finally{
     hideLoading();
-    loginBtn.disabled=false;
+    loginBusy=false;
+    loginBtn.disabled=!loginSecurity.state.ready;
   }
 });
 
@@ -1110,7 +1122,9 @@ function openRangeDatePicker(button){
 window.openRangeDatePicker=openRangeDatePicker;
 
 function dateRangeFilterBar(scope,definitions){
-  const f=viewDateRanges[scope]||{};
+  const paged=typeof dashboardViews!=="undefined"&&dashboardViews.has(scope);
+  const f=paged?dashboardRange(scope):(viewDateRanges[scope]||{});
+  if(paged)definitions=[{field:"receptionDate",label:"Data recepției"},{field:"deadline",label:"Termenul de livrare"}];
   const groups=(definitions||[]).map(def=>{
     const fromKey=`${def.field}From`,toKey=`${def.field}To`;
     return `<div class="date-range-group">
@@ -1130,21 +1144,32 @@ function dateRangeFilterBar(scope,definitions){
     </div>`;
   }).join("");
 
-  const hasValue=Object.values(f).some(Boolean);
+  const hasValue=Object.entries(f).some(([key,value])=>key!=="dashboardInitialized"&&Boolean(value));
   return `<div class="date-range-filter-card">
-    <div class="date-range-filter-head"><strong>Interval de timp</strong><span>Selectează cu mouse-ul sau introdu manual data.</span></div>
+    <div class="date-range-filter-head"><strong>Interval de timp</strong><span>Filtre independente · selectează orice perioadă, inclusiv din istoric.</span></div>
+    ${paged?`<div class="dashboard-presets" aria-label="Interval recepție">${[30,90,180].map(days=>`<button class="secondary-btn" type="button" data-dashboard-days="${days}" data-dashboard-scope="${scope}">${days} zile</button>`).join("")}<button class="secondary-btn" type="button" data-dashboard-days="all" data-dashboard-scope="${scope}">Fără limită de recepție</button></div>`:""}
     <div class="date-range-filter-body">${groups}</div>
-    ${hasValue?`<button class="secondary-btn date-range-clear" type="button" data-clear-date-range="${scope}">Resetează intervalul</button>`:""}
+    ${hasValue?`<button class="secondary-btn date-range-clear" type="button" data-clear-date-range="${scope}">Elimină ambele intervale</button>`:""}
   </div>`;
 }
 
 function clearViewDateRange(scope){
   const f=viewDateRanges[scope];
   if(!f)return;
-  Object.keys(f).forEach(k=>f[k]="");
+  Object.keys(f).filter(k=>k!=="dashboardInitialized").forEach(k=>f[k]="");
 }
 
 function wireDateRangeFilters(scope,rerender){
+  document.querySelectorAll(`[data-dashboard-scope="${scope}"]`).forEach(button=>button.addEventListener("click",()=>{
+    const range=dashboardRange(scope),days=button.dataset.dashboardDays;
+    if(days==="all"){range.receptionDateFrom="";range.receptionDateTo="";}
+    else{
+      const defaults=DashboardData.defaultRange(),start=new Date(`${defaults.receptionDateTo}T12:00:00Z`);
+      start.setUTCDate(start.getUTCDate()-(Number(days)-1));
+      range.receptionDateFrom=start.toISOString().slice(0,10);range.receptionDateTo=defaults.receptionDateTo;
+    }
+    rerender();
+  }));
   document.querySelectorAll(`[data-date-range-scope="${scope}"]`).forEach(input=>{
     input.addEventListener("change",e=>{
       const key=e.target.dataset.dateRangeKey;
@@ -1294,9 +1319,9 @@ function applyWorkQuickFilters(rows){
 
 function workOrdersQuickFilterBar(){
   const available=displayedOrders();
-  const partnerValues=[...new Set(available.map(o=>String(o.partner||"").trim()).filter(Boolean))]
+  const partnerValues=dashboardFacet("partners",[...new Set(available.map(o=>String(o.partner||"").trim()).filter(Boolean))])
     .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
-  const workTypeValues=[...new Set(available.map(o=>String(o.workType||"").trim()).filter(Boolean))]
+  const workTypeValues=dashboardFacet("work_types",[...new Set(available.map(o=>String(o.workType||"").trim()).filter(Boolean))])
     .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
   const hasValue=Object.values(workQuickFilters||{}).some(Boolean);
 
@@ -1517,9 +1542,7 @@ function renderMobileWorkOrders(baseOrders){
 
 function renderWorkOrders(){
   pageTitle.textContent="Lucrări";
-  pageSubtitle.textContent=isTechnician()
-    ? `Assigned work orders · ${includeOlderOrders?"full history":"last 45 days by Deadline"}`
-    : `Work order view · ${includeOlderOrders?"full history":"last 45 days by Deadline"}`;
+  pageSubtitle.textContent=isTechnician()?"Lucrări asignate · filtre după recepție și livrare":"Lucrări · filtre după recepție și livrare";
   const datedOrders=applyViewDateRanges(displayedOrders(),"workorders");
   const baseOrders=applyWorkQuickFilters(datedOrders);
   const dateBar=dateRangeFilterBar("workorders",[
@@ -1646,22 +1669,22 @@ function renderWorkOrders(){
 
 
 
-function exportWorkOrdersPdf(rows){
+function exportWorkOrdersPdf(rows,existingWindow=null,filters=[]){
   const list=[...(rows||[])];
-  const reportWindow=window.open("","_blank","width=1100,height=820");
+  const reportWindow=existingWindow||window.open("","_blank","width=1100,height=820");
   if(!reportWindow){
     alert("Browserul a blocat fereastra PDF. Permite pop-up-urile pentru această pagină.");
     return;
   }
 
-  const total=list.reduce((sum,o)=>sum+num(o.finalPrice),0);
+  const total=list.some(o=>o.finalPrice===null)?null:list.reduce((sum,o)=>sum+num(o.finalPrice),0);
   const logoUrl=new URL("assets/flowrise-brand.jpg",window.location.href).href;
   const generated=new Date().toLocaleString("ro-RO");
 
   reportWindow.document.open();
   reportWindow.document.write(`<!doctype html><html lang="ro"><head><meta charset="utf-8"><title>Raport lucrări - Flowrise Dental Studio</title><style>
   *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#191713;background:#fff;font-size:10pt}.page{padding:10mm}.actions{display:flex;justify-content:flex-end;margin-bottom:10px}.actions button{border:0;border-radius:6px;padding:9px 13px;background:#c99a36;color:#fff;font-weight:700;cursor:pointer}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #a5824e;padding-bottom:10px;margin-bottom:14px}.brand{display:flex;align-items:center;gap:12px}.brand img{width:82px;height:52px;object-fit:cover;border-radius:5px}h1{font-size:19pt;margin:0 0 3px}.meta{color:#74695b;font-size:8.5pt}table{width:100%;border-collapse:collapse}th{background:#f5efe2;color:#4a4033;text-align:left;padding:7px 6px;font-size:8.5pt}td{padding:7px 6px;border-bottom:1px solid #ddd8d0}td.money{text-align:right;font-weight:700}tfoot td{border-top:2px solid #a5824e;border-bottom:0;background:#f6f1e9;font-size:11pt;font-weight:800}.empty{text-align:center;color:#777;padding:25px}@page{size:A4 landscape;margin:10mm}@media print{.actions{display:none}.page{padding:0}thead{display:table-header-group}tr{break-inside:avoid}}
-  </style></head><body><div class="page"><div class="actions"><button onclick="window.print()">Tipărește / Salvează PDF</button></div><div class="head"><div class="brand"><img src="${logoUrl}"><div><h1>Raport lucrări</h1><div class="meta">Flowrise Dental Studio · ${list.length} lucrări filtrate</div></div></div><div class="meta">Generat: ${escapeHtml(generated)}</div></div><table><thead><tr><th>Termen</th><th>Nume pacient</th><th>Tip lucrare</th><th>Nr. elemente</th><th style="text-align:right">Total</th></tr></thead><tbody>${list.length?list.map(o=>`<tr><td>${fmtDate(o.deadline)}</td><td>${escapeHtml(o.patient||"—")}</td><td>${escapeHtml(o.workType||"—")}</td><td>${o.elements}</td><td class="money">${money(o.finalPrice)}</td></tr>`).join(""):`<tr><td class="empty" colspan="5">Nu există lucrări pentru filtrele selectate.</td></tr>`}</tbody><tfoot><tr><td colspan="4">TOTAL</td><td class="money">${money(total)}</td></tr></tfoot></table></div></body></html>`);
+  </style></head><body><div class="page"><div class="actions"><button onclick="window.print()">Tipărește / Salvează PDF</button></div><div class="head"><div class="brand"><img src="${logoUrl}"><div><h1>Raport lucrări</h1><div class="meta">Flowrise Dental Studio · ${list.length} lucrări filtrate</div><div class="meta">${filters.map(escapeHtml).join(" · ")}</div></div></div><div class="meta">Generat: ${escapeHtml(generated)}</div></div><table><thead><tr><th>Termen</th><th>Nume pacient</th><th>Tip lucrare</th><th>Nr. elemente</th><th style="text-align:right">Total</th></tr></thead><tbody>${list.length?list.map(o=>`<tr><td>${fmtDate(o.deadline)}</td><td>${escapeHtml(o.patient||"—")}</td><td>${escapeHtml(o.workType||"—")}</td><td>${o.elements}</td><td class="money">${money(o.finalPrice)}</td></tr>`).join(""):`<tr><td class="empty" colspan="5">Nu există lucrări pentru filtrele selectate.</td></tr>`}</tbody><tfoot><tr><td colspan="4">${total===null?"TOTAL INCOMPLET — PREȚURI NECONFIGURATE":"TOTAL"}</td><td class="money">${money(total)}</td></tr></tfoot></table></div></body></html>`);
   reportWindow.document.close();
   reportWindow.focus();
   setTimeout(()=>reportWindow.print(),350);
@@ -2342,8 +2365,8 @@ function reportFilterSummary(filters){
   return parts;
 }
 
-function openPdfReport({title,rows,filters=[],totals=[],columns=null,orientation="portrait"}){
-  const reportWindow=window.open("","_blank","width=1100,height=800");
+function openPdfReport({title,rows,filters=[],totals=[],columns=null,orientation="portrait",reportWindow:existingWindow=null}){
+  const reportWindow=existingWindow||window.open("","_blank","width=1100,height=800");
   if(!reportWindow){
     alert("The PDF report window was blocked by the browser. Please allow pop-ups for this site.");
     return;
@@ -2563,8 +2586,8 @@ function renderPartners(){
   updateOldToggle();
 
   const rows=filterByReportControls(visible,partnerReportFilters);
-  const partnersForFilter=[...new Set(visible.map(o=>o.partner).filter(Boolean))];
-  const workTypesForFilter=[...new Set(visible.map(o=>o.workType).filter(Boolean))];
+  const partnersForFilter=dashboardFacet("partners",[...new Set(visible.map(o=>o.partner).filter(Boolean))]);
+  const workTypesForFilter=dashboardFacet("work_types",[...new Set(visible.map(o=>o.workType).filter(Boolean))]);
 
   const filterBar=`<div class="report-filter-panel">
     <div class="report-filter-head">
@@ -2716,8 +2739,8 @@ function renderPatients(){
     {key:"status",label:"Status",type:"text"}
   ];
   rows=sortedByColumns(rows,patientCols,patientSort);
-  const partners=[...new Set(visible.map(o=>o.partner).filter(Boolean))];
-  const workTypesForFilter=[...new Set(visible.map(o=>o.workType).filter(Boolean))];
+  const partners=dashboardFacet("partners",[...new Set(visible.map(o=>o.partner).filter(Boolean))]);
+  const workTypesForFilter=dashboardFacet("work_types",[...new Set(visible.map(o=>o.workType).filter(Boolean))]);
 
   const filterBar=`<div class="report-filter-panel">
     <div class="report-filter-head">
@@ -3888,8 +3911,8 @@ function renderTechnicians(){
     {technician:Boolean(selectedTech)}
   );
 
-  const partnerOptions=[...new Set(visible.map(o=>o.partner).filter(Boolean))];
-  const workTypeOptions=[...new Set(visible.map(o=>o.workType).filter(Boolean))];
+  const partnerOptions=dashboardFacet("partners",[...new Set(visible.map(o=>o.partner).filter(Boolean))]);
+  const workTypeOptions=dashboardFacet("work_types",[...new Set(visible.map(o=>o.workType).filter(Boolean))]);
   const technicianOptions=isTechnician()
     ? [auth?.user?.Technician_Name].filter(Boolean)
     : technicians;
@@ -6685,15 +6708,10 @@ window.addEventListener("resize",()=>{
   applyDesktopPanelState();
   render();
 });
-loadOlderBtn?.addEventListener("click",async()=>{
-  includeOlderOrders=!includeOlderOrders;
-  try{
-    await loadAll(true);
-  }catch(err){
-    includeOlderOrders=!includeOlderOrders;
-    updateDatasetScope();
-    alert(err.message);
-  }
+loadOlderBtn?.addEventListener("click",()=>{
+  const scope=dashboardViews.has(currentView)?currentView:"workorders";
+  viewDateRanges[scope]={...DashboardData.defaultRange(),dashboardInitialized:true};
+  render();
 });
 
 toggleOldBtn?.addEventListener("click",()=>{
@@ -7240,11 +7258,8 @@ loadAll=async function(show=true){
   try{
     const labId=await resolveLabOrganizationId();
 
-    const woPromise=sbRpc("get_my_work_orders_v188",{p_lab_organization_id:labId});
+    const woPromise=dashboardLoadPage(dashboardViews.has(currentView)?currentView:"workorders",labId);
     const refPromise=sbRpc("get_work_order_reference_data",{p_lab_organization_id:labId});
-    const salaryPromise=isTechnician()
-      ? sbRpc("get_my_salary",{p_lab_organization_id:labId})
-      : Promise.resolve([]);
     const costsPromise=isManagement()
       ? supabaseClient
           .from("lab_technician_costs")
@@ -7261,11 +7276,11 @@ loadAll=async function(show=true){
       : Promise.resolve({data:[],error:null});
     const legacyAdminPromise=loadLegacyAdminUsersSafe();
 
-    const [woRows,ref,salaryData,costRes,adminPriceRes,adminTypeRes,legacyAdmin]=await Promise.all([
-      woPromise,refPromise,salaryPromise,costsPromise,adminPricesPromise,adminTypesPromise,legacyAdminPromise
+    const [woRows,ref,costRes,adminPriceRes,adminTypeRes,legacyAdmin]=await Promise.all([
+      woPromise,refPromise,costsPromise,adminPricesPromise,adminTypesPromise,legacyAdminPromise
     ]);
 
-    if(!requestContextValid(epoch,userId))return;
+    if(!requestContextValid(epoch,userId)||!woRows)return;
     if(costRes.error)throw new Error(costRes.error.message);
     if(adminPriceRes.error)throw new Error(adminPriceRes.error.message);
     if(adminTypeRes.error)throw new Error(adminTypeRes.error.message);
@@ -7299,44 +7314,7 @@ loadAll=async function(show=true){
     stageStatuses=["Not Started","Started","Finished"];
     paidStatuses=["Paid","Not Paid"];
 
-    technicianSalaryRows=Array.isArray(salaryData)?salaryData.map(row=>({
-      workOrderId:num(row.work_order_id),
-      stageKey:String(row.stage_key||""),
-      stageLabel:String(row.stage_label||row.stage_key||""),
-      stageStatus:String(row.stage_status||"Not Started"),
-      paymentStatus:String(row.payment_status||"Not Paid"),
-      unitCost:num(row.unit_cost),
-      amount:nullableMoney(row.amount)
-    })):[];
-
-    const salaryByOrder=new Map();
-    technicianSalaryRows.forEach(row=>{
-      if(!salaryByOrder.has(row.workOrderId))salaryByOrder.set(row.workOrderId,[]);
-      salaryByOrder.get(row.workOrderId).push(row);
-    });
-
-    const mappedAll=(Array.isArray(woRows)?woRows:[]).map(mapSupabaseOrder).map(order=>{
-      const salaryStages=salaryByOrder.get(order.id)||[];
-      if(isTechnician()){
-        order.salaryStages=salaryStages;
-        order.ownCost=salaryStages.some(stage=>stage.amount===null)
-          ? null
-          : salaryStages.reduce((sum,stage)=>sum+stage.amount,0);
-        order.myStages=(order.myStages||[]).map(stage=>{
-          const salary=salaryStages.find(row=>costStageKey(row.stageKey)===costStageKey(stage.stage));
-          return salary?{...stage,cost:salary.amount,paid:salary.paymentStatus}:stage;
-        });
-      }
-      return order;
-    });
-    orders=applyDefaultOrderWindow(mappedAll);
-    workOrderScope={
-      include_older:includeOlderOrders,
-      days:45,
-      returned:orders.length,
-      total:mappedAll.length,
-      cutoff_date:cutoffDate45()
-    };
+    // dashboardLoadPage already mapped the bounded rows, salaries and complete totals.
     updateDatasetScope();
 
     if(isAdmin()){
@@ -9807,8 +9785,8 @@ renderPatients=function(){
   updateOldToggle();
 
   let rows=filterByReportControls(visible,patientReportFilters);
-  const partners=[...new Set(visible.map(o=>o.partner).filter(Boolean))];
-  const types=[...new Set(visible.map(o=>o.workType).filter(Boolean))];
+  const partners=dashboardFacet("partners",[...new Set(visible.map(o=>o.partner).filter(Boolean))]);
+  const types=dashboardFacet("work_types",[...new Set(visible.map(o=>o.workType).filter(Boolean))]);
   const filterBar=`<div class="report-filter-panel">
     <div class="report-filter-head"><div><strong>Filtre pacienți</strong><span>${rows.length} lucrări</span></div></div>
     <div class="report-filter-grid">
@@ -10049,8 +10027,10 @@ renderCalendar=function(){
 };
 
 
+initializeDashboardPagination();
+
 setInterval(()=>{
-  if(auth)loadAll(false).catch(()=>{});
+  if(auth&&!dashboardState.pendingKey&&!dashboardState.exporting)loadAll(false).catch(()=>{});
 },AUTO_REFRESH_MS);
 
 if(window.location.protocol==="file:"){

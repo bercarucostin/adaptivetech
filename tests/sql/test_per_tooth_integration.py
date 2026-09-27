@@ -50,7 +50,9 @@ class IntegrationRegressions(unittest.TestCase):
         start = app.index('function mapSupabaseOrder(')
         mapper = app[start:start + 18000]
         self.assertIn('nullableMoney(r.cost_model)', mapper)
-        self.assertIn('nullableMoney(row.amount)', mapper)
+        # Salary mapping moved into the bounded dashboard reader; behavior is
+        # exercised by dashboard-ui.test.js (unknown salary remains null).
+        self.assertIn('nullableMoney(stage.amount)', read('website/app/dashboard-ui.js'))
         self.assertIn('Cost neconfigurat', app)
 
     def test_management_create_is_one_transactional_rpc(self):

@@ -21,8 +21,10 @@
         <h2>Autentificare</h2>
         <label>Nickname sau email<input type="text" id="identifier" name="username" autocomplete="username" required /></label>
         <label>Parolă<input type="password" id="password" name="password" autocomplete="current-password" required /></label>
+        <div id="signInCaptcha"></div>
+        <p id="signInSecurity" role="status" aria-live="polite"></p>
         <p class="error" id="signInError" hidden></p>
-        <button type="submit" id="signInButton">Intră</button>
+        <button type="submit" id="signInButton" disabled>Intră</button>
       </form>
     </section>
 
@@ -71,6 +73,7 @@
   <script src="../supabase-config.js"></script>
   <script src="price-list.js"></script>
   <script src="document.js"></script>
+  <script src="../login-security.js"></script>
   <script src="editor.js"></script>
 </body>
 
