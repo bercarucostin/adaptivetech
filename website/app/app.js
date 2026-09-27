@@ -447,6 +447,9 @@ function updateDatasetScope(){
   loadOlderBtn.textContent="Ultimele 90 zile";
   loadOlderBtn.title="Resetează recepția la ultimele 90 de zile și elimină filtrul de livrare";
   loadOlderBtn.classList.remove("active-toggle");
+  const showDatasetScope=["partners","technicians"].includes(currentView);
+  datasetScope.classList.toggle("hidden",!showDatasetScope);
+  if(!showDatasetScope){datasetScope.textContent="";return;}
   datasetScope.textContent=`${Number(workOrderScope?.returned||0)} lucrări pe pagină · ${Number(workOrderScope?.total||0)} în intervalul filtrat`;
 }
 
@@ -1195,7 +1198,7 @@ function updateTopActionsForView(){
   const usesOrders=["workorders","production","partners","patients","technicians"].includes(currentView);
   loadOlderBtn?.classList.toggle("hidden",!usesOrders);
   toggleOldBtn?.classList.toggle("hidden",!usesOrders);
-  datasetScope?.classList.toggle("hidden",!usesOrders);
+  datasetScope?.classList.toggle("hidden",!["partners","technicians"].includes(currentView));
 }
 
 function render(){
