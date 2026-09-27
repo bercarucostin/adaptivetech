@@ -293,6 +293,26 @@ test('the extraction prompt transcribes screenshots and forbids guessing', async
   assert.ok(prompt.includes('\n\n5. FIDELITATE'), 'rule 5 still follows rule 4');
 });
 
+test('the extraction prompt writes key sequences out and keeps table wording to the table', async () => {
+  const code = byName('Prepare Gemini Request').parameters.jsCode;
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  const out = await new AsyncFunction('$input', '$', code).call(
+    { helpers: { getBinaryDataBuffer: async () => Buffer.from('%PDF') } },
+    { all: () => [{ json: { id: 'f1', name: 'Doc' }, binary: { data: { mimeType: 'application/pdf', fileName: 'Doc.pdf' } } }] },
+    () => ({ item: { json: {} } }));
+  const prompt = out[0].json.requestBody.systemInstruction.parts[0].text;
+  // Key-sequence images were left as empty "[Imagine secvență taste]" in the
+  // Partner 200 and Touch Evo user manuals.
+  assert.ok(prompt.includes('„[Taste: 7, PLU, 1, 0, TOTAL]”'));
+  assert.ok(prompt.includes('NU lăsa niciodată un marcaj de imagine gol'));
+  // The old "Eroarea [cod]" example made Gemini label VAT rates and protocol
+  // commands as errors.
+  assert.ok(!prompt.includes('Eroarea [cod]'), 'the error-flavoured table example is gone');
+  assert.ok(prompt.includes('folosind denumirile coloanelor din tabel'));
+  assert.ok(prompt.includes('NU adăuga cuvinte care nu apar în tabel'));
+  assert.ok(prompt.includes('\n\n4. IMAGINI ȘI CAPTURI DE ECRAN:'), 'rule 4 still follows rule 3');
+});
+
 test('Format Gemini Result accepts short screenshot-heavy documents but still catches truncated long ones', () => {
   const code = byName('Format Gemini Result').parameters.jsCode;
   const run = (inTok, outTok) => new Function('$input', '$', code)(

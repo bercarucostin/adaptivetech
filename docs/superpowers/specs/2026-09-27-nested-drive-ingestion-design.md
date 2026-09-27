@@ -149,6 +149,13 @@ The manifest recordset gains `folder text, folder_path text`.
   selected options, field values, error messages, COM ports) at the step where they appear, as
   `[Imagine: …]`, to transcribe only what is clearly readable, and never to guess. Hardware
   diagrams keep the two-sentence description; decorative images are still ignored.
+  After the second live run, rule 4 also requires key-sequence images to be written as
+  `[Taste: 7, PLU, 1, 0, TOTAL]` and forbids empty markers: the Partner 200 and Touch Evo user
+  manuals had come back with bare `[Imagine secvență taste]` placeholders.
+- **Tables (after the second live run):** rule 3's example `"Eroarea [cod]: [descriere]"` made
+  Gemini label non-error tables as errors ("Eroarea A = 19 %" for VAT rates, "Eroarea Discount
+  are valoarea Hex 0x44" for protocol commands). Rule 3 now builds each sentence from the
+  table's own column names (example: `Cota A: 19%`) and forbids words the table does not contain.
 - **Length check (added after the first live run):** `Format Gemini Result`'s "output under 10%
   of input" truncation check applies only above 5,000 input tokens (about 16+ pages). Gemini
   counts ~258 input tokens per PDF page whatever it holds, plus ~700 for the system prompt, so
@@ -167,6 +174,7 @@ The logic is pasted into the node verbatim and unit tested. Constants:
 | `OVERLAP_WORDS` | 75 | Words carried into the next chunk of the same section |
 | `WHOLE_DOC_WORDS` | 800 | Documents at or under this are one chunk |
 | `MIN_SECTION_WORDS` | 60 | Sections under this merge into their neighbour |
+| `MIN_TAIL_WORDS` | 40 | A section's last chunk with fewer new (non-overlap) words folds into the previous chunk |
 | `EMBED_BATCH_SIZE` | 100 | Unchanged |
 
 Per document:
@@ -183,6 +191,10 @@ Per document:
      words in total.
    - A single line longer than `WORD_LIMIT` is split into words, in windows of `WORD_LIMIT` that
      advance by `WORD_LIMIT - OVERLAP_WORDS`.
+   - If a section's last chunk would carry fewer than `MIN_TAIL_WORDS` new words (the rest being
+     the overlap), those new lines are appended to the previous chunk instead, which may then
+     exceed `WORD_LIMIT` by up to `MIN_TAIL_WORDS`. The second live run had several such tails
+     that were near-duplicates of the chunk before them.
    - Line breaks survive. A numbered procedure stays one step per line and is no longer flattened
      into a single line.
 5. **Label the chunk:**

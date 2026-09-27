@@ -93,6 +93,26 @@ test('a repeated section is stored once', () => {
   assert.deepStrictEqual(chunks.map((c) => c.section_heading), ['Dup', 'Alt']);
 });
 
+test('a tail chunk with little new text is folded into the previous chunk', () => {
+  // 18 lines of 20 words = 360 words. The first chunk takes 17 lines (340);
+  // a separate tail would be 3 carried lines + 1 new line: 60 of its 80 words
+  // repeat the previous chunk. Fold the 1 new line in instead.
+  const lines = Array.from({ length: 18 }, (_, i) => words(20, 't' + i + '_'));
+  const text = ['## Pasi', ...lines, '## Alt', words(500, 'z')].join('\n');
+  const chunks = chunkDocument(text, 'Doc', 'X').filter((c) => c.section_heading === 'Pasi');
+  assert.strictEqual(chunks.length, 1);
+  assert.strictEqual(body(chunks[0]), lines.join('\n'));
+});
+
+test('a tail with enough new text stays its own chunk', () => {
+  // 20 lines: the tail has 3 new lines (60 words), at or above the threshold.
+  const lines = Array.from({ length: 20 }, (_, i) => words(20, 'u' + i + '_'));
+  const text = ['## Pasi', ...lines, '## Alt', words(500, 'z')].join('\n');
+  const chunks = chunkDocument(text, 'Doc', 'X').filter((c) => c.section_heading === 'Pasi');
+  assert.strictEqual(chunks.length, 2);
+  assert.deepStrictEqual(body(chunks[1]).split('\n'), lines.slice(14));
+});
+
 test('blank text yields no chunks', () => {
   assert.deepStrictEqual(chunkDocument('   \n ', 'Doc', 'X'), []);
   assert.deepStrictEqual(chunkDocument('', 'Doc', 'X'), []);
