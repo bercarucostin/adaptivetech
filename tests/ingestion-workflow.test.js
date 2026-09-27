@@ -115,3 +115,47 @@ test('Build Sync Batch reads sheet rows from Get Technicians Sheet, not its dire
   assert.ok(!/const rows = \$input\.all\(\)/.test(glue),
     'reading rows from $input would read the mirror count instead, once Count Mirror is upstream');
 });
+
+test('the knowledge base listing walks the folder tree in order', () => {
+  assert.deepStrictEqual(targets('Sync Trigger'), [['Drive: All Folders']]);
+  assert.deepStrictEqual(targets('Drive: All Folders'), [['Build Folder Tree']]);
+  assert.deepStrictEqual(targets('Build Folder Tree'), [['Drive: Knowledge Base']]);
+  assert.deepStrictEqual(targets('Drive: Knowledge Base'), [['Build Drive Manifest']]);
+  assert.deepStrictEqual(targets('Build Drive Manifest'), [['Sync Check']]);
+});
+
+test('Drive: All Folders lists every folder and always reaches Build Folder Tree', () => {
+  const node = byName('Drive: All Folders');
+  assert.strictEqual(node.type, 'n8n-nodes-base.googleDrive');
+  assert.strictEqual(node.parameters.searchMethod, 'query');
+  assert.strictEqual(node.parameters.queryString,
+    "mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+  assert.strictEqual(node.parameters.returnAll, true);
+  assert.deepStrictEqual(node.parameters.filter, {}, 'a filter makes the node append its own clauses');
+  assert.deepStrictEqual(node.parameters.options.fields, ['*'], 'parents is only returned with *');
+  assert.strictEqual(node.alwaysOutputData, true);
+  assert.deepStrictEqual(node.credentials, byName('Download Knowledge Base File').credentials);
+});
+
+test('Build Folder Tree embeds lib/drive-tree.js and roots at the new folder', () => {
+  const code = byName('Build Folder Tree').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/drive-tree.js')), 'Code node has drifted from lib/drive-tree.js');
+  assert.ok(code.includes("const KB_ROOT_ID = '1g7SDhQdmKB-MVs5R21gZypwpKLPzee0q';"));
+});
+
+test('Drive: Knowledge Base lists files with the query Build Folder Tree built', () => {
+  const p = byName('Drive: Knowledge Base').parameters;
+  assert.strictEqual(p.searchMethod, 'query');
+  assert.strictEqual(p.queryString, '={{ $json.query }}');
+  assert.strictEqual(p.returnAll, true);
+  assert.deepStrictEqual(p.filter, {});
+  assert.deepStrictEqual(p.options.fields, ['*'], 'timestamps and parents need *');
+  assert.ok(!JSON.stringify(p).includes('1-y3bvqtTXEj2Vyl-lC5Em6aISbtqCcbm'), 'old flat folder is gone');
+});
+
+test('Build Drive Manifest embeds lib/drive-manifest.js and reads folders from Build Folder Tree', () => {
+  const code = byName('Build Drive Manifest').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/drive-manifest.js')), 'Code node has drifted from lib/drive-manifest.js');
+  assert.ok(code.includes("$('Build Folder Tree').first().json.folders"));
+  assert.ok(code.includes('buildSyncQuery(manifest)'));
+});
