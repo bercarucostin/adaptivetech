@@ -211,4 +211,7 @@ set local check_function_bodies = off;
 \echo == 60 per-tooth work order cutover ==
 \i db/schema/60_per_tooth_work_order_cutover.sql
 
+\echo == 70 email notifications ==
+\i db/schema/70_email_notifications.sql
+
 commit;

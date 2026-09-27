@@ -4695,6 +4695,12 @@ function renderAdminConfig(){
         <label class="admin-checkbox-label admin-user-active">
           <input id="editUserActive" type="checkbox" ${active(selected.Active)?"checked":""}> Activ
         </label>
+        <fieldset class="email-notification-options">
+          <legend>Notificări pe email</legend>
+          <label><input id="editUserNotifyNew" type="checkbox" ${selected.Notify_New_Work_Order?"checked":""}><span>Lucrare nouă sau asignată</span></label>
+          <label><input id="editUserNotifyStage" type="checkbox" ${selected.Notify_Stage_Status?"checked":""}><span>Status de etapă modificat</span></label>
+          <small>Se trimit la adresa contului, numai pentru lucrările și etapele permise rolului.</small>
+        </fieldset>
       </div>
 
       <div class="admin-user-editor-actions">
@@ -4735,6 +4741,11 @@ function renderAdminConfig(){
             <label>Partner Name<input id="newUserPartner" placeholder="opțional / clinică Doctor"></label>
             <label>Parolă<input id="newUserPassword" type="password" autocomplete="new-password" placeholder="Parolă inițială"></label>
             <label class="admin-checkbox-label"><input id="newUserActive" type="checkbox" checked> Activ</label>
+            <fieldset class="email-notification-options">
+              <legend>Notificări pe email</legend>
+              <label><input id="newUserNotifyNew" type="checkbox"><span>Lucrare nouă sau asignată</span></label>
+              <label><input id="newUserNotifyStage" type="checkbox"><span>Status de etapă modificat</span></label>
+            </fieldset>
             <button class="primary-btn" type="button" onclick="adminCreateUser()">+ Adaugă</button>
           </div>
         </div>
@@ -4993,7 +5004,9 @@ async function adminCreateUser(){
     Technician_Name:String($("newUserTechnician")?.value||"").trim(),
     Partner_Name:String($("newUserPartner")?.value||"").trim(),
     Password:String($("newUserPassword")?.value||""),
-    Active:Boolean($("newUserActive")?.checked)
+    Active:Boolean($("newUserActive")?.checked),
+    Notify_New_Work_Order:Boolean($("newUserNotifyNew")?.checked),
+    Notify_Stage_Status:Boolean($("newUserNotifyStage")?.checked)
   };
 
   if(!data.User_ID||!data.Username||!data.Name||!data.Role||!data.Password){
@@ -5027,7 +5040,9 @@ async function adminSaveUser(userId){
     Technician_Name:String($("editUserTechnician")?.value||"").trim(),
     Partner_Name:String($("editUserPartner")?.value||"").trim(),
     Password:String($("editUserPassword")?.value||""),
-    Active:Boolean($("editUserActive")?.checked)
+    Active:Boolean($("editUserActive")?.checked),
+    Notify_New_Work_Order:Boolean($("editUserNotifyNew")?.checked),
+    Notify_Stage_Status:Boolean($("editUserNotifyStage")?.checked)
   };
 
   if(!data.User_ID||!data.Username||!data.Name||!data.Role){

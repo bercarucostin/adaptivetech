@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flowrise Dental Studio</title>
-  <link rel="stylesheet" href="styles.css?v=18.43" />
+  <link rel="stylesheet" href="styles.css?v=18.46" />
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -43,6 +43,7 @@
         <div class="user-card-main">
           <div id="userName" class="user-name"></div>
           <div id="userRole" class="user-role"></div>
+          <button id="emailPreferencesBtn" class="logout-btn" type="button">Notificări email</button>
           <button id="logoutBtn" class="logout-btn user-logout-btn" type="button">Deconectare</button>
         </div>
       </div>
@@ -496,11 +497,25 @@
     </div>
   </div>
 
+  <dialog id="emailPreferencesDialog" class="email-preferences-dialog" aria-labelledby="emailPreferencesTitle">
+    <form id="emailPreferencesForm">
+      <h2 id="emailPreferencesTitle">Notificări pe email</h2>
+      <p>Primești notificări la adresa contului, în funcție de rolul și asignările tale.</p>
+      <fieldset id="emailPreferencesFields" class="email-notification-options" disabled>
+        <legend class="sr-only">Tipuri de notificări</legend>
+        <label><input id="myNotifyNew" type="checkbox"><span>Lucrare nouă sau asignată</span></label>
+        <label><input id="myNotifyStage" type="checkbox"><span>Status de etapă modificat<small>Model, Modelare și Ceramică / Finisare.</small></span></label>
+      </fieldset>
+      <p id="emailPreferencesStatus" role="status" aria-live="polite"></p>
+      <div class="email-preferences-actions"><button id="emailPreferencesClose" class="secondary-btn" type="button">Închide</button><button id="emailPreferencesSave" class="primary-btn" type="submit" disabled>Salvează</button></div>
+    </form>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=18.43"></script>
   <script src="login-security.js?v=18.43"></script>
   <script src="dashboard-data.js?v=18.43"></script>
   <script src="dashboard-ui.js?v=18.45"></script>
-  <script src="app.js?v=18.44"></script>
+  <script src="app.js?v=18.46"></script>
+  <script src="email-notifications.js?v=18.46"></script>
 </body>
 </html>

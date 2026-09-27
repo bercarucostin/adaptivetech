@@ -9320,3 +9320,15 @@ body.dashboard-production-maximized .kanban-col{
   .range-date-input{min-width:0;grid-template-columns:minmax(0,1fr) 30px}
   .dashboard-server-summary .kpi-value{overflow-wrap:anywhere}
 }
+
+/* Email preferences: compact, accessible green checkboxes. */
+.email-preferences-dialog{width:min(480px,calc(100vw - 32px));box-sizing:border-box;border:1px solid #ded8cc;border-radius:18px;padding:24px;background:#fff;color:#3c3326;box-shadow:0 20px 70px #0003}
+.email-preferences-dialog::backdrop{background:#0006}
+.email-preferences-dialog h2{margin:0 0 12px;font-size:22px}
+.email-preferences-dialog p{font-size:14px;line-height:1.5;color:#756a5b}
+.email-notification-options{grid-column:1/-1;border:1px solid #ded8cc;border-radius:12px;padding:14px;margin:12px 0;min-width:0}
+.email-notification-options legend{font-size:14px;font-weight:600;padding:0 6px}
+.email-notification-options label{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px;margin:10px 0;font-size:14px!important;cursor:pointer}
+.email-notification-options input[type=checkbox]{appearance:auto!important;width:17px!important;height:17px!important;min-width:17px!important;min-height:17px!important;margin:2px 0!important;padding:0!important;accent-color:#26845b;flex:0 0 17px}
+.email-notification-options small{display:block;font-size:12px;line-height:1.5;color:#756a5b}
+.email-preferences-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}

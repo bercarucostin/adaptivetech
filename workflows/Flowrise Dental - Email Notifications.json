@@ -1,0 +1,228 @@
+{
+  "name": "Flowrise Dental - Email Notifications",
+  "nodes": [
+    {
+      "id": "every-minute",
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-test",
+      "name": "Manual test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "claim-notifications",
+      "name": "Claim notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.claim_email_notifications(10);",
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-email",
+      "name": "Prepare email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node, Run Once for Each Item. Only vetted queue fields enter the email.\nconst row=$json;\nif(!/^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(row.recipient_email||''))throw new Error('Invalid recipient address');\nif(!/^[a-f0-9-]{36}$/.test(row.id||'')||!/^\\d+$/.test(String(row.work_order_id)))throw new Error('Invalid notification identifiers');\nconst stages={model:'Model',modelare:'Modelare',cer_fin:'Ceramică / Finisare'};\nconst statuses={'Not Started':'Neînceput','Started':'În lucru','Finished':'Finalizat'};\nconst escape=value=>String(value??'—').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nlet title,detail;\nif(row.event_kind==='new_work_order'){\n title=`Lucrare nouă #${row.work_order_id}`;detail='O lucrare nouă este disponibilă în aplicație.';\n}else if(row.event_kind==='assignment'&&stages[row.stage_key]){\n title=`Lucrare asignată #${row.work_order_id}`;detail=`Ți-a fost asignată etapa <strong>${stages[row.stage_key]}</strong>.`;\n}else if(row.event_kind==='stage_status'&&stages[row.stage_key]){\n title=`Lucrare #${row.work_order_id} — ${stages[row.stage_key]}`;\n detail=`Statusul etapei <strong>${stages[row.stage_key]}</strong> s-a modificat: <strong>${escape(statuses[row.old_status]||row.old_status)}</strong> → <strong>${escape(statuses[row.new_status]||row.new_status)}</strong>.`;\n}else throw new Error('Unsupported notification event');\nconst html=`<!doctype html><html lang=\"ro\"><body style=\"font-family:Arial,sans-serif;background:#faf8f4;padding:24px;color:#3c3326\"><div style=\"max-width:560px;margin:auto;background:white;border:1px solid #e3dccf;border-radius:16px;padding:28px\"><p style=\"color:#927027;font-size:13px;letter-spacing:2px\">FLOWRISE DENTAL</p><h2>${escape(title)}</h2><p style=\"line-height:1.7\">${detail}</p><p style=\"margin:28px 0\"><a href=\"https://app.flowrisedental.ro/\" style=\"background:#a57212;color:white;text-decoration:none;padding:12px 18px;border-radius:8px\">Deschide aplicația</a></p><p style=\"font-size:12px;color:#786e60\">Poți modifica aceste notificări din contul tău, la „Notificări email”. Acesta este un mesaj automat.</p></div></body></html>`;\nconst encoded=Buffer.from(html,'utf8').toString('base64').match(/.{1,76}/g).join('\\r\\n');\nconst mime=[\n 'From: Flowrise Dental <app@flowrisedental.ro>',\n `To: ${row.recipient_email}`,\n `Subject: =?UTF-8?B?${Buffer.from(title,'utf8').toString('base64')}?=`,\n `Message-ID: <${row.id}@flowrisedental.ro>`,\n 'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',encoded\n].join('\\r\\n');\nreturn {json:{id:row.id,lease_token:row.lease_token,raw:Buffer.from(mime,'utf8').toString('base64url')}};\n"
+      }
+    },
+    {
+      "id": "send-with-gmail",
+      "name": "Send with Gmail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { raw: $json.raw } }}",
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "classify-delivery",
+      "name": "Classify delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node, Run Once for Each Item; linked item survives HTTP response replacement.\nconst source=$('Prepare email').item.json;\nconst response=$json;\nconst status=Number(response.statusCode||0);\nlet outcome='uncertain',messageId=null;\nif(status>=200&&status<300&&typeof response.body?.id==='string'&&response.body.id){\n outcome='sent';messageId=response.body.id;\n}else if(status===429){\n // Google explicitly rejected the request; retry later, bounded by SQL attempt count.\n outcome='retry';\n}else if(status>=400&&status<500){\n outcome='failed';\n}\n// Network failures and 5xx can occur after acceptance. Keep for manual reconciliation.\nreturn {json:{id:source.id,lease_token:source.lease_token,outcome,message_id:messageId}};\n"
+      }
+    },
+    {
+      "id": "record-delivery",
+      "name": "Record delivery",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT public.finish_email_notification($1::uuid,$2::uuid,$3::text,$4::text);",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [$json.id, $json.lease_token, $json.outcome, $json.message_id] }}"
+        }
+      }
+    },
+    {
+      "id": "setup",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        250
+      ],
+      "parameters": {
+        "content": "## Before activation\n1. Apply 20260927_email_notifications.sql.\n2. Select the Supabase Postgres credential in both SQL nodes.\n3. Enable Gmail API and create Gmail OAuth2 credential for contact@flowrisedental.ro. Select it in Send with Gmail.\n4. Configure app@flowrisedental.ro in Gmail Send mail as.\n5. Enable preferences for a test user; create a test order and run manually.\n6. Verify queue states and Gmail delivery, then activate.\n\nTen notifications per minute. Only HTTP 429 is retried (max 5 attempts). 5xx/timeouts become uncertain; check Sent mail before replay. Inspect failed/uncertain states in Supabase. Never retry a whole send execution blindly. No patient data in email.",
+        "height": 410,
+        "width": 510
+      }
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Claim notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test": {
+      "main": [
+        [
+          {
+            "node": "Claim notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim notifications": {
+      "main": [
+        [
+          {
+            "node": "Prepare email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare email": {
+      "main": [
+        [
+          {
+            "node": "Send with Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send with Gmail": {
+      "main": [
+        [
+          {
+            "node": "Classify delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify delivery": {
+      "main": [
+        [
+          {
+            "node": "Record delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Bucharest",
+    "executionTimeout": 600,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "pinData": {}
+}

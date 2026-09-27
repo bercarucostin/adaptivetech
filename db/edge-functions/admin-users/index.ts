@@ -90,11 +90,18 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const action = clean(body?.action).toLowerCase();
     const data = body?.data || {};
+    for (const key of ["Notify_New_Work_Order", "Notify_Stage_Status"]) {
+      if (key in data && typeof data[key] !== "boolean") return json({ message: "Notification preferences must be boolean." }, 400);
+    }
+    const notificationPatch = {
+      ...("Notify_New_Work_Order" in data ? { notify_new_work_order: data.Notify_New_Work_Order } : {}),
+      ...("Notify_Stage_Status" in data ? { notify_stage_status: data.Notify_Stage_Status } : {}),
+    };
 
     if (action === "list") {
       const { data: profiles, error: profilesError } = await admin
         .from("profiles")
-        .select("id,username,display_name,legacy_user_id,technician_name,legacy_partner_name,active")
+        .select("id,username,display_name,legacy_user_id,technician_name,legacy_partner_name,active,notify_new_work_order,notify_stage_status")
         .order("display_name");
 
       if (profilesError) throw profilesError;
@@ -141,6 +148,8 @@ Deno.serve(async (req) => {
           Partner_Name: p.legacy_partner_name || "",
           Active: Boolean(p.active) && String(selected?.status || "") === "active",
           Supabase_User_ID: p.id,
+          Notify_New_Work_Order: Boolean(p.notify_new_work_order),
+          Notify_Stage_Status: Boolean(p.notify_stage_status),
         };
       });
 
@@ -236,6 +245,7 @@ Deno.serve(async (req) => {
         display_name: name,
         legacy_user_id: legacyUserId,
         active,
+        ...notificationPatch,
         technician_name: clean(data.Technician_Name) || null,
         legacy_partner_name: clean(data.Partner_Name) || null,
         updated_at: new Date().toISOString(),
@@ -316,6 +326,7 @@ Deno.serve(async (req) => {
           username,
           display_name: name,
           active,
+          ...notificationPatch,
           technician_name: clean(data.Technician_Name) || null,
           legacy_partner_name: clean(data.Partner_Name) || null,
           updated_at: new Date().toISOString(),
