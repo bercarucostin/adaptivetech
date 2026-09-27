@@ -1,0 +1,3 @@
+# Local agent scratch: git worktrees and plan-execution ledgers
+.claude/worktrees/
+.superpowers/
