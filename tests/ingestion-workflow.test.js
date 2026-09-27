@@ -159,3 +159,38 @@ test('Build Drive Manifest embeds lib/drive-manifest.js and reads folders from B
   assert.ok(code.includes("$('Build Folder Tree').first().json.folders"));
   assert.ok(code.includes('buildSyncQuery(manifest)'));
 });
+
+test('Download Knowledge Base File exports Docs, Slides and Sheets as PDF', () => {
+  const conv = byName('Download Knowledge Base File').parameters.options.googleFileConversion.conversion;
+  assert.deepStrictEqual(conv, {
+    docsToFormat: 'application/pdf',
+    slidesToFormat: 'application/pdf',
+    sheetsToFormat: 'application/pdf',
+  });
+});
+
+test('the folder travels from Sync Check to the chunker', () => {
+  const prep = byName('Prepare Gemini Request').parameters.jsCode;
+  assert.ok(prep.includes("const folder = syncRow.folder || '';"));
+  assert.ok(prep.includes("const folderPath = syncRow.folder_path || '';"));
+  assert.ok(/folder: folder,\s+folder_path: folderPath,/.test(prep));
+  const fmt = byName('Format Gemini Result').parameters.jsCode;
+  assert.ok(/folder: prep\.folder \|\| '',\s+folder_path: prep\.folder_path \|\| ''/.test(fmt));
+});
+
+test('Preparing Chunks embeds lib/chunking.js and never ends the loop silently', () => {
+  const code = byName('Preparing Chunks').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/chunking.js')), 'Code node has drifted from lib/chunking.js');
+  assert.ok(code.includes("chunkDocument(x.text || '', title, x.folder || '')"));
+  assert.ok(code.includes('titleFromFileName(originalFileName)'));
+  assert.ok(code.includes('title: c.embed_title'));
+  assert.ok(/if \(allChunks\.length === 0\) \{\s+throw new Error/.test(code));
+  assert.ok(!code.includes('TOKEN_LIMIT'), 'the old inline chunker is gone');
+});
+
+test('Format for Insert stores folder and folder_path in metadata', () => {
+  const code = byName('Format for Insert').parameters.jsCode;
+  assert.ok(/folder: chunk\.folder,\s+folder_path: chunk\.folder_path,/.test(code));
+  assert.ok(code.includes("source: 'knowledge_base'"));
+  assert.ok(code.includes("DELETE FROM documents WHERE metadata->>'file_id' = "));
+});
