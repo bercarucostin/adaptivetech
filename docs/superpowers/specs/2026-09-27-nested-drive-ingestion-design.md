@@ -118,8 +118,6 @@ The logic is pasted into the node verbatim and unit tested. Changes from today:
   `unsupported type <mime>: <path>/<name>`. An excluded file is not in the manifest, so any rows it
   had are removed by the orphan sweep.
 - **Zero-files guard:** unchanged. It now counts files after the allowlist is applied.
-- **Run failure list:** the list of failed files for this run is reset (see
-  [Per-file failures](#per-file-failures)).
 
 The manifest recordset gains `folder text, folder_path text`.
 
@@ -264,16 +262,16 @@ existing `errorWorkflow` (`error-handling-ingestion`), which already emails the 
     `embeddings`. `Format for Insert` already throws on that ("Embedding API error for batch i"),
     and its error output routes the file to `Note Failure` exactly once.
 - **`Note Failure` (new Code node, run once for all items):**
-  - appends `{ name, folder_path, error }` to `$getWorkflowStaticData('global').kbFailures`. The
-    file identity comes from `$('Process One File').first().json`, since the loop takes one file
-    per batch;
-  - then returns one item, and its output connects back to `Process One File`, so the loop moves
-    on.
-- **Reset:** `Build Drive Manifest` sets `kbFailures = []` at the start of each run, so failures
-  from earlier runs never carry over.
+  - returns one item, `{ kb_failure: { name, folder_path, error } }`. The file identity comes
+    from `$('Process One File').first().json`, since the loop takes one file per batch;
+  - its output connects back to `Process One File`, so the loop moves on.
+- **Collecting failures:** no state store is needed. `Process One File` (SplitInBatches v3) adds
+  every item fed back into it to `processedItems`, and its `done` output emits all of them. This
+  was verified in the n8n 2.28.3 source. So the `kb_failure` items arrive at `done` alongside
+  the Insert node's success items, and they exist only for the current execution.
 - **`Check Failures` (new Code node):** it is connected to the `done` output of `Process One File`.
-  - If `kbFailures` is empty, it returns a single item, `{ ok: true }`. It does not pass on the
-    items `done` collects from the loop. The run succeeds.
+  - It collects `kb_failure` from its input items.
+  - If there are none, it returns a single item, `{ ok: true }`, and the run succeeds.
   - Otherwise it throws one error listing every failed file (`<folder_path>/<name>: <error>`,
     one per line). The run ends failed after every good file has been ingested, `errorWorkflow`
     fires, and the team gets one email per run naming all the failures.
@@ -294,7 +292,7 @@ Two existing product-matching rules are extended with the same text. No new rule
 Text appended to each:
 
 > Each document begins with the folder it came from in square brackets, e.g. [PARTNER 200]. A
-> document from a machine's folder applies only to that machine — never apply it to another
+> document from a machine folder applies only to that machine — never apply it to another
 > machine. [DOCUMENTATIE COMUNA] applies to all machines.
 
 ## Verification
@@ -312,7 +310,6 @@ Text appended to each:
   - allowlisted types are kept, and a shortcut and a `.docx` are skipped;
   - the zero-files guard throws;
   - the SQL contains the `folder_path IS DISTINCT FROM` condition and the `ORDER BY`;
-  - `kbFailures` is reset.
 - **`tests/chunking.test.js`:**
   - a numbered procedure keeps its `\n`;
   - a 700-word document with three `##` sections is one chunk;
