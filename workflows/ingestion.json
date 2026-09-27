@@ -40,7 +40,8 @@
           "id": "Sn4u54Xr5kgDae8s",
           "name": "Gemini API Key Auth"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -53,7 +54,8 @@
         -1264
       ],
       "id": "0d31294b-65c8-453b-b4b0-d45da2f58ff0",
-      "name": "Format for Insert"
+      "name": "Format for Insert",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -66,7 +68,8 @@
         -1264
       ],
       "id": "a6a2f292-d347-46b9-a412-482ae0f2e6f0",
-      "name": "Preparing Chunks"
+      "name": "Preparing Chunks",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -92,7 +95,8 @@
         -1264
       ],
       "id": "1ae51335-fa01-4a12-ab5d-02fdb2bee8b5",
-      "name": "Prepare Gemini Request"
+      "name": "Prepare Gemini Request",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -134,7 +138,8 @@
           "id": "Sn4u54Xr5kgDae8s",
           "name": "Gemini API Key Auth"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -147,7 +152,8 @@
         -1264
       ],
       "id": "d872574e-51d5-400c-892d-9c25f6cf18b8",
-      "name": "Format Gemini Result"
+      "name": "Format Gemini Result",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -420,7 +426,8 @@
           "id": "WuE5ur27KVvphmjl",
           "name": "Google Drive account"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -441,7 +448,8 @@
           "id": "Rlo7S13CLihXk7eq",
           "name": "Postgres account"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -682,6 +690,32 @@
       ],
       "id": "b7d1e2f0-0002-4000-8000-00000000a002",
       "name": "Build Folder Tree"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Note Failure — one file failed somewhere in the per-file chain. Record why\n// and hand control back to Process One File so the rest of the batch runs.\n// Process One File's \"done\" output re-emits every item fed back into the loop,\n// so Check Failures finds these kb_failure items there.\nconst file = $('Process One File').first().json || {};\nconst err = $input.first().json || {};\nconst e = err.error;\nconst message = (typeof e === 'string' ? e : (e && (e.message || e.description))) ||\n  err.message || JSON.stringify(err).slice(0, 300);\nreturn [{\n  json: {\n    kb_failure: {\n      name: file.name || file.id || 'unknown',\n      folder_path: file.folder_path || '',\n      error: String(message).slice(0, 500),\n    },\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5840,
+        -976
+      ],
+      "id": "b7d1e2f0-0003-4000-8000-00000000a003",
+      "name": "Note Failure"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check Failures — runs once the loop is done. If any file failed this run,\n// fail the execution with one message naming them all: every good file is\n// already ingested, and the workflow's errorWorkflow emails the team.\nconst failures = $input.all().map((item) => item.json.kb_failure).filter(Boolean);\nif (failures.length) {\n  throw new Error(failures.length + ' knowledge base file(s) were not ingested and will be retried on the next run:\\n' +\n    failures.map((f) => (f.folder_path ? f.folder_path + '/' : '') + f.name + ': ' + f.error).join('\\n'));\n}\nreturn [{ json: { ok: true } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4944,
+        -1456
+      ],
+      "id": "b7d1e2f0-0004-4000-8000-00000000a004",
+      "name": "Check Failures"
     }
   ],
   "pinData": {},
@@ -705,6 +739,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Note Failure",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -716,12 +757,25 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Note Failure",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Process One File": {
       "main": [
-        [],
+        [
+          {
+            "node": "Check Failures",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Download Knowledge Base File",
@@ -739,6 +793,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Note Failure",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -750,6 +811,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Note Failure",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -758,6 +826,13 @@
         [
           {
             "node": "Preparing Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Note Failure",
             "type": "main",
             "index": 0
           }
@@ -883,6 +958,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Note Failure",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -891,6 +973,13 @@
         [
           {
             "node": "Process One File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Note Failure",
             "type": "main",
             "index": 0
           }
@@ -1001,6 +1090,17 @@
         [
           {
             "node": "Drive: Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Note Failure": {
+      "main": [
+        [
+          {
+            "node": "Process One File",
             "type": "main",
             "index": 0
           }

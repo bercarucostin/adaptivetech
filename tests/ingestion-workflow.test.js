@@ -194,3 +194,68 @@ test('Format for Insert stores folder and folder_path in metadata', () => {
   assert.ok(code.includes("source: 'knowledge_base'"));
   assert.ok(code.includes("DELETE FROM documents WHERE metadata->>'file_id' = "));
 });
+
+const PER_FILE = [
+  'Download Knowledge Base File',
+  'Prepare Gemini Request',
+  'Gemini Text Extraction',
+  'Format Gemini Result',
+  'Preparing Chunks',
+  'Format for Insert',
+  'Insert Into Postgres Knowledge Base',
+];
+
+test('every per-file node routes its errors to Note Failure', () => {
+  for (const name of PER_FILE) {
+    assert.strictEqual(byName(name).onError, 'continueErrorOutput', name);
+    const outs = targets(name);
+    assert.deepStrictEqual(outs[1], ['Note Failure'], name + ' error output');
+    assert.ok(outs[0].length > 0, name + ' success output must stay wired');
+  }
+});
+
+test('Generate Embeddings passes failed batches on instead of splitting the file', () => {
+  assert.strictEqual(byName('Generate Embeddings').onError, 'continueRegularOutput');
+  assert.deepStrictEqual(targets('Generate Embeddings'), [['Format for Insert']]);
+  assert.ok(byName('Format for Insert').parameters.jsCode.includes("throw new Error('Embedding API error for batch '"),
+    'Format for Insert must throw on a batch without embeddings');
+});
+
+test('Note Failure loops back and done goes to Check Failures', () => {
+  assert.deepStrictEqual(targets('Note Failure'), [['Process One File']]);
+  assert.deepStrictEqual(targets('Process One File'), [['Check Failures'], ['Download Knowledge Base File']]);
+  assert.deepStrictEqual(targets('Insert Into Postgres Knowledge Base')[0], ['Process One File']);
+});
+
+test('Note Failure names the file from the loop, for string and object error shapes', () => {
+  const code = byName('Note Failure').parameters.jsCode;
+  const run = (err) => new Function('$', '$input', code)(
+    () => ({ first: () => ({ json: { id: 'f1', name: 'Manual', folder_path: 'PARTNER 200' } }) }),
+    { first: () => ({ json: err }) })[0].json.kb_failure;
+  assert.deepStrictEqual(run({ error: 'Gemini API error' }),
+    { name: 'Manual', folder_path: 'PARTNER 200', error: 'Gemini API error' });
+  assert.strictEqual(run({ message: 'pg failed', error: { message: 'duplicate key' } }).error, 'duplicate key');
+  assert.ok(code.includes("$('Process One File').first().json"));
+});
+
+test('Check Failures passes a clean run and throws one message naming every failed file', () => {
+  const code = byName('Check Failures').parameters.jsCode;
+  const run = (items) => new Function('$input', code)({ all: () => items.map((json) => ({ json })) });
+  assert.deepStrictEqual(run([{ success: true }]), [{ json: { ok: true } }]);
+  assert.throws(() => run([
+    { success: true },
+    { kb_failure: { name: 'Manual', folder_path: 'PARTNER 600', error: 'boom' } },
+    { kb_failure: { name: 'Root doc', folder_path: '', error: 'bad pdf' } },
+  ]), (err) => err.message ===
+    '2 knowledge base file(s) were not ingested and will be retried on the next run:\n' +
+    'PARTNER 600/Manual: boom\nRoot doc: bad pdf');
+});
+
+test('the insert stays in single-query batching, which is atomic per file', () => {
+  // "single" concatenates the file's DELETE and INSERTs into one multi-statement
+  // query: PostgreSQL runs it as one implicit transaction, and on failure the
+  // node emits exactly one error item. "transaction" mode would emit success
+  // items for rolled-back statements plus an error item, firing both outputs.
+  const batching = byName('Insert Into Postgres Knowledge Base').parameters.options.queryBatching;
+  assert.ok(batching === undefined || batching === 'single', 'queryBatching must stay single, got ' + batching);
+});
