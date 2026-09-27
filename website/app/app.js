@@ -4698,7 +4698,7 @@ function renderAdminConfig(){
         <fieldset class="email-notification-options">
           <legend>Notificări pe email</legend>
           <label><input id="editUserNotifyNew" type="checkbox" ${selected.Notify_New_Work_Order?"checked":""}><span>Lucrare nouă sau asignată</span></label>
-          <label><input id="editUserNotifyStage" type="checkbox" ${selected.Notify_Stage_Status?"checked":""}><span>Status de etapă modificat</span></label>
+          <label><input id="editUserNotifyStage" type="checkbox" ${selected.Notify_Stage_Status?"checked":""}><span>Statusul lucrării modificat</span></label>
           <small>Se trimit la adresa contului, numai pentru lucrările și etapele permise rolului.</small>
         </fieldset>
       </div>
@@ -4744,7 +4744,7 @@ function renderAdminConfig(){
             <fieldset class="email-notification-options">
               <legend>Notificări pe email</legend>
               <label><input id="newUserNotifyNew" type="checkbox"><span>Lucrare nouă sau asignată</span></label>
-              <label><input id="newUserNotifyStage" type="checkbox"><span>Status de etapă modificat</span></label>
+              <label><input id="newUserNotifyStage" type="checkbox"><span>Statusul lucrării modificat</span></label>
             </fieldset>
             <button class="primary-btn" type="button" onclick="adminCreateUser()">+ Adaugă</button>
           </div>

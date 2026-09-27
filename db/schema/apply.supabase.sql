@@ -10859,6 +10859,7 @@ CREATE CONSTRAINT TRIGGER work_order_retains_items AFTER DELETE OR UPDATE ON pub
 
 -- BEGIN db/schema/70_email_notifications.sql
 -- Opt-in email notifications. No historical backfill and no network I/O in triggers.
+-- notify_stage_status is the legacy preference name, now used for overall work order status.
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_new_work_order boolean NOT NULL DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_stage_status boolean NOT NULL DEFAULT false;
 
@@ -10878,6 +10879,9 @@ CREATE TABLE IF NOT EXISTS public.email_notification_queue (
  lease_token uuid,leased_at timestamptz,sent_at timestamptz,provider_message_id text,
  FOREIGN KEY(lab_organization_id,work_order_id) REFERENCES public.lab_work_orders(lab_organization_id,id) ON DELETE CASCADE
 );
+ALTER TABLE public.email_notification_queue DROP CONSTRAINT IF EXISTS email_notification_queue_event_kind_check;
+ALTER TABLE public.email_notification_queue ADD CONSTRAINT email_notification_queue_event_kind_check
+ CHECK(event_kind IN ('new_work_order','stage_status','work_order_status','assignment'));
 -- New order plus assignment in the same transaction is one notification per recipient.
 CREATE UNIQUE INDEX IF NOT EXISTS email_notification_event_idx ON public.email_notification_queue
  (lab_organization_id,work_order_id,recipient_id,event_transaction,
@@ -10910,7 +10914,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
  SELECT EXISTS (
  SELECT 1 FROM public.profiles p JOIN public.lab_work_orders w ON w.lab_organization_id=p_lab AND w.id=p_order
  WHERE p.id=p_user AND p.active AND w.archived_at IS NULL
- AND CASE WHEN p_kind='stage_status' THEN p.notify_stage_status ELSE p.notify_new_work_order END
+ AND p_kind IN ('new_work_order','work_order_status','assignment')
+ AND CASE WHEN p_kind='work_order_status' THEN p.notify_stage_status ELSE p.notify_new_work_order END
  AND (
   (p_kind<>'assignment' AND EXISTS(SELECT 1 FROM public.organization_memberships m WHERE m.organization_id=p_lab AND m.user_id=p.id AND m.status='active' AND lower(m.role) IN ('admin','manager')))
   OR (
@@ -10953,16 +10958,16 @@ BEGIN
     WHERE p.notify_new_work_order AND public.email_notification_recipient_allowed(p.id,NEW.lab_organization_id,NEW.id,'assignment',s.stage)
     ON CONFLICT DO NOTHING;
   END IF;
-  IF current_row->>s.status_field IS DISTINCT FROM previous->>s.status_field THEN
-   INSERT INTO public.email_notification_queue(lab_organization_id,work_order_id,recipient_id,event_kind,stage_key,old_status,new_status)
-    SELECT NEW.lab_organization_id,NEW.id,p.id,'stage_status',s.stage,previous->>s.status_field,current_row->>s.status_field FROM public.profiles p
-    WHERE p.notify_stage_status AND public.email_notification_recipient_allowed(p.id,NEW.lab_organization_id,NEW.id,'stage_status',s.stage)
-    ON CONFLICT(lab_organization_id,work_order_id,recipient_id,event_transaction,
-      (CASE WHEN event_kind='assignment' THEN 'new_work_order' ELSE event_kind END),
-      (CASE WHEN event_kind='stage_status' THEN stage_key ELSE '' END))
-    DO UPDATE SET new_status=EXCLUDED.new_status;
-  END IF;
  END LOOP;
+ IF NEW.status IS DISTINCT FROM OLD.status THEN
+  INSERT INTO public.email_notification_queue(lab_organization_id,work_order_id,recipient_id,event_kind,old_status,new_status)
+   SELECT NEW.lab_organization_id,NEW.id,p.id,'work_order_status',OLD.status,NEW.status FROM public.profiles p
+   WHERE p.notify_stage_status AND public.email_notification_recipient_allowed(p.id,NEW.lab_organization_id,NEW.id,'work_order_status',null)
+   ON CONFLICT(lab_organization_id,work_order_id,recipient_id,event_transaction,
+     (CASE WHEN event_kind='assignment' THEN 'new_work_order' ELSE event_kind END),
+     (CASE WHEN event_kind='stage_status' THEN stage_key ELSE '' END))
+   DO UPDATE SET new_status=EXCLUDED.new_status;
+ END IF;
  RETURN NEW;
 END;
 $$;
@@ -10982,7 +10987,7 @@ BEGIN
   email:=NULL;
   SELECT u.email INTO email FROM auth.users u WHERE u.id=q.recipient_id AND u.email_confirmed_at IS NOT NULL AND nullif(trim(u.email),'') IS NOT NULL;
   IF email IS NULL OR NOT public.email_notification_recipient_allowed(q.recipient_id,q.lab_organization_id,q.work_order_id,q.event_kind,q.stage_key)
-    OR (q.event_kind='stage_status' AND q.old_status IS NOT DISTINCT FROM q.new_status) THEN
+    OR (q.event_kind='work_order_status' AND q.old_status IS NOT DISTINCT FROM q.new_status) THEN
    UPDATE public.email_notification_queue e SET state='suppressed' WHERE e.id=q.id;
    CONTINUE;
   END IF;

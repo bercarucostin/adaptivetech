@@ -9322,6 +9322,27 @@ body.dashboard-production-maximized .kanban-col{
 }
 
 /* Email preferences: compact, accessible green checkboxes. */
+.user-card .user-notifications-btn{
+  display:block;
+  width:fit-content!important;
+  min-width:0!important;
+  min-height:24px!important;
+  margin:4px 0 0!important;
+  padding:3px 0!important;
+  border:0!important;
+  border-radius:3px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#74695b!important;
+  font-size:11px!important;
+  font-weight:500!important;
+  line-height:1.4!important;
+  text-align:left;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.user-card .user-notifications-btn:hover{color:#8a621d!important;text-decoration:underline;text-underline-offset:3px;}
+.user-card .user-notifications-btn:focus-visible{outline:2px solid #a57212;outline-offset:3px;}
 .email-preferences-dialog{width:min(480px,calc(100vw - 32px));box-sizing:border-box;border:1px solid #ded8cc;border-radius:18px;padding:24px;background:#fff;color:#3c3326;box-shadow:0 20px 70px #0003}
 .email-preferences-dialog::backdrop{background:#0006}
 .email-preferences-dialog h2{margin:0 0 12px;font-size:22px}

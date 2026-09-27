@@ -20,11 +20,13 @@ async function setup(){
  INSERT INTO organization_relationships VALUES('${id(2)}','${id(1)}','active');`);
  const sql=fs.readFileSync('db/migrations/20260927_email_notifications.sql','utf8');
  await db.exec(sql);await db.exec(sql);
+ const update=fs.readFileSync('db/migrations/20260927_work_order_status_notifications.sql','utf8');
+ await db.exec(update);await db.exec(update);
  return db;
 }
 const create=`INSERT INTO lab_work_orders(lab_organization_id,id,nume_partener,status,status_model,status_modelare,status_cer_fin,tehnician_model,tehnician1_modelare) VALUES('${id(1)}',1,'Clinic','Not Started','Not Started','Not Started','Not Started','Alice','Bob')`;
 const claim=db=>db.query('SELECT * FROM claim_email_notifications(100)');
-test('opt-in, role/tenant routing, stage-only changes and late assignment',async()=>{
+test('opt-in, role/tenant routing, overall status changes and late assignment',async()=>{
  const db=await setup();
  await db.exec(create);assert.equal((await claim(db)).rows.length,0);
  await db.exec('UPDATE profiles SET notify_new_work_order=true,notify_stage_status=true; DELETE FROM lab_work_orders;');
@@ -32,11 +34,11 @@ test('opt-in, role/tenant routing, stage-only changes and late assignment',async
  let rows=(await claim(db)).rows;
  assert.deepEqual(rows.map(r=>r.recipient_id).sort(),[10,11,12,13,16].map(id).sort());
  assert.ok(rows.every(r=>!JSON.stringify(r).includes('Clinic')),'email payload excludes clinical/partner information');
- await db.exec("UPDATE lab_work_orders SET status='Started'");assert.equal((await claim(db)).rows.length,0);
- await db.exec("UPDATE lab_work_orders SET status_model='Finished'");
- rows=(await claim(db)).rows;assert.deepEqual(rows.map(r=>r.recipient_id).sort(),[10,11,13,16].map(id).sort());
+ await db.exec("UPDATE lab_work_orders SET status_model='Started',status_modelare='Finished',status_cer_fin='Started'");assert.equal((await claim(db)).rows.length,0);
+ await db.exec("UPDATE lab_work_orders SET status='Finished'");
+ rows=(await claim(db)).rows;assert.deepEqual(rows.map(r=>r.recipient_id).sort(),[10,11,12,13,16].map(id).sort());
  assert.ok(rows.every(r=>r.old_status==='Not Started'&&r.new_status==='Finished'));
- await db.exec("UPDATE lab_work_orders SET status_model='Finished'");assert.equal((await claim(db)).rows.length,0);
+ await db.exec("UPDATE lab_work_orders SET status='Finished'");assert.equal((await claim(db)).rows.length,0);
  await db.exec("UPDATE lab_work_orders SET tehnician_model='Bob'");
  rows=(await claim(db)).rows;assert.deepEqual(rows.map(r=>r.recipient_id),[id(12)]);
  await db.close();
@@ -69,14 +71,31 @@ test('rollback, transaction coalescing, sent acknowledgement and retry ceiling',
  await db.exec(create);let row=(await claim(db)).rows[0];
  await db.query("SELECT finish_email_notification($1,$2,'sent','message-1')",[row.id,row.lease_token]);
  assert.equal((await db.query('SELECT state,provider_message_id FROM email_notification_queue')).rows[0].state,'sent');
- await db.exec("BEGIN; UPDATE lab_work_orders SET status_model='Started'; UPDATE lab_work_orders SET status_model='Finished'; COMMIT;");
+ await db.exec("BEGIN; UPDATE lab_work_orders SET status='Started'; UPDATE lab_work_orders SET status='Finished'; COMMIT;");
  row=(await claim(db)).rows[0];assert.equal(row.old_status,'Not Started');assert.equal(row.new_status,'Finished');
- assert.equal((await db.query("SELECT count(*)::int n FROM email_notification_queue WHERE event_kind='stage_status'")).rows[0].n,1);
+ assert.equal((await db.query("SELECT count(*)::int n FROM email_notification_queue WHERE event_kind='work_order_status'")).rows[0].n,1);
  for(let n=0;n<5;n++){
   await db.query("SELECT finish_email_notification($1,$2,'retry',null)",[row.id,row.lease_token]);
   await db.exec("UPDATE email_notification_queue SET available_at=now()-interval '1 minute'");
   const rows=(await claim(db)).rows;if(n<4){assert.equal(rows.length,1);row=rows[0];}else assert.equal(rows.length,0);
  }
- assert.equal((await db.query("SELECT state FROM email_notification_queue WHERE event_kind='stage_status'")).rows[0].state,'failed');
+ assert.equal((await db.query("SELECT state FROM email_notification_queue WHERE event_kind='work_order_status'")).rows[0].state,'failed');
+ await db.close();
+});
+
+test('migration preserves opt-ins, suppresses old stage events and general status checks all assignments',async()=>{
+ const db=await setup();
+ await db.exec(`UPDATE profiles SET notify_stage_status=true WHERE id IN ('${id(10)}','${id(11)}','${id(12)}');`);
+ await db.exec(create);
+ await db.exec(`INSERT INTO email_notification_queue(lab_organization_id,work_order_id,recipient_id,event_kind,stage_key,old_status,new_status) VALUES('${id(1)}',1,'${id(10)}','stage_status','model','Not Started','Started')`);
+ await db.exec(fs.readFileSync('db/migrations/20260927_work_order_status_notifications.sql','utf8'));
+ assert.equal((await db.query(`SELECT notify_stage_status FROM profiles WHERE id='${id(10)}'`)).rows[0].notify_stage_status,true);
+ assert.equal((await db.query("SELECT state FROM email_notification_queue WHERE event_kind='stage_status'")).rows[0].state,'suppressed');
+ await db.exec("UPDATE lab_work_orders SET status='Started'");
+ await db.exec(`UPDATE profiles SET notify_stage_status=false WHERE id='${id(10)}'; UPDATE lab_work_orders SET tehnician_model=null;`);
+ assert.deepEqual((await claim(db)).rows.map(r=>r.recipient_id),[id(12)]);
+ await db.exec(`UPDATE profiles SET notify_stage_status=true WHERE id='${id(10)}';`);
+ await db.exec("BEGIN; UPDATE lab_work_orders SET status='Finished'; UPDATE lab_work_orders SET status='Started'; COMMIT;");
+ assert.equal((await claim(db)).rows.length,0,'reverted overall status does not send');
  await db.close();
 });

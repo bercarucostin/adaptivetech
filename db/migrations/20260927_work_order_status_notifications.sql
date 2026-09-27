@@ -1,3 +1,4 @@
+BEGIN;
 -- Opt-in email notifications. No historical backfill and no network I/O in triggers.
 -- notify_stage_status is the legacy preference name, now used for overall work order status.
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS notify_new_work_order boolean NOT NULL DEFAULT false;
@@ -158,3 +159,8 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.claim_email_notifications(integer),public.finish_email_notification(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_email_notifications(integer),public.finish_email_notification(uuid,uuid,text,text) TO service_role;
+
+-- Pending legacy stage notifications must not be delivered after the switch.
+UPDATE public.email_notification_queue SET state='suppressed'
+WHERE event_kind='stage_status' AND state='pending';
+COMMIT;
