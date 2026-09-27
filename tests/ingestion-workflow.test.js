@@ -247,8 +247,64 @@ test('Check Failures passes a clean run and throws one message naming every fail
     { kb_failure: { name: 'Manual', folder_path: 'PARTNER 600', error: 'boom' } },
     { kb_failure: { name: 'Root doc', folder_path: '', error: 'bad pdf' } },
   ]), (err) => err.message ===
-    '2 knowledge base file(s) were not ingested and will be retried on the next run:\n' +
-    'PARTNER 600/Manual: boom\nRoot doc: bad pdf');
+    '2 knowledge base file(s) were not ingested and will be retried on the next run — ' +
+    'PARTNER 600/Manual (boom) | Root doc (bad pdf)');
+});
+
+test('the Check Failures message survives n8n\'s Code-node error parsing whole', () => {
+  // n8n 2.28.3 (task-runner execution-error.ts) takes the first stack row with
+  // "Error:", splits it on ':' and keeps only the LAST segment as the message.
+  // A multi-line message, or any colon, loses the file list ("Unknown error").
+  const code = byName('Check Failures').parameters.jsCode;
+  const run = (items) => new Function('$input', code)({ all: () => items.map((json) => ({ json })) });
+  let err;
+  try {
+    run([
+      { kb_failure: { name: 'The instruction of bluetooth connection 2018-7-13', folder_path: 'DOCUMENTATIE COMUNA',
+        error: 'Gemini extraction suspiciously short for "The instruction of bluetooth connection 2018-7-13": 194 output tokens for 2318 input tokens (8.4%). The model likely truncated. Document was NOT ingested. [line 40]' } },
+      { kb_failure: { name: 'broken-test.pdf', folder_path: 'DOCUMENTATIE COMUNA',
+        // Exactly as the first live run reported it: the API body is JSON
+        // escaped a second time, so quotes arrive as \" and breaks as \n.
+        error: '400 - "{\\n  \\"error\\": {\\n    \\"code\\": 400,\\n    \\"message\\": \\"Request contains an invalid argument.\\",\\n    \\"status\\": \\"INVALID_ARGUMENT\\"\\n  }\\n}\\n"' } },
+    ]);
+  } catch (e) { err = e; }
+  assert.ok(err, 'Check Failures must throw');
+  assert.ok(!err.message.includes('\n'), 'one line only');
+  const parsed = ('Error: ' + err.message).split(':').map((s) => s.trim()).reverse()[0];
+  assert.strictEqual(parsed, err.message.trim(), 'n8n would keep only: ' + parsed);
+  assert.ok(err.message.includes('DOCUMENTATIE COMUNA/broken-test.pdf (400 - Request contains an invalid argument.)'),
+    'a Gemini JSON error is reduced to its message: ' + err.message);
+  assert.ok(err.message.includes('DOCUMENTATIE COMUNA/The instruction of bluetooth connection 2018-7-13 (Gemini extraction suspiciously short'));
+});
+
+test('the extraction prompt transcribes screenshots and forbids guessing', async () => {
+  const code = byName('Prepare Gemini Request').parameters.jsCode;
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  const out = await new AsyncFunction('$input', '$', code).call(
+    { helpers: { getBinaryDataBuffer: async () => Buffer.from('%PDF') } },
+    { all: () => [{ json: { id: 'f1', name: 'Doc' }, binary: { data: { mimeType: 'application/pdf', fileName: 'Doc.pdf' } } }] },
+    () => ({ item: { json: {} } }));
+  const prompt = out[0].json.requestBody.systemInstruction.parts[0].text;
+  assert.ok(prompt.includes('4. IMAGINI ȘI CAPTURI DE ECRAN:'));
+  assert.ok(prompt.includes('transcrie textul vizibil relevant'));
+  assert.ok(prompt.includes('[Imagine: …]'));
+  assert.ok(prompt.includes('Transcrie DOAR ce se poate citi clar. NU ghici și NU completa text ilizibil.'));
+  assert.ok(!prompt.includes('Descrie DOAR imaginile care'), 'the old images-only-if-critical rule is gone');
+  assert.ok(prompt.includes('\n\n5. FIDELITATE'), 'rule 5 still follows rule 4');
+});
+
+test('Format Gemini Result accepts short screenshot-heavy documents but still catches truncated long ones', () => {
+  const code = byName('Format Gemini Result').parameters.jsCode;
+  const run = (inTok, outTok) => new Function('$input', '$', code)(
+    { all: () => [{ json: {
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'extracted text' }] } }],
+      usageMetadata: { promptTokenCount: inTok, candidatesTokenCount: outTok },
+    } }] },
+    () => ({ all: () => [{ json: { file_id: 'f1', original_file_name: 'Doc', folder: 'X', folder_path: 'X' } }] }));
+  // The real numbers from the two documents rejected in the first live run.
+  assert.strictEqual(run(2318, 194)[0].json.text, 'extracted text');
+  assert.strictEqual(run(1254, 103)[0].json.text, 'extracted text');
+  assert.throws(() => run(20000, 500), /The model likely truncated/);
 });
 
 test('the insert stays in single-query batching, which is atomic per file', () => {

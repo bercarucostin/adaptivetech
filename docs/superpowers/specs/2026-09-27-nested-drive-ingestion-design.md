@@ -144,6 +144,16 @@ The manifest recordset gains `folder text, folder_path text`.
   - `Prepare Gemini Request` reads `folder` and `folder_path` from the `Process One File` row, the
     same way it already reads `last_modified`.
   - `Format Gemini Result` passes them on to `Preparing Chunks`.
+- **Screenshots (added after the first live run):** rule 4 of the extraction prompt now tells
+  Gemini to transcribe the visible, relevant text of screenshots and UI captures (menus, buttons,
+  selected options, field values, error messages, COM ports) at the step where they appear, as
+  `[Imagine: …]`, to transcribe only what is clearly readable, and never to guess. Hardware
+  diagrams keep the two-sentence description; decorative images are still ignored.
+- **Length check (added after the first live run):** `Format Gemini Result`'s "output under 10%
+  of input" truncation check applies only above 5,000 input tokens (about 16+ pages). Gemini
+  counts ~258 input tokens per PDF page whatever it holds, plus ~700 for the system prompt, so
+  short screenshot-heavy documents were rejected although their extraction was complete (the
+  bluetooth instructions: 194 of 2,318; the PF 80K memory-stick update: 103 of 1,254).
 
 ## Chunking
 
@@ -272,9 +282,12 @@ existing `errorWorkflow` (`error-handling-ingestion`), which already emails the 
 - **`Check Failures` (new Code node):** it is connected to the `done` output of `Process One File`.
   - It collects `kb_failure` from its input items.
   - If there are none, it returns a single item, `{ ok: true }`, and the run succeeds.
-  - Otherwise it throws one error listing every failed file (`<folder_path>/<name>: <error>`,
-    one per line). The run ends failed after every good file has been ingested, `errorWorkflow`
-    fires, and the team gets one email per run naming all the failures.
+  - Otherwise it throws one error listing every failed file, on **one line with no colons**, as
+    `<n> … — <folder_path>/<name> (<reason>) | …`. n8n's Code node keeps only the text after the
+    last `:` of the first error line as the message (task-runner `execution-error.ts`), so a
+    colon or a line break would reduce the list to "Unknown error". A Google API error body is
+    reduced to its `message`. The run ends failed after every good file has been ingested,
+    `errorWorkflow` fires, and the team gets one email per run naming all the failures.
 
 Retries are implicit. A failed file was never written, or its implicit transaction rolled back, so the next
 run's `Sync Check` still sees it as new or changed and picks it up again.
