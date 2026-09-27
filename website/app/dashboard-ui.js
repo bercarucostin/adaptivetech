@@ -131,7 +131,7 @@ function dashboardChrome(scope,loading){
     if(filterCard)filterCard.after(note);else content.prepend(note);
   }
   content.setAttribute('aria-busy',String(loading));
-  if(!loading&&!error&&page){
+  if(scope!=="production"&&!loading&&!error&&page){
     const amounts=(isManagement()||isDoctor())?kpi('Valoare totală',money(summary.final_price),summary.final_price===null?'Total incomplet: există prețuri neconfigurate':'Toate lucrările filtrate'):'';
     const tech=scope==='technicians'?kpi('Cost tehnician',technicianMoney(summary.technician_cost),'Toate lucrările filtrate'):'';
     const box=document.createElement('div');box.className='dashboard-server-summary kpi-grid';
