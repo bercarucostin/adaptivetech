@@ -351,7 +351,8 @@ Text appended to each:
   into the new root first. The first run's orphan sweep deletes every row whose file is not under
   the new root.
 
-1. **Index:** apply `db/migrations/2026-09-27-documents-uniq-by-file-id.sql`.
+1. **Index:** run the pre-check query in the migration's header (it must return no rows), then
+   apply `db/migrations/2026-09-27-documents-uniq-by-file-id.sql`. The swap is one transaction.
 2. **Import:** import the updated `ingestion.json` and `agent.json` with the ingestion `Sync Trigger`
    **deactivated**.
 3. **First run:** run the sync once by hand, off-hours.
@@ -359,4 +360,7 @@ Text appended to each:
      knowledge base is thin in the meantime.
    - Running it by hand also keeps a scheduled run from starting on top of it and processing the
      same files twice.
+   - A run started by hand never triggers `errorWorkflow` in n8n 2.28.3, so its failures show only
+     in the execution view, on `Check Failures`. The failure email is proven on a scheduled run
+     after activation.
 4. **Check and activate:** run the manual checks, then reactivate `Sync Trigger`.

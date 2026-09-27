@@ -1791,7 +1791,9 @@ Confirm with the human partner that everything in the old `documentation` folder
 
 - [ ] **Step 2: Apply the index migration**
 
-Run `db/migrations/2026-09-27-documents-uniq-by-file-id.sql` against the production database. Then check:
+First run the **pre-check** query from the migration's header. It must return no rows. If it returns any, those are rows sharing a `file_id` under two names; decide which copy to keep before going on.
+
+Then run `db/migrations/2026-09-27-documents-uniq-by-file-id.sql` against the production database. It swaps the index in one transaction, so if the `CREATE` fails the old index stays in place. Then check:
 
 ```sql
 select indexdef from pg_indexes where indexname = 'documents_content_file_uniq';
@@ -1815,11 +1817,11 @@ Open the ingestion workflow and run it from `Sync Trigger`. Expect 15–40 minut
 
 Expected:
 - the execution ends **failed** at `Check Failures`;
-- the message names `DOCUMENTATIE COMUNA/broken-test.pdf`, which confirms that `Note Failure`'s `$('Process One File').first()` resolves the right file;
-- the team receives one error email;
-- every other file was processed.
+- the error shown on `Check Failures` in the execution view names `DOCUMENTATIE COMUNA/broken-test.pdf`, which confirms that `Note Failure`'s `$('Process One File').first()` resolves the right file;
+- every other file was processed;
+- **no email arrives.** n8n 2.28.3 never runs the error workflow for executions started by hand (`execution-lifecycle-hooks.ts`: every `executeErrorWorkflow` call is guarded by `!isManualMode`). This is expected, not a fault.
 
-If the email names a different file, stop. Change `Note Failure` to read `$('Process One File').first(1)` (the loop output) instead, and re-run.
+If the error names a different file, stop. Change `Note Failure` to read `$('Process One File').first(1)` (the loop output) instead, and re-run.
 
 - [ ] **Step 6: Check the knowledge base**
 
@@ -1856,3 +1858,9 @@ Over WhatsApp, ask the same question for two machines, for example how to change
 - [ ] **Step 9: Turn the schedule back on**
 
 Reactivate the `ingestion` workflow.
+
+- [ ] **Step 10: Prove the failure email on a scheduled run**
+
+Runs started by hand never send the email (see Step 5), so the email path is only proven by a scheduled run. Upload `broken-test.pdf` to `DOCUMENTATIE COMUNA` again and wait for the next scheduled run, at most 30 minutes.
+
+Expected: the team receives one error email whose message names `DOCUMENTATIE COMUNA/broken-test.pdf`. Then delete the file from Drive. The next scheduled run succeeds and sends no email.
