@@ -21,3 +21,15 @@ test('the migration rebuilds the index with the same key', () => {
   assert.ok(sql.includes('create unique index documents_content_file_uniq'));
   assert.ok(sql.includes(KEY));
 });
+
+test('the migration swaps the index inside one transaction', () => {
+  // Under autocommit (psql -f), a failed CREATE after a committed DROP would
+  // leave production with no dedupe index at all. The new key is stricter
+  // than the old one for rows that share a file_id under two names, so the
+  // CREATE can fail on real data.
+  const sql = read('db/migrations/2026-09-27-documents-uniq-by-file-id.sql');
+  const statements = sql.split('\n').filter((l) => l.trim() && !l.trim().startsWith('--'));
+  assert.strictEqual(statements[0].trim().toLowerCase(), 'begin;', 'BEGIN must come before the DROP');
+  assert.strictEqual(statements[statements.length - 1].trim().toLowerCase(), 'commit;', 'COMMIT must come last');
+  assert.ok(sql.includes('having count(*) > 1'), 'the header must carry the pre-check query for conflicting rows');
+});
