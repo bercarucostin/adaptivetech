@@ -69,7 +69,7 @@ Google Drive v3 node, search in query mode:
 
 - query `mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
 - Return All on;
-- fields `id`, `name` and `parents`;
+- fields `*`. The node's field picker has no `parents` option, and `*` includes it;
 - `alwaysOutputData: true`, so an account with no folders still reaches `Build Folder Tree`.
 
 It lists every folder the credential can see, not only the ones under the root. At the current
@@ -183,6 +183,9 @@ Per document:
    - Embedding `title` field: `<folder> — <title> — <heading>`, or `<title> — <heading>` when
      there is no folder.
 6. **Deduplicate:** by content within the file, as today.
+   - **Title:** strip only a known file extension (`.pdf`, `.doc(x)`, `.ppt(x)`, `.xls(x)`) from
+     the file name. Today's `/.[^.]+$/` turns the Google Doc "Instructiuni update firmware
+     P200-300-600 19.01.2026" into "… 19.01". Google-native files have no extension.
 7. **Empty result:** zero chunks throws `no chunkable text in "<name>"`. Otherwise an empty output
    would stop the loop without reaching `Process One File` again, and the rest of the batch would
    be skipped silently.
@@ -220,13 +223,22 @@ create unique index documents_content_file_uniq
 - **Where:** `db/documents.sql` is updated to match, and the migration ships as
   `db/migrations/2026-09-27-documents-uniq-by-file-id.sql`.
 
-### Atomic per-file replace
+### Atomic per-file replace (already true; must stay that way)
 
-- **Change:** `Insert Into Postgres Knowledge Base` sets `options.queryBatching = 'transaction'`.
-- **Effect:** a file's `DELETE` and every one of its `INSERT`s commit together or not at all.
-- **Why:** today, if an insert fails partway through, the delete has already run and only some
-  chunks are stored. Those chunks carry the new `last_modified`, so the sync never re-processes the
-  file, and it stays half-ingested with no sign of it.
+Verified against the n8n 2.28.3 Postgres node source (`nodes/Postgres/v2/helpers/utils.ts`):
+
+- **How it works:** `Insert Into Postgres Knowledge Base` uses the default `queryBatching`,
+  `single`. It joins every incoming item's query into one multi-statement string
+  (`pgp.helpers.concat`) and sends it in one round trip.
+  - PostgreSQL runs a multi-statement simple query as one implicit transaction.
+  - So a file's `DELETE` and all of its `INSERT`s already commit together or not at all.
+- **On failure** with continue-on-error, `single` mode returns exactly **one** error item and
+  nothing on the success output. The error path below relies on this.
+- **`queryBatching` must not be set to `transaction`.** In that mode, a failing statement is
+  caught inside the transaction callback, which then returns normally. PostgreSQL rolls the aborted
+  transaction back, but the node still emits success items for the statements before the failure,
+  plus an error item. Both outputs would fire for one file.
+- **Guard:** a workflow test pins `queryBatching` to absent or `single`.
 
 ## Per-file failures
 
@@ -251,9 +263,6 @@ existing `errorWorkflow` (`error-handling-ingestion`), which already emails the 
   - With `continueRegularOutput`, a failed batch arrives at `Format for Insert` as an item without
     `embeddings`. `Format for Insert` already throws on that ("Embedding API error for batch i"),
     and its error output routes the file to `Note Failure` exactly once.
-- **Insert failure must be all-or-nothing:** in `transaction` mode, a failed insert must produce
-  only error-output items, with nothing on the success output. The implementation plan confirms
-  this against n8n 2.28.3 by forcing one insert failure before relying on it.
 - **`Note Failure` (new Code node, run once for all items):**
   - appends `{ name, folder_path, error }` to `$getWorkflowStaticData('global').kbFailures`. The
     file identity comes from `$('Process One File').first().json`, since the loop takes one file
@@ -269,7 +278,7 @@ existing `errorWorkflow` (`error-handling-ingestion`), which already emails the 
     one per line). The run ends failed after every good file has been ingested, `errorWorkflow`
     fires, and the team gets one email per run naming all the failures.
 
-Retries are implicit. A failed file was never written, or its transaction rolled back, so the next
+Retries are implicit. A failed file was never written, or its implicit transaction rolled back, so the next
 run's `Sync Check` still sees it as new or changed and picks it up again.
 
 Failures in listing, the tree or the manifest still abort the run immediately, as today. These
@@ -324,7 +333,7 @@ Text appended to each:
 - `Generate Embeddings` has `continueRegularOutput`;
 - `Note Failure` loops back to `Process One File`;
 - `done` reaches `Check Failures`;
-- the Insert node has `queryBatching: 'transaction'`;
+- the Insert node's `queryBatching` is absent or `single`, and never `transaction`;
 - the Slides and Sheets PDF conversions are set.
 
 **`tests/agent-workflow.test.js`:** the folder sentence is present in both `Build Prompt` and
