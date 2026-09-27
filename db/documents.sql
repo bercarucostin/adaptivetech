@@ -64,11 +64,15 @@ create index documents_file_id_idx
 create index documents_source_idx
   on public.documents ((metadata ->> 'source')) tablespace pg_default;
 
--- Chunk-level dedupe within a file. coalesce() matters: without it,
--- rows missing original_file_name are all distinct under btree NULL
--- semantics and the constraint silently stops enforcing anything.
+-- Chunk-level dedupe within a file. Keyed on the Drive file, not its name:
+-- the same document can sit in two machine folders under the same name, and
+-- a name key would silently drop the second copy (the INSERT is ON CONFLICT
+-- DO NOTHING). original_file_name is the fallback for rows without a file_id.
+-- coalesce() matters: without it, rows missing both are all distinct under
+-- btree NULL semantics and the constraint silently stops enforcing anything.
+-- Existing databases: db/migrations/2026-09-27-documents-uniq-by-file-id.sql.
 create unique index documents_content_file_uniq
   on public.documents (
     md5(content),
-    coalesce(metadata ->> 'original_file_name', '')
+    coalesce(metadata ->> 'file_id', metadata ->> 'original_file_name', '')
   ) tablespace pg_default;
