@@ -259,3 +259,13 @@ test('the insert stays in single-query batching, which is atomic per file', () =
   const batching = byName('Insert Into Postgres Knowledge Base').parameters.options.queryBatching;
   assert.ok(batching === undefined || batching === 'single', 'queryBatching must stay single, got ' + batching);
 });
+
+test('an empty file listing still reaches the zero-files guard', () => {
+  // With no items, Build Drive Manifest would never run and the run would end
+  // "successfully" with nothing ingested and no alert -- e.g. at rollout, if
+  // the credential cannot see the new root. alwaysOutputData emits one empty
+  // item, which buildManifest ignores, so the guard throws.
+  assert.strictEqual(byName('Drive: Knowledge Base').alwaysOutputData, true);
+  const { buildManifest } = require('../lib/drive-manifest.js');
+  assert.throws(() => buildManifest([{}], {}), /Refusing to run the orphan sweep/);
+});

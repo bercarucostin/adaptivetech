@@ -393,7 +393,8 @@
           "id": "WuE5ur27KVvphmjl",
           "name": "Google Drive account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
