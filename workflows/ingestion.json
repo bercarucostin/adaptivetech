@@ -22,10 +22,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4768,
-        -416
+        6064,
+        -1264
       ],
-      "id": "2b43eded-c4e5-4e2a-bc6b-50ab88b1c35e",
+      "id": "0193db82-09d7-459f-b89e-ff4e79aac4b7",
       "name": "Generate Embeddings",
       "settings": {
         "retryOnFail": true,
@@ -49,10 +49,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4992,
-        -416
+        6288,
+        -1264
       ],
-      "id": "328c75b1-3866-4101-812a-86c6a8aef7d4",
+      "id": "0d31294b-65c8-453b-b4b0-d45da2f58ff0",
       "name": "Format for Insert"
     },
     {
@@ -62,10 +62,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4544,
-        -416
+        5840,
+        -1264
       ],
-      "id": "4130fe5d-dfe8-4424-b863-81bdb1650b58",
+      "id": "a6a2f292-d347-46b9-a412-482ae0f2e6f0",
       "name": "Preparing Chunks"
     },
     {
@@ -75,10 +75,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        3424,
-        -352
+        4720,
+        -1200
       ],
-      "id": "4faaf79d-c246-43c6-b6fb-7d9421a639c7",
+      "id": "6cfac864-4f9c-44a6-af9b-066aad652d96",
       "name": "Process One File"
     },
     {
@@ -88,10 +88,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3872,
-        -416
+        5168,
+        -1264
       ],
-      "id": "4b743577-a23e-409c-9773-ce6c8850747b",
+      "id": "1ae51335-fa01-4a12-ab5d-02fdb2bee8b5",
       "name": "Prepare Gemini Request"
     },
     {
@@ -116,10 +116,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4096,
-        -416
+        5392,
+        -1264
       ],
-      "id": "51a4faa4-2809-425b-a8f9-96872320845e",
+      "id": "26319338-a315-4ae2-9e88-0b105dbfd91b",
       "name": "Gemini Text Extraction",
       "settings": {
         "retryOnFail": true,
@@ -143,10 +143,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        -416
+        5616,
+        -1264
       ],
-      "id": "2a4bb653-0e19-4e43-b1bb-1f8064873a1f",
+      "id": "d872574e-51d5-400c-892d-9c25f6cf18b8",
       "name": "Format Gemini Result"
     },
     {
@@ -170,10 +170,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4096,
-        -944
+        5392,
+        -1792
       ],
-      "id": "9c1726b6-fa60-465d-b3bb-f5ed4df59205",
+      "id": "d46198a2-c7de-4f27-8965-34da65aa24aa",
       "name": "Generate Embeddings1",
       "settings": {
         "retryOnFail": true,
@@ -197,10 +197,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        -944
+        5616,
+        -1792
       ],
-      "id": "84ee3c61-6044-4b8e-9b34-02bb736f94d2",
+      "id": "db0849aa-8ed9-454b-b55d-eb618d75ead6",
       "name": "Format for Insert1"
     },
     {
@@ -210,10 +210,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3872,
-        -944
+        5168,
+        -1792
       ],
-      "id": "0cd8318d-5428-43f5-ab25-7be530f9033c",
+      "id": "f853ac40-acff-4ae5-8b27-4f27609e3a25",
       "name": "Preparing Chunks1"
     },
     {
@@ -223,10 +223,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        2752,
-        -864
+        4048,
+        -1712
       ],
-      "id": "109afd8b-3dd5-489c-a6ec-688ef1423331",
+      "id": "56a86a43-ba98-414a-9dad-c31efcc6ef6f",
       "name": "Process One File1"
     },
     {
@@ -236,10 +236,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3200,
-        -944
+        4496,
+        -1792
       ],
-      "id": "474c2144-391d-4b20-b3fb-82aa717bc5aa",
+      "id": "519c8e35-2326-42fa-9903-f314f63567a2",
       "name": "Prepare Gemini Request1"
     },
     {
@@ -264,10 +264,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3424,
-        -944
+        4720,
+        -1792
       ],
-      "id": "adc707ef-0ef0-409d-9729-4361fc65b099",
+      "id": "cff3c9f9-f33c-472a-8e65-ad4682211bde",
       "name": "Gemini Text Extraction1",
       "settings": {
         "retryOnFail": true,
@@ -291,10 +291,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3648,
-        -944
+        4944,
+        -1792
       ],
-      "id": "73c41b71-a80b-45f5-9fe9-d4801d2a98bc",
+      "id": "a4b7726a-1950-4d2b-b9ab-7db64c4812ed",
       "name": "Format Gemini Result1"
     },
     {
@@ -316,10 +316,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        2976,
-        -944
+        4272,
+        -1792
       ],
-      "id": "dc9e980b-8005-4483-9ace-1fca97f9f0f1",
+      "id": "6bd3c785-dd49-4c8d-b70d-209b2bf189e0",
       "name": "Download File1",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -349,10 +349,10 @@
       "type": "n8n-nodes-base.googleDriveTrigger",
       "typeVersion": 1,
       "position": [
-        2528,
-        -864
+        3824,
+        -1712
       ],
-      "id": "71b1589d-be74-4de3-ac9d-4caa366b7b4f",
+      "id": "b048b7d9-fe9d-4593-9247-6c5ae3aec33a",
       "name": "Drive: Expert Feedback",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -383,10 +383,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        2752,
-        -352
+        4048,
+        -1200
       ],
-      "id": "2bea64b1-22dd-4400-820c-7b498c49d4d4",
+      "id": "f5148e43-6f4c-42df-94cb-523654d5ff2a",
       "name": "Drive: Knowledge Base",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -414,10 +414,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        3648,
-        -416
+        4944,
+        -1264
       ],
-      "id": "45e8199e-fc1b-4dc2-beba-e819fc917d40",
+      "id": "4276a8e6-c1ac-43a6-90a3-83d2ab626c40",
       "name": "Download Knowledge Base File",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -435,10 +435,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        5216,
-        -352
+        6512,
+        -1200
       ],
-      "id": "116f704b-a921-4909-b457-edfb2119f856",
+      "id": "f012e718-1e20-499b-9366-6db9cd60448a",
       "name": "Insert Into Postgres Knowledge Base",
       "credentials": {
         "postgres": {
@@ -456,10 +456,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        4544,
-        -864
+        5840,
+        -1712
       ],
-      "id": "0594dd74-0fe7-4c63-96ea-96d72d86ad4e",
+      "id": "b23b2a40-c801-4f6a-be73-74e7e3282004",
       "name": "Insert into Postgres Expert Feedback",
       "credentials": {
         "postgres": {
@@ -482,10 +482,10 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
-        2528,
-        -352
+        3824,
+        -1200
       ],
-      "id": "997ac4c0-17c9-475d-8af5-312edb1909a1",
+      "id": "6306f541-d23a-4759-9595-02e66f89108b",
       "name": "Sync Trigger"
     },
     {
@@ -495,10 +495,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2976,
-        -352
+        4272,
+        -1200
       ],
-      "id": "65f2d4b5-3ca3-44e6-aa5f-23e7a3ad7970",
+      "id": "9557e711-eaa9-4cad-bbf4-845f2afdd594",
       "name": "Build Drive Manifest"
     },
     {
@@ -510,10 +510,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        3200,
-        -352
+        4496,
+        -1200
       ],
-      "id": "99865b66-a295-44ac-aba8-b75769bfde32",
+      "id": "2a31bc6a-a7f5-4c6a-b39e-3ef15ad8e8f5",
       "name": "Sync Check",
       "credentials": {
         "postgres": {
@@ -539,10 +539,10 @@
       "type": "n8n-nodes-base.googleDriveTrigger",
       "typeVersion": 1,
       "position": [
-        2528,
-        -640
+        3824,
+        -1488
       ],
-      "id": "a1b2c3d4-0001-4000-8000-000000000101",
+      "id": "39939d7f-8727-4531-b5cf-da2f46e34d37",
       "name": "Drive: Technicians",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -556,22 +556,26 @@
         "documentId": {
           "__rl": true,
           "value": "1GIK996bS_pHxpg7gTFAD1L-OkI6BdWRkz3AIcsmGtQs",
-          "mode": "id"
+          "mode": "list",
+          "cachedResultName": "Tabel tehnicieni",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GIK996bS_pHxpg7gTFAD1L-OkI6BdWRkz3AIcsmGtQs/edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
-          "value": "0",
-          "mode": "id"
+          "value": 1026707269,
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GIK996bS_pHxpg7gTFAD1L-OkI6BdWRkz3AIcsmGtQs/edit#gid=1026707269"
         },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        2752,
-        -640
+        4048,
+        -1488
       ],
-      "id": "a1b2c3d4-0002-4000-8000-000000000102",
+      "id": "b2e0471b-8e92-4e07-884b-5db3e08e3053",
       "name": "Get Technicians Sheet",
       "retryOnFail": true,
       "credentials": {
@@ -590,10 +594,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        2864,
-        -640
+        4272,
+        -1488
       ],
-      "id": "a1b2c3d4-0005-4000-8000-000000000105",
+      "id": "0c2880fb-cf0b-43cb-bf90-0da05c62cd10",
       "name": "Count Mirror",
       "retryOnFail": true,
       "executeOnce": true,
@@ -611,10 +615,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3088,
-        -640
+        4496,
+        -1488
       ],
-      "id": "a1b2c3d4-0003-4000-8000-000000000103",
+      "id": "64601c7c-8444-4a3f-b2f8-acb948a8d31f",
       "name": "Build Sync Batch"
     },
     {
@@ -628,10 +632,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        3312,
-        -640
+        4720,
+        -1488
       ],
-      "id": "a1b2c3d4-0004-4000-8000-000000000104",
+      "id": "c2e14d2f-a219-4fac-9dc4-61a480cd5f7b",
       "name": "Sync Technicians",
       "retryOnFail": true,
       "credentials": {
@@ -944,7 +948,7 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
@@ -953,7 +957,7 @@
     "errorWorkflow": "AGFSdnvZqj8t51tt",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "323a0f2e-fc75-4b7a-8f9a-586bf604fd13",
+  "versionId": "21e86904-68ca-414f-86e4-c3af06fdd28b",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "b29154469c7b6048a4af2059dfbd9d8d6409b5084188c0b838fb358a4b152054"
