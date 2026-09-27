@@ -123,16 +123,20 @@ function dashboardChrome(scope,loading){
   content.querySelectorAll('.kpi-grid,.dashboard-pagination,.dashboard-dataset-note,.dashboard-server-summary').forEach(el=>el.remove());
   const total=loading?0:page?.total||0,offset=dashboardState.offset;
   const status=error?error:loading?'Încarc lucrările pentru filtrele selectate…':`${total} lucrări în interval · ${orders.length?offset+1:0}–${offset+orders.length} afișate`;
-  const note=document.createElement('div');note.className='dashboard-dataset-note'+(error?' error-text':'');note.setAttribute('role','status');note.textContent=status;
   const filterCard=content.querySelector('.date-range-filter-card');
-  if(filterCard)filterCard.after(note);else content.prepend(note);
+  const showIntervalStatus=scope==='partners'||scope==='technicians';
+  let note=null;
+  if(showIntervalStatus){
+    note=document.createElement('div');note.className='dashboard-dataset-note'+(error?' error-text':'');note.setAttribute('role','status');note.textContent=status;
+    if(filterCard)filterCard.after(note);else content.prepend(note);
+  }
   content.setAttribute('aria-busy',String(loading));
   if(!loading&&!error&&page){
     const amounts=(isManagement()||isDoctor())?kpi('Valoare totală',money(summary.final_price),summary.final_price===null?'Total incomplet: există prețuri neconfigurate':'Toate lucrările filtrate'):'';
     const tech=scope==='technicians'?kpi('Cost tehnician',technicianMoney(summary.technician_cost),'Toate lucrările filtrate'):'';
     const box=document.createElement('div');box.className='dashboard-server-summary kpi-grid';
     box.innerHTML=kpi('Lucrări',total,'Întregul interval filtrat')+kpi('Elemente',num(summary.elements),'Întregul interval filtrat')+amounts+tech;
-    note.after(box);
+    if(note)note.after(box);else if(filterCard)filterCard.after(box);else content.prepend(box);
   }
   const navigation=document.createElement('div');navigation.className='dashboard-pagination';
   navigation.innerHTML=`<button type="button" class="secondary-btn" data-dashboard-page="previous" ${loading||error||offset===0?'disabled':''}>← Anterior</button><span>Pagina ${Math.floor(offset/100)+1} din ${Math.max(1,Math.ceil(total/100))}</span><button type="button" class="secondary-btn" data-dashboard-page="next" ${loading||error||offset+100>=total?'disabled':''}>Următor →</button>`;
@@ -142,7 +146,7 @@ function dashboardChrome(scope,loading){
   }));
   const topNavigation=navigation.cloneNode(true);
   const summaryBox=content.querySelector('.dashboard-server-summary');
-  if(summaryBox)summaryBox.after(topNavigation);else note.after(topNavigation);
+  if(summaryBox)summaryBox.after(topNavigation);else if(note)note.after(topNavigation);else if(filterCard)filterCard.after(topNavigation);else content.prepend(topNavigation);
   topNavigation.querySelectorAll('[data-dashboard-page]').forEach(button=>button.addEventListener('click',()=>{
     dashboardState.offset=Math.max(0,dashboardState.offset+(button.dataset.dashboardPage==='next'?100:-100));render();
   }));

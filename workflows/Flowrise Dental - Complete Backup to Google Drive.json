@@ -1,0 +1,1116 @@
+{
+  "name": "Flowrise Dental - Supabase Backup to Google Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "id": "bbe2ccca-ccba-4bfc-b580-c7aba62968a2",
+      "name": "Daily 02:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        9536,
+        1024
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "7c8d0516-0ae6-4158-b2cf-380321399c14",
+      "name": "Manual test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        9536,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst stamp = now.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}Z$/, 'Z');\nreturn [{ json: {\n  started_at: now.toISOString(),\n  supabase_url: 'https://qlynvfltjgjgeipndior.supabase.co',\n  incomplete_folder_name: `flowrise-supabase-incomplete-${stamp}`,\n  complete_folder_name: `flowrise-supabase-${stamp}`,\n  max_estimated_bytes: 4 * 1024 * 1024 * 1024,\n} }];"
+      },
+      "id": "bdbd30cb-dabb-4949-810d-d482ea3b5234",
+      "name": "Prepare run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9776,
+        1104
+      ],
+      "notesInFlow": true,
+      "notes": "Înlocuiește REPLACE_PROJECT_REF o singură dată, după import, cu URL-ul proiectului Supabase."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH public_size AS (\n  SELECT COALESCE(SUM(pg_total_relation_size(format('%I.%I', table_schema, table_name)::regclass)), 0)::bigint AS bytes\n  FROM information_schema.tables\n  WHERE table_schema = 'public' AND table_type = 'BASE TABLE'\n), storage_size AS (\n  SELECT COALESCE(SUM(CASE WHEN COALESCE(metadata->>'size', '') ~ '^[0-9]+$' THEN (metadata->>'size')::bigint ELSE 0 END), 0)::bigint AS bytes\n  FROM storage.objects\n)\nSELECT public_size.bytes AS public_relation_bytes,\n       storage_size.bytes AS storage_bytes,\n       (storage_size.bytes + GREATEST(public_size.bytes * 2, 134217728))::bigint AS estimated_backup_bytes\nFROM public_size CROSS JOIN storage_size;",
+        "options": {}
+      },
+      "id": "7e9332a0-40b2-4423-b1f1-21d5f12f7a30",
+      "name": "Estimate backup size",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        10016,
+        1104
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      },
+      "notes": "Selectează credentialul PostgreSQL al proiectului Supabase (conexiune directă sau Session Pooler, SSL activ)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const estimate = Number($json.estimated_backup_bytes);\nconst limit = Number($('Prepare run').first().json.max_estimated_bytes);\nif (!Number.isSafeInteger(estimate) || estimate < 0) throw new Error('Supabase backup size estimate is invalid');\nif (estimate > limit) throw new Error('Estimated backup exceeds 4 GiB; two safe copies would exceed the reserved 8 GiB');\nreturn [{ json: { ...$('Prepare run').first().json, ...$json } }];"
+      },
+      "id": "f66c5e9c-fb37-449b-b352-d7dd5f865eca",
+      "name": "Enforce Drive capacity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10256,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "queryString": "flowrise-supabase-",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "1SanyMKe6-AKvzTX8hvbtbD2tkM2jc6IZ",
+            "mode": "id",
+            "cachedResultName": "Flowrise Backups",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1SanyMKe6-AKvzTX8hvbtbD2tkM2jc6IZ"
+          },
+          "whatToSearch": "folders",
+          "includeTrashed": false
+        },
+        "options": {
+          "fields": [
+            "*"
+          ]
+        }
+      },
+      "id": "edd51796-4b27-4bba-9a37-d9510c253a5b",
+      "name": "List backup folders",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        10496,
+        1104
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      },
+      "notes": "Selectează credentialul Google Drive creat deja."
+    },
+    {
+      "parameters": {
+        "jsCode": "const complete = /^flowrise-supabase-\\d{8}T\\d{6}Z$/;\nconst incomplete = /^flowrise-supabase-incomplete-\\d{8}T\\d{6}Z$/;\nconst now = Date.now();\nconst staleBefore = now - 6 * 60 * 60 * 1000;\nconst folders = $input.all().map(item => item.json).filter(folder => folder.id && !folder.trashed);\nconst completed = folders.filter(folder => complete.test(folder.name || '')).sort((a, b) => String(b.createdTime || '').localeCompare(String(a.createdTime || '')) || String(b.id).localeCompare(String(a.id)));\nconst staleIncomplete = folders.filter(folder => {\n  if (!incomplete.test(folder.name || '')) return false;\n  const created = Date.parse(folder.createdTime || '');\n  return Number.isFinite(created) && created < staleBefore;\n});\nconst expired = [...completed.slice(1), ...staleIncomplete];\nreturn expired.length ? expired.map(folder => ({ json: { delete: true, id: folder.id, name: folder.name } })) : [{ json: { delete: false } }];"
+      },
+      "id": "c3a4761f-6b96-47b4-bf9e-888e809c5bcd",
+      "name": "Select folders to remove",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10736,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5f47b9aa-4d8d-4228-a365-aa3fce029077",
+              "leftValue": "={{ $json.delete }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2228040f-66c9-4c78-8c2d-5fb8b11b5dcf",
+      "name": "Cleanup required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        10976,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "deleteFolder",
+        "folderNoRootId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "deletePermanently": true
+        }
+      },
+      "id": "60e92ac5-e4ff-4270-b568-7e4a254fa64f",
+      "name": "Permanently delete old folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        11216,
+        1024
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c1b97fe6-bcdf-470a-9e7b-ba57d3bb5c23",
+      "name": "No cleanup needed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        11216,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Prepare run').first().json.incomplete_folder_name }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1PvmWJ9DExN3AbV6JCe3rWPvr5E4noEJB",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": false
+        }
+      },
+      "id": "a97dfe56-df95-4df6-83eb-9e9a4dfd77b0",
+      "name": "Create backup folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        11456,
+        1104
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      },
+      "notes": "Selectează același credential Google Drive."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT table_schema, table_name\nFROM information_schema.tables\nWHERE table_schema = 'public' AND table_type = 'BASE TABLE'\nORDER BY table_name;",
+        "options": {}
+      },
+      "id": "02814f06-2b81-4383-a221-fa2ff1df02a5",
+      "name": "List public tables",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        11696,
+        1104
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      },
+      "notes": "Selectează același credential PostgreSQL Supabase."
+    },
+    {
+      "parameters": {
+        "jsCode": "const quoteIdentifier = value => `\"${String(value).replace(/\"/g, '\"\"')}\"`;\nreturn $input.all().map(item => {\n  const schema = String(item.json.table_schema || '');\n  const table = String(item.json.table_name || '');\n  if (!schema || !table) throw new Error('Invalid table metadata');\n  const safeFile = `${schema}-${table}`.replace(/[^A-Za-z0-9._-]/g, '_');\n  const prefix = `table-${safeFile}-part-`;\n  return { json: {\n    table_schema: schema,\n    table_name: table,\n    filename_prefix: prefix,\n    query: `WITH numbered AS (SELECT row_number() OVER () AS rn, to_jsonb(src) AS row_data FROM ${quoteIdentifier(schema)}.${quoteIdentifier(table)} AS src), pages AS (SELECT ((rn - 1) / 1000)::bigint AS page_index, jsonb_agg(row_data ORDER BY rn) AS rows FROM numbered GROUP BY ((rn - 1) / 1000)::bigint) SELECT $1::text || lpad((page_index + 1)::text, 6, '0') || '.json' AS filename, jsonb_build_object('schema', $2::text, 'table', $3::text, 'page', page_index + 1, 'row_count', jsonb_array_length(rows), 'rows', rows)::text AS backup_json FROM pages UNION ALL SELECT $1::text || '000001.json', jsonb_build_object('schema', $2::text, 'table', $3::text, 'page', 1, 'row_count', 0, 'rows', '[]'::jsonb)::text WHERE NOT EXISTS (SELECT 1 FROM pages) ORDER BY filename`,\n  } };\n});"
+      },
+      "id": "ef62b817-654f-46fa-8077-cde35cec6798",
+      "name": "Build table exports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11936,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {
+          "queryReplacement": "={{ [$json.filename_prefix, $json.table_schema, $json.table_name] }}"
+        }
+      },
+      "id": "fc695fd7-3970-4fec-9f56-012737316263",
+      "name": "Export public tables",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        12176,
+        1104
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "backup_json",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "={{ $json.filename }}"
+        }
+      },
+      "id": "65e4ab07-305a-442d-b91d-bc6b0c02a3ed",
+      "name": "Create table JSON files",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        12416,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $binary.data.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": true
+        }
+      },
+      "id": "5538bf2d-a034-42fb-9990-db9ff1cd2602",
+      "name": "Upload table files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        12656,
+        1104
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH numbered_objects AS (\n  SELECT row_number() OVER (ORDER BY bucket_id, name) AS backup_index,\n         bucket_id, name, owner_id, created_at, updated_at, last_accessed_at, metadata\n  FROM storage.objects\n  WHERE name IS NOT NULL\n)\nSELECT 'storage-manifest.json'::text AS filename,\n       jsonb_build_object(\n         'exported_at', now(),\n         'buckets', COALESCE((SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM storage.buckets b), '[]'::jsonb),\n         'objects', COALESCE((SELECT jsonb_agg(to_jsonb(o) || jsonb_build_object('backup_file', 'storage-' || lpad(o.backup_index::text, 8, '0') || '.bin') ORDER BY o.backup_index) FROM numbered_objects o), '[]'::jsonb)\n       )::text AS backup_json;",
+        "options": {}
+      },
+      "id": "1a9bfeb3-070a-4a3b-a7f2-3c8fd4006e0b",
+      "name": "Export storage manifest",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        12896,
+        1104
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "backup_json",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "={{ $json.filename }}"
+        }
+      },
+      "id": "ba946502-a919-48bf-8a68-830f29dbd70c",
+      "name": "Create storage manifest file",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        13136,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $binary.data.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": true
+        }
+      },
+      "id": "6d863f0c-16d6-4b65-8dfc-1121059921e1",
+      "name": "Upload storage manifest",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        13376,
+        1104
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT 'storage-' || lpad(row_number() OVER (ORDER BY bucket_id, name)::text, 8, '0') || '.bin' AS backup_file,\n       bucket_id, name, COALESCE(metadata->>'mimetype', 'application/octet-stream') AS mime_type\nFROM storage.objects\nWHERE name IS NOT NULL\nORDER BY bucket_id, name;",
+        "options": {}
+      },
+      "id": "77e20cd9-fb26-4af6-958f-af4065e4090c",
+      "name": "List storage objects",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        13616,
+        1104
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fb7e760b-dff3-49cb-89d4-a6f354bc9a6b",
+              "leftValue": "={{ Boolean($json.bucket_id && $json.name && $json.backup_file) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "733ee138-df45-4a77-956e-6338770a83e5",
+      "name": "Storage objects exist?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        13856,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Prepare run').first().json.supabase_url + '/storage/v1/object/authenticated/' + encodeURIComponent($json.bucket_id) + '/' + String($json.name).split('/').map(encodeURIComponent).join('/') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 250
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "4923b68f-3e90-4af1-8adb-b2fc54d0064b",
+      "name": "Download storage objects",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        14096,
+        1024
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "xraqFiHBrege94TX",
+          "name": "Supabase Service Key"
+        }
+      },
+      "notes": "Selectează credentialul Supabase API care conține Project URL și Secret/Service Role key."
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.backup_file }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": true
+        }
+      },
+      "id": "fd404019-3c0c-4ec8-bb0d-f3d03a5c08e6",
+      "name": "Upload storage objects",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        14336,
+        1024
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "75ace9ae-3126-4113-81a0-16cbb529b29d",
+      "name": "No storage objects",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        14096,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT 'auth-users.json'::text AS filename,\n       jsonb_build_object(\n         'exported_at', now(),\n         'notice', 'Password hashes, active sessions and refresh tokens are intentionally excluded. Users must reset passwords after a standalone JSON restore.',\n         'users', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', u.id, 'aud', u.aud, 'role', u.role, 'email', u.email, 'phone', u.phone, 'email_confirmed_at', u.email_confirmed_at, 'phone_confirmed_at', u.phone_confirmed_at, 'confirmed_at', u.confirmed_at, 'last_sign_in_at', u.last_sign_in_at, 'raw_app_meta_data', u.raw_app_meta_data, 'raw_user_meta_data', u.raw_user_meta_data, 'created_at', u.created_at, 'updated_at', u.updated_at, 'banned_until', u.banned_until, 'deleted_at', u.deleted_at) ORDER BY u.created_at, u.id) FROM auth.users u), '[]'::jsonb),\n         'identities', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', i.id, 'user_id', i.user_id, 'provider', i.provider, 'identity_data', i.identity_data, 'created_at', i.created_at, 'updated_at', i.updated_at, 'last_sign_in_at', i.last_sign_in_at) ORDER BY i.created_at, i.id) FROM auth.identities i), '[]'::jsonb)\n       )::text AS backup_json;",
+        "options": {}
+      },
+      "id": "fc1cfed5-6958-41cd-9a40-76ff66bec941",
+      "name": "Export Auth users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        14576,
+        1104
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "PRTqflVpRgparfiO",
+          "name": "Supabase Session Pooler Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "backup_json",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "={{ $json.filename }}"
+        }
+      },
+      "id": "bcddde65-99cd-4d88-b0fe-954ce7954f23",
+      "name": "Create Auth JSON file",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        14816,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $binary.data.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": true
+        }
+      },
+      "id": "42f58c67-cd04-4f5e-9e77-86cdf4b5ee28",
+      "name": "Upload Auth users",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        15056,
+        1104
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tables = $('List public tables').all().filter(item => item.json.table_name).length;\nconst objects = $('List storage objects').all().filter(item => item.json.backup_file).length;\nconst estimate = $('Estimate backup size').first().json;\nconst payload = {\n  status: 'complete', completed_at: new Date().toISOString(), started_at: $('Prepare run').first().json.started_at,\n  public_tables: tables, storage_objects: objects, estimated_backup_bytes: Number(estimate.estimated_backup_bytes),\n  auth_passwords_included: false, schema_source: 'Git repository',\n};\nreturn [{ json: { filename: '_BACKUP_COMPLETE.json', backup_json: JSON.stringify(payload, null, 2) } }];"
+      },
+      "id": "7c4907b3-7121-4f20-9cd0-8e918b1bca13",
+      "name": "Create completion manifest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        15296,
+        1104
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "backup_json",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "={{ $json.filename }}"
+        }
+      },
+      "id": "919dbf7c-a2a4-4c56-9a51-b217a54a79f4",
+      "name": "Create completion file",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        15536,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $binary.data.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "simplifyOutput": true
+        }
+      },
+      "id": "3efb75c4-2fcb-4ff3-b5b8-d05f5af644fc",
+      "name": "Upload completion marker",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        15776,
+        1104
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create backup folder').first().json.id }}",
+          "mode": "id"
+        },
+        "newUpdatedFileName": "={{ $('Prepare run').first().json.complete_folder_name }}",
+        "options": {}
+      },
+      "id": "39db88e4-74d2-40c2-bd16-7ec4ac4a097b",
+      "name": "Mark backup complete",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        16016,
+        1104
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "uTpsHCEFMIB3nZHS",
+          "name": "Google Drive – Flowrise Backups"
+        }
+      },
+      "notes": "Folderul primește numele final numai după ce toate fișierele și manifestul au fost încărcate."
+    },
+    {
+      "parameters": {
+        "content": "## Configurare după import\n\n1. În toate nodurile **Postgres**, selectează aceeași conexiune Supabase directă sau Session Pooler, cu SSL.\n2. În **Download storage objects**, selectează credentialul **Supabase API** cu Secret/Service Role key.\n3. În toate nodurile **Google Drive**, selectează credentialul Google Drive creat deja.\n4. Rulează **Manual test**. Backup-ul este valid numai dacă folderul nu mai conține `incomplete` și are `_BACKUP_COMPLETE.json`.\n5. După verificare, publică workflow-ul. Retenția păstrează două copii complete și șterge permanent copiile mai vechi.",
+        "height": 460,
+        "width": 620,
+        "color": 5
+      },
+      "id": "ce574342-c7cf-4a33-a52f-a3fa869ab1f3",
+      "name": "Setup checklist",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        9536,
+        464
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 02:00": {
+      "main": [
+        [
+          {
+            "node": "Prepare run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test": {
+      "main": [
+        [
+          {
+            "node": "Prepare run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare run": {
+      "main": [
+        [
+          {
+            "node": "Estimate backup size",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estimate backup size": {
+      "main": [
+        [
+          {
+            "node": "Enforce Drive capacity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enforce Drive capacity": {
+      "main": [
+        [
+          {
+            "node": "List backup folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List backup folders": {
+      "main": [
+        [
+          {
+            "node": "Select folders to remove",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select folders to remove": {
+      "main": [
+        [
+          {
+            "node": "Cleanup required?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup required?": {
+      "main": [
+        [
+          {
+            "node": "Permanently delete old folder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No cleanup needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Permanently delete old folder": {
+      "main": [
+        [
+          {
+            "node": "Create backup folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No cleanup needed": {
+      "main": [
+        [
+          {
+            "node": "Create backup folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create backup folder": {
+      "main": [
+        [
+          {
+            "node": "List public tables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List public tables": {
+      "main": [
+        [
+          {
+            "node": "Build table exports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build table exports": {
+      "main": [
+        [
+          {
+            "node": "Export public tables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export public tables": {
+      "main": [
+        [
+          {
+            "node": "Create table JSON files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create table JSON files": {
+      "main": [
+        [
+          {
+            "node": "Upload table files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload table files": {
+      "main": [
+        [
+          {
+            "node": "Export storage manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export storage manifest": {
+      "main": [
+        [
+          {
+            "node": "Create storage manifest file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create storage manifest file": {
+      "main": [
+        [
+          {
+            "node": "Upload storage manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload storage manifest": {
+      "main": [
+        [
+          {
+            "node": "List storage objects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List storage objects": {
+      "main": [
+        [
+          {
+            "node": "Storage objects exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storage objects exist?": {
+      "main": [
+        [
+          {
+            "node": "Download storage objects",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No storage objects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download storage objects": {
+      "main": [
+        [
+          {
+            "node": "Upload storage objects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload storage objects": {
+      "main": [
+        [
+          {
+            "node": "Export Auth users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No storage objects": {
+      "main": [
+        [
+          {
+            "node": "Export Auth users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Auth users": {
+      "main": [
+        [
+          {
+            "node": "Create Auth JSON file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Auth JSON file": {
+      "main": [
+        [
+          {
+            "node": "Upload Auth users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Auth users": {
+      "main": [
+        [
+          {
+            "node": "Create completion manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create completion manifest": {
+      "main": [
+        [
+          {
+            "node": "Create completion file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create completion file": {
+      "main": [
+        [
+          {
+            "node": "Upload completion marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload completion marker": {
+      "main": [
+        [
+          {
+            "node": "Mark backup complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f8702d49-6f0d-4833-af81-00ccf2daf50a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "15b8ae918d578f60299a82d53a24d3a960c7b4ac90a862d3d7bbc9993fe54be9"
+  },
+  "nodeGroups": [],
+  "id": "xRyu5Y1efWQG4dCK",
+  "tags": []
+}
