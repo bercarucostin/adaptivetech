@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { sharedBlock } = require('./helpers/shared-block.js');
 const { extractSigilii } = require('../lib/sigiliu.js');
 
 const ROOT = path.join(__dirname, '..');
@@ -67,11 +68,7 @@ test('the verification branch is wired end to end', () => {
 });
 
 test('Extract Sigiliu embeds lib/sigiliu.js verbatim', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'lib/sigiliu.js'), 'utf8');
-  const start = src.indexOf('// ---8<--- SHARED START ---8<---');
-  const end = src.indexOf('// ---8<--- SHARED END ---8<---');
-  assert.ok(start !== -1 && end > start, 'SHARED markers missing');
-  assert.ok(byName('Extract Sigiliu').parameters.jsCode.includes(src.slice(start, end)),
+  assert.ok(byName('Extract Sigiliu').parameters.jsCode.includes(sharedBlock('lib/sigiliu.js')),
     'Code node has drifted from lib/sigiliu.js');
 });
 

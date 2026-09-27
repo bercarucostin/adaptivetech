@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { sharedBlock } = require('./helpers/shared-block.js');
 
 const ROOT = path.join(__dirname, '..');
 const wf = JSON.parse(fs.readFileSync(path.join(ROOT, 'workflows/ingestion.json'), 'utf8'));
@@ -80,12 +81,7 @@ test('the orphan cleanup never deletes a revoked (is_active = false) row', () =>
 });
 
 test('Build Sync Batch embeds lib/sync-batch.js verbatim', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'lib/sync-batch.js'), 'utf8');
-  const start = src.indexOf('// ---8<--- SHARED START ---8<---');
-  const end = src.indexOf('// ---8<--- SHARED END ---8<---');
-  assert.ok(start !== -1 && end > start, 'SHARED markers missing');
-  const shared = src.slice(start, end);
-  assert.ok(byName('Build Sync Batch').parameters.jsCode.includes(shared),
+  assert.ok(byName('Build Sync Batch').parameters.jsCode.includes(sharedBlock('lib/sync-batch.js')),
     'Code node has drifted from lib/sync-batch.js');
 });
 
