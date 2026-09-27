@@ -122,3 +122,23 @@ test('the confirmation names the technician', () => {
   const body = byName('Send "Validated"').parameters.textBody;
   assert.ok(body.includes('technician_name') && body.includes('service_unit'));
 });
+
+test('both answering prompts explain the [FOLDER] chunk label', () => {
+  const FOLDER_RULE = 'Each document begins with the folder it came from in square brackets, e.g. [PARTNER 200]. ' +
+    'A document from a machine folder applies only to that machine — never apply it to another machine. ' +
+    '[DOCUMENTATIE COMUNA] applies to all machines.';
+
+  // Build Prompt: run the Code node's string-building and read the real prompt.
+  const code = byName('Build Prompt').parameters.jsCode;
+  const stub = (name) => ({
+    first: () => ({ json: name === 'Unified Input' ? { question: 'q', sessionId: 's', from: 'f' } : { response: 'docs' } }),
+    all: () => [],
+  });
+  const system = new Function('$', code)(stub)[0].json.system;
+  assert.ok(system.includes('3. When the documentation contains product-specific info (e.g. Partner 200, Partner 600), ' +
+    'ensure your answer matches the correct product. ' + FOLDER_RULE));
+
+  const message = byName('AI Agent1').parameters.options.systemMessage;
+  assert.ok(message.includes('4. When the documentation contains product-specific info (e.g. Partner 200, Partner 600), ' +
+    'ensure your answer matches the correct product. ' + FOLDER_RULE + '\n'));
+});
