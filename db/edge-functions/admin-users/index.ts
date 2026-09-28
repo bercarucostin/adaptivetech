@@ -30,6 +30,24 @@ function validUsername(value: string) {
   return /^[a-z0-9_]{3,40}$/.test(value);
 }
 
+// Server-only: the callback is deployment configuration, never request input.
+async function createAuthAccount(
+  authAdmin: ReturnType<typeof createClient>["auth"]["admin"],
+  { email, name, password, invite }: { email: string; name: string; password: string; invite: boolean },
+  redirect: string
+) {
+  if(invite){
+    let url;
+    try{url=new URL(redirect);}catch{throw new Error('Configure APP_PASSWORD_REDIRECT_URL before sending invitations.');}
+    if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||!url.pathname.endsWith('/password.html')){
+      throw new Error('APP_PASSWORD_REDIRECT_URL must be an HTTPS password.html URL without query parameters.');
+    }
+    url.searchParams.set('mode','invite');
+    return authAdmin.inviteUserByEmail(email,{redirectTo:url.href,data:{display_name:name}});
+  }
+  return authAdmin.createUser({email,password,email_confirm:true,user_metadata:{display_name:name}});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ message: "Method not allowed." }, 405);
@@ -206,13 +224,15 @@ Deno.serve(async (req) => {
 
       const email = clean(data.Email).toLowerCase();
       const password = String(data.Password ?? "");
+      const invite = data.Send_Invite === true;
+      if ("Send_Invite" in data && typeof data.Send_Invite !== "boolean") return json({ message: "Send_Invite must be boolean." }, 400);
       const name = clean(data.Name);
       const role = clean(data.Role);
       const active = data.Active !== false;
       const username = clean(data.Username || usernameBase(legacyUserId)).toLowerCase();
 
-      if (!email || !password || !name || !role || !username) {
-        return json({ message: "Username, Email, Password, Name and Role are required." }, 400);
+      if (!email || (!invite && !password) || !name || !role || !username) {
+        return json({ message: "Username, Email, Name, Role and either invitation or password are required." }, 400);
       }
       if (!validUsername(username)) {
         return json({ message: "Username must be 3–40 characters using only lowercase letters, numbers and _." }, 400);
@@ -227,12 +247,11 @@ Deno.serve(async (req) => {
       if (usernameConflictError) throw usernameConflictError;
       if (usernameConflict?.id) return json({ message: "Username already exists." }, 409);
 
-      const { data: created, error: createError } = await admin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { display_name: name },
-      });
+      if (invite && !active) return json({ message: "Activează contul înainte de a trimite invitația." }, 400);
+      const { data: created, error: createError } = await createAuthAccount(
+        admin.auth.admin, { email, password, name, invite },
+        Deno.env.get("APP_PASSWORD_REDIRECT_URL") || ""
+      );
       if (createError || !created?.user?.id) {
         throw createError || new Error("Account creation failed.");
       }
@@ -274,7 +293,7 @@ Deno.serve(async (req) => {
       });
 
       createdAuthUserId = null;
-      return json({ ok: true, user_id: created.user.id, username });
+      return json({ ok: true, user_id: created.user.id, username, invited: invite });
     }
 
     if (!existingProfile?.id) return json({ message: "User not found." }, 404);

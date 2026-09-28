@@ -68,6 +68,7 @@ http://{$SITE_DOMAIN} {
 # ── The web platform ─────────────────────────────────────────────────────
 http://app.{$SITE_DOMAIN} {
 	encode gzip
+	header /password* Cache-Control "no-store"
 
 	# The AI endpoint, same-origin with the app that calls it.
 	#

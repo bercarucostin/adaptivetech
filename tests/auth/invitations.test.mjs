@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const source=fs.readFileSync('db/edge-functions/admin-users/index.ts','utf8');
+assert.doesNotMatch(source,/from ["']\.\//,'admin-users must deploy from one file');
+const createAuthAccount=new Function('Deno',stripTypeScriptTypes(source.replace(/^import .*;\n/gm,''))+'\nreturn createAuthAccount;')({serve(){}});
+const fixture=()=>{const calls=[];return {calls,admin:{inviteUserByEmail:async(...args)=>{calls.push(['invite',...args]);return {data:{user:{id:'new'}}};},createUser:async args=>{calls.push(['create',args]);return {data:{user:{id:'new'}}};}}};};
+test('invitation never sets or confirms a password; server redirect only',async()=>{const f=fixture();await createAuthAccount(f.admin,{email:'u@ex.test',name:'User',invite:true,password:'ignored'},'https://app.example/password.html');assert.deepEqual(f.calls,[['invite','u@ex.test',{redirectTo:'https://app.example/password.html?mode=invite',data:{display_name:'User'}}]]);});
+test('missing or insecure callback prevents email being sent',async()=>{for(const url of ['', 'http://app.example/password.html','https://app.example/other','https://app.example/password.html?next=elsewhere']){const f=fixture();await assert.rejects(createAuthAccount(f.admin,{email:'u@ex.test',name:'U',invite:true},url));assert.equal(f.calls.length,0);}});
+test('manual account creation remains supported',async()=>{const f=fixture();await createAuthAccount(f.admin,{email:'u@ex.test',name:'U',invite:false,password:'manual-password'},'');assert.equal(f.calls[0][0],'create');assert.equal(f.calls[0][1].password,'manual-password');});

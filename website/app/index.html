@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flowrise Dental Studio</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="assets/flowrise-tooth.svg?v=2" />
-  <link rel="stylesheet" href="styles.css?v=18.48" />
+  <link rel="stylesheet" href="styles.css?v=18.49" />
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -26,6 +26,7 @@
         <button id="loginBtn" class="primary-btn full" type="submit" disabled>Autentificare</button>
       </form>
 
+      <a class="password-recovery-link" href="password.html">Ai uitat parola?</a>
       <div id="loginError" class="login-error"></div>
       <div class="poc-note">Acces securizat · nickname sau email</div>
     </div>
@@ -45,6 +46,7 @@
           <div id="userName" class="user-name"></div>
           <div id="userRole" class="user-role"></div>
           <button id="emailPreferencesBtn" class="user-notifications-btn" type="button">Notificări email</button>
+          <a class="user-password-link" href="password.html?mode=change">Schimbă parola</a>
           <button id="logoutBtn" class="logout-btn user-logout-btn" type="button">Deconectare</button>
         </div>
       </div>
@@ -516,7 +518,7 @@
   <script src="login-security.js?v=18.43"></script>
   <script src="dashboard-data.js?v=18.43"></script>
   <script src="dashboard-ui.js?v=18.45"></script>
-  <script src="app.js?v=18.47"></script>
+  <script src="app.js?v=18.49"></script>
   <script src="email-notifications.js?v=18.47"></script>
 </body>
 </html>

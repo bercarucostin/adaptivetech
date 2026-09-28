@@ -9353,3 +9353,9 @@ body.dashboard-production-maximized .kanban-col{
 .email-notification-options input[type=checkbox]{appearance:auto!important;width:17px!important;height:17px!important;min-width:17px!important;min-height:17px!important;margin:2px 0!important;padding:0!important;accent-color:#26845b;flex:0 0 17px}
 .email-notification-options small{display:block;font-size:12px;line-height:1.5;color:#756a5b}
 .email-preferences-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+/* Compact account security actions. */
+.password-recovery-link{display:inline-block;margin-top:16px;font-size:14px;color:#856019;text-underline-offset:3px}
+.user-password-link{display:block;width:fit-content;margin-top:6px;font-size:12px;font-weight:500;color:var(--muted,#746d61);text-underline-offset:3px}
+.user-invite-option{display:flex!important;align-items:center;gap:8px;font-size:13px}
+.user-invite-option input[type="checkbox"]{width:16px!important;height:16px!important;min-height:16px!important;margin:0;accent-color:#258350;flex:0 0 16px}

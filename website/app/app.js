@@ -4739,7 +4739,8 @@ function renderAdminConfig(){
             <label>Rol<select id="newUserRole">${optionHtml(roleNames,"",true)}</select></label>
             <label>Technician Name<input id="newUserTechnician" list="adminUserTechnicianList" placeholder="opțional"></label>
             <label>Partner Name<input id="newUserPartner" placeholder="opțional / clinică Doctor"></label>
-            <label>Parolă<input id="newUserPassword" type="password" autocomplete="new-password" placeholder="Parolă inițială"></label>
+            <label class="user-invite-option"><input id="newUserInvite" type="checkbox" checked onchange="document.getElementById('newUserPassword').disabled=this.checked"> Trimite invitație pe email</label>
+            <label>Parolă inițială (fără invitație)<input id="newUserPassword" type="password" autocomplete="new-password" placeholder="Utilizatorul își alege parola din invitație" disabled></label>
             <label class="admin-checkbox-label"><input id="newUserActive" type="checkbox" checked> Activ</label>
             <fieldset class="email-notification-options">
               <legend>Notificări pe email</legend>
@@ -5003,14 +5004,15 @@ async function adminCreateUser(){
     Role:String($("newUserRole")?.value||"").trim(),
     Technician_Name:String($("newUserTechnician")?.value||"").trim(),
     Partner_Name:String($("newUserPartner")?.value||"").trim(),
-    Password:String($("newUserPassword")?.value||""),
+    Send_Invite:Boolean($("newUserInvite")?.checked),
+    Password:$("newUserInvite")?.checked?"":String($("newUserPassword")?.value||""),
     Active:Boolean($("newUserActive")?.checked),
     Notify_New_Work_Order:Boolean($("newUserNotifyNew")?.checked),
     Notify_Stage_Status:Boolean($("newUserNotifyStage")?.checked)
   };
 
-  if(!data.User_ID||!data.Username||!data.Name||!data.Role||!data.Password){
-    alert("ID intern, Username, Nume, Rol și Parolă sunt obligatorii.");
+  if(!data.User_ID||!data.Username||!data.Email||!data.Name||!data.Role||(!data.Send_Invite&&!data.Password)){
+    alert("Completează ID intern, Username, Email, Nume și Rol. Alege invitația sau o parolă inițială.");
     return;
   }
   if(!/^[a-z0-9_]{3,40}$/.test(data.Username)){
@@ -5019,7 +5021,8 @@ async function adminCreateUser(){
   }
 
   try{
-    await adminConfigRequest("user","create",data);
+    const result=await adminConfigRequest("user","create",data);
+    if(result?.invited)alert("Contul a fost creat și invitația a fost trimisă pe email.");
     selectedAdminUser=data.User_ID;
     renderAdminConfig();
   }catch(err){
