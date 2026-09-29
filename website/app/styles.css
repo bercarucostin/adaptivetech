@@ -9359,3 +9359,19 @@ body.dashboard-production-maximized .kanban-col{
 .user-password-link{display:block;width:fit-content;margin-top:6px;font-size:12px;font-weight:500;color:var(--muted,#746d61);text-underline-offset:3px}
 .user-invite-option{display:flex!important;align-items:center;gap:8px;font-size:13px}
 .user-invite-option input[type="checkbox"]{width:16px!important;height:16px!important;min-height:16px!important;margin:0;accent-color:#258350;flex:0 0 16px}
+
+/* Configuration import preview */
+.spreadsheet-preview { width:min(960px,calc(100vw - 32px)); max-height:85vh; overflow:auto; box-sizing:border-box; border:1px solid #ded7cb; border-radius:20px; padding:24px; color:#39352c; background:#fff; }
+.spreadsheet-preview::backdrop { background:rgba(25,22,17,.45); }
+.spreadsheet-preview h2 { margin:0 0 12px; font-size:22px; }
+.spreadsheet-preview p { font-size:14px; color:#716b61; }
+.spreadsheet-table { overflow:auto; max-height:320px; border:1px solid #e5e0d8; border-radius:10px; }
+.spreadsheet-table table { width:100%; border-collapse:collapse; font-size:13px; }
+.spreadsheet-table th,.spreadsheet-table td { padding:9px 12px; text-align:left; border-bottom:1px solid #eee9e1; white-space:pre-wrap; min-width:70px; max-width:320px; overflow-wrap:anywhere; }
+.spreadsheet-table th { position:sticky; top:0; background:#faf7f1; }
+.spreadsheet-errors { padding:12px; background:#fff2ef; color:#9b3324; border-radius:10px; max-height:180px; overflow:auto; font-size:14px; margin:16px 0; }
+.spreadsheet-preview select { margin:8px 0 12px; display:block; width:100%; padding:10px; border:1px solid #ded7cb; border-radius:8px; background:white; }
+.spreadsheet-preview .spreadsheet-replace:not([hidden]) { display:flex; align-items:center; gap:10px; color:#9b3324; font-size:14px; }
+.spreadsheet-preview input[type=checkbox] { flex:none; width:18px; height:18px; margin:0; accent-color:#28835d; }
+.spreadsheet-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; margin-top:20px; }
+.spreadsheet-actions button:disabled { opacity:.45; cursor:not-allowed; }

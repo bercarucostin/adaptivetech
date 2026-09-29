@@ -7973,7 +7973,7 @@ adminCreateManyRows=async function(rows,title,entityLabel){
 
 function csvEscape(value){
   const s=value===null||value===undefined?"":String(value);
-  return /[",\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+  return /[";,\t\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
 }
 function downloadTextFile(name,text,type="text/csv;charset=utf-8"){
   const blob=new Blob(["\ufeff",text],{type});
@@ -8144,118 +8144,43 @@ function downloadAdminCsv(kind){
 window.downloadAdminCsv=downloadAdminCsv;
 
 
+async function downloadAdminExcel(kind){
+  if(!isAdmin())return;
+  const epoch=authEpoch,userId=auth.user.User_ID;
+  try{
+    const data=adminCsvDataset(kind);
+    const bytes=await SpreadsheetUI.job({action:"write",dataset:data});
+    if(!requestContextValid(epoch,userId)||!isAdmin())return;
+    const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download=data.name.replace(/\.csv$/i,".xlsx");document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setConnection(true,`Excel descărcat · ${data.rows.length} rânduri`);
+  }catch(err){alert(`Export Excel eșuat: ${err.message}`);}
+}
+let adminSpreadsheetImportBusy=false;
 async function uploadAdminCsv(kind,file){
-  if(!isAdmin()||!file)return;
-
-  const text=await file.text();
-  let parsedInfo;
+  if(!isAdmin()||!file||adminSpreadsheetImportBusy)return;
+  adminSpreadsheetImportBusy=true;
+  const epoch=authEpoch,userId=auth.user.User_ID;
+  let loading=false;
   try{
-    parsedInfo=parseCsv(text);
-  }catch(err){
-    alert(`CSV invalid: ${err.message}`);
-    return;
-  }
-
-  const parsed=parsedInfo.rows;
-  const delimiter=parsedInfo.delimiter;
-
-  if(!parsed.length){
-    alert("CSV-ul nu conține rânduri.");
-    return;
-  }
-
-  const modeRaw=window.prompt(
-    "Mod import: scrie MERGE pentru adăugare/actualizare sau REPLACE pentru înlocuirea completă a secțiunii.",
-    "MERGE"
-  );
-  if(modeRaw===null)return;
-
-  const mode=String(modeRaw).trim().toUpperCase();
-  if(!["MERGE","REPLACE"].includes(mode)){
-    alert("Mod invalid. Folosește MERGE sau REPLACE.");
-    return;
-  }
-
-  if(mode==="REPLACE"&&!confirm(
-    `REPLACE va înlocui toate rândurile existente din această secțiune cu cele ${parsed.length} rânduri din CSV. Continui?`
-  ))return;
-
-  let rows;
-
-  try{
-    if(kind==="prices"){
-      rows=parsed.map(r=>{
-        const pret=parseCsvNumber(csvValue(r,["Pret","Price"]),delimiter);
-        return {
-          id:String(csvValue(r,["ID"])).trim(),
-          contract:String(csvValue(r,["Contract"])).trim(),
-          tip_lucrare:String(csvValue(r,["Tip_Lucrare","Tip Lucrare"])).trim(),
-          pret:pret===null?"":pret
-        };
-      });
-
-      if(rows.some(r=>!r.contract||!r.tip_lucrare||r.pret===""||!Number.isFinite(Number(r.pret)))){
-        throw new Error("Pentru prețuri sunt obligatorii Contract, Tip_Lucrare și Pret numeric.");
-      }
-
-    }else if(kind==="types"){
-      rows=parseWorkTypeCsvRows(parsed);
-
-      if(rows.some(r=>!r.tip_lucrare)){
-        throw new Error("Pentru tipuri de lucrări, Tip_Lucrare este obligatoriu.");
-      }
-
-    }else if(kind==="costs"){
-      rows=parsed.map(r=>{
-        const raw=csvValue(r,["Cost"]);
-        const cost=parseCsvNumber(raw,delimiter);
-        return {
-          source_row_no:String(csvValue(r,["Source_Row_No","Source Row No"])).trim(),
-          legacy_id:String(csvValue(r,["ID","Legacy_ID","Legacy ID"])).trim(),
-          tehnician:String(csvValue(r,["Tehnician","Technician"])).trim(),
-          tip_lucrare:String(csvValue(r,["Tip_Lucrare","Tip Lucrare"])).trim(),
-          etapa:String(csvValue(r,["Etapa","Stage"])).trim(),
-          cost:String(raw).trim()===""?"":cost
-        };
-      });
-
-      if(rows.some(r=>
-        !r.tehnician||
-        !r.tip_lucrare||
-        !r.etapa||
-        (r.cost!==""&&!Number.isFinite(Number(r.cost)))
-      )){
-        throw new Error("Pentru costuri sunt obligatorii Tehnician, Tip_Lucrare și Etapa; Cost trebuie să fie numeric sau gol.");
-      }
-    }else{
-      throw new Error("Secțiune CSV necunoscută.");
-    }
-  }catch(err){
-    alert(`CSV invalid: ${err.message}`);
-    return;
-  }
-
-  showLoading("Import CSV",`${rows.length} rânduri · ${mode} · verific și import...`);
-
-  try{
-    const result=await sbRpc("admin_bulk_config_import",{
-      p_kind:kind,
-      p_mode:mode,
-      p_rows:rows
-    });
-
+    const info=await SpreadsheetUI.read(file);
+    if(!requestContextValid(epoch,userId)||!isAdmin())return;
+    const validation=SpreadsheetImport.prepare(kind,info);
+    const mode=await SpreadsheetUI.preview({fileName:file.name,info,validation});
+    if(!mode||validation.errors.length||!requestContextValid(epoch,userId)||!isAdmin())return;
+    loading=true;showLoading("Import date",`${validation.rows.length} rânduri · ${mode}`);
+    const result=await sbRpc("admin_bulk_config_import",{p_kind:kind,p_mode:mode,p_rows:validation.rows});
+    if(!requestContextValid(epoch,userId))return;
     await loadAll(false);
-    currentView="adminconfig";
-    renderAdminConfig();
-
-    const imported=Number(result?.imported_rows??rows.length);
-    setConnection(true,`CSV importat · ${imported} rânduri`);
+    if(!requestContextValid(epoch,userId))return;
+    currentView="adminconfig";renderAdminConfig();
+    const imported=Number(result?.imported_rows??validation.rows.length);
+    setConnection(true,`Date importate · ${imported} rânduri`);
     alert(`Import finalizat: ${imported} rânduri (${mode}).`);
-  }catch(err){
-    alert(`Import CSV eșuat: ${err.message}`);
-  }finally{
-    hideLoading();
-  }
+  }catch(err){if(requestContextValid(epoch,userId))alert(`Import eșuat: ${err.message}`);}
+  finally{adminSpreadsheetImportBusy=false;if(loading)hideLoading();}
 }
 window.uploadAdminCsv=uploadAdminCsv;
 
@@ -8269,16 +8194,11 @@ renderAdminConfig=function(){
     const toolbar=document.querySelector(".admin-config-toolbar");
     if(toolbar&&!toolbar.querySelector(".admin-bulk-tools")){
       const tools=document.createElement("div");tools.className="admin-bulk-tools";
-      tools.innerHTML=`<button class="secondary-btn" type="button" data-bulk-download>↓ Descarcă CSV</button><button class="secondary-btn" type="button" data-bulk-upload-btn>↑ Încarcă CSV</button><input type="file" accept=".csv,text/csv,text/plain" hidden data-bulk-upload><span class="admin-bulk-hint">CSV: virgulă / ; / TAB · MERGE sau REPLACE</span>`;
+      tools.innerHTML=`<button class="secondary-btn" type="button" data-bulk-download>↓ Descarcă Excel</button><button class="secondary-btn" type="button" data-bulk-csv>CSV</button><button class="secondary-btn" type="button" data-bulk-upload-btn>↑ Importă Excel / CSV</button><input type="file" accept=".xlsx,.csv,.tsv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values" hidden data-bulk-upload><span class="admin-bulk-hint">Editează în Excel și reimportă · previzualizare înainte de salvare</span>`;
       toolbar.appendChild(tools);
       const fileInput=tools.querySelector("[data-bulk-upload]");
-      tools.querySelector("[data-bulk-download]")?.addEventListener("click",()=>{
-        if(typeof downloadAdminCsv!=="function"){
-          alert("Funcția de export CSV nu este disponibilă.");
-          return;
-        }
-        downloadAdminCsv(kind);
-      });
+      tools.querySelector("[data-bulk-download]")?.addEventListener("click",()=>downloadAdminExcel(kind));
+      tools.querySelector("[data-bulk-csv]")?.addEventListener("click",()=>downloadAdminCsv(kind));
       tools.querySelector("[data-bulk-upload-btn]")?.addEventListener("click",()=>fileInput?.click());
       fileInput?.addEventListener("change",async e=>{
         const f=e.target.files?.[0];
