@@ -1,3 +1,9 @@
+BEGIN;
+
+ALTER TABLE public.lab_work_orders ADD COLUMN IF NOT EXISTS qr_token uuid NOT NULL DEFAULT gen_random_uuid();
+
+CREATE UNIQUE INDEX IF NOT EXISTS lab_work_orders_qr_token_key ON public.lab_work_orders(qr_token);
+
 -- Bounded dashboard read. The materialized date/role scope precedes item and cost work.
 -- Absent reception boundaries default to today-89/today in Europe/Bucharest;
 -- explicit JSON null disables each boundary. All date endpoints are inclusive.
@@ -192,3 +198,43 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION public.get_work_orders_page(uuid,jsonb,integer,integer) FROM public;
 GRANT EXECUTE ON FUNCTION public.get_work_orders_page(uuid,jsonb,integer,integer) TO authenticated;
+
+
+-- QR identifiers are permanent references, not bearer access credentials.
+CREATE OR REPLACE FUNCTION public.get_work_order_qr_token(p_lab_organization_id uuid,p_work_order_id bigint)
+RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE token uuid;
+BEGIN
+ IF auth.uid() IS NULL OR NOT coalesce(public.can_access_work_order(p_lab_organization_id,p_work_order_id),false) THEN
+  RAISE EXCEPTION 'Lucrarea nu este disponibilă sau nu ai acces.';
+ END IF;
+ SELECT qr_token INTO token FROM public.lab_work_orders
+ WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id AND archived_at IS NULL;
+ IF token IS NULL THEN RAISE EXCEPTION 'Lucrarea nu este disponibilă sau nu ai acces.'; END IF;
+ RETURN token;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_work_order_qr_token(uuid,bigint) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_work_order_qr_token(uuid,bigint) TO authenticated;
+
+
+CREATE OR REPLACE FUNCTION public.resolve_work_order_qr(p_lab_organization_id uuid,p_token uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE wo record; page jsonb;
+BEGIN
+ IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+ SELECT lab_organization_id,id INTO wo FROM public.lab_work_orders WHERE lab_organization_id=p_lab_organization_id AND qr_token=p_token AND archived_at IS NULL;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ IF NOT coalesce(public.can_access_work_order(wo.lab_organization_id,wo.id),false) THEN RETURN NULL; END IF;
+ -- Reuse the bounded read's role-specific financial/assignment masks.
+ page:=public.get_work_orders_page(wo.lab_organization_id,jsonb_build_object(
+   'work_order_id',wo.id,'reception_from',NULL,'reception_to',NULL,'hide_old',false
+ ),1,0);
+ RETURN page->'rows'->0;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.resolve_work_order_qr(uuid,uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.resolve_work_order_qr(uuid,uuid) TO authenticated;
+
+
+COMMIT;

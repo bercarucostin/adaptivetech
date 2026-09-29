@@ -36,3 +36,11 @@ test('old case sheets without connection metadata still export',()=>{
  assert.match(report,/Test note/);
  assert.match(report,/Solo/);
 });
+
+test('case sheet places QR beside work metadata with a physical print size',()=>{
+ context.qrMarkup='<div class="case-qr"><svg data-test="work-order-qr"></svg><strong>Lucrare #42</strong></div>';
+ assert.equal(vm.runInContext('renderPhysicalCaseSheet(order,draft,qrMarkup)',context),true);
+ assert.match(report,/data-test="work-order-qr"/);
+ assert.match(report,/width:32mm;height:32mm/);
+ assert.ok(report.indexOf('data-test="work-order-qr"')<report.indexOf('<div class="chart-wrap">'));
+});

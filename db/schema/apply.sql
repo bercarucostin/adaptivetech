@@ -126,6 +126,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/get_public_price_list_history.sql
 \i db/schema/20_functions/get_work_order_financial_history.sql
 \i db/schema/20_functions/get_work_order_price_lines.sql
+\i db/schema/20_functions/get_work_order_qr_token.sql
 \i db/schema/20_functions/get_work_order_reference_data.sql
 \i db/schema/20_functions/get_work_orders_page.sql
 \i db/schema/20_functions/has_org_role.sql
@@ -147,6 +148,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/replace_work_order_items.sql
 \i db/schema/20_functions/resolve_effective_work_order_contract.sql
 \i db/schema/20_functions/resolve_work_order_price_snapshot.sql
+\i db/schema/20_functions/resolve_work_order_qr.sql
 \i db/schema/20_functions/resolve_work_order_technician_costs.sql
 \i db/schema/20_functions/reverse_technician_payment.sql
 \i db/schema/20_functions/sanitize_tooth_details.sql

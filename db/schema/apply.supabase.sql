@@ -974,6 +974,10 @@ BEGIN
             );
     END IF;
 END $$;
+
+-- Random stable QR reference for both existing and future work orders.
+ALTER TABLE public.lab_work_orders ADD COLUMN IF NOT EXISTS qr_token uuid NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS lab_work_orders_qr_token_key ON public.lab_work_orders(qr_token);
 -- END db/schema/10_tables/15_lab_work_orders.sql
 
 -- BEGIN db/schema/10_tables/16_lab_work_types.sql
@@ -6987,6 +6991,25 @@ REVOKE ALL ON FUNCTION public.get_work_order_price_lines(uuid,bigint) FROM publi
 GRANT EXECUTE ON FUNCTION public.get_work_order_price_lines(uuid,bigint) TO authenticated;
 -- END db/schema/20_functions/get_work_order_price_lines.sql
 
+-- BEGIN db/schema/20_functions/get_work_order_qr_token.sql
+-- QR identifiers are permanent references, not bearer access credentials.
+CREATE OR REPLACE FUNCTION public.get_work_order_qr_token(p_lab_organization_id uuid,p_work_order_id bigint)
+RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE token uuid;
+BEGIN
+ IF auth.uid() IS NULL OR NOT coalesce(public.can_access_work_order(p_lab_organization_id,p_work_order_id),false) THEN
+  RAISE EXCEPTION 'Lucrarea nu este disponibilă sau nu ai acces.';
+ END IF;
+ SELECT qr_token INTO token FROM public.lab_work_orders
+ WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id AND archived_at IS NULL;
+ IF token IS NULL THEN RAISE EXCEPTION 'Lucrarea nu este disponibilă sau nu ai acces.'; END IF;
+ RETURN token;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_work_order_qr_token(uuid,bigint) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_work_order_qr_token(uuid,bigint) TO authenticated;
+-- END db/schema/20_functions/get_work_order_qr_token.sql
+
 -- BEGIN db/schema/20_functions/get_work_order_reference_data.sql
 -- Flowrise Supabase function: public.get_work_order_reference_data(p_lab_organization_id uuid)
 -- Generated from the Supabase schema snapshot dated 2026-09-04.
@@ -7129,6 +7152,7 @@ BEGIN
  IF rf>rt OR df>dt OR uf>ut THEN RAISE EXCEPTION 'Date range is reversed'; END IF;
  IF p_filters?'hide_old' AND jsonb_typeof(p_filters->'hide_old') NOT IN ('boolean','null') THEN RAISE EXCEPTION 'hide_old must be boolean'; END IF;
  IF p_filters?'status_in' AND jsonb_typeof(p_filters->'status_in')<>'array' THEN RAISE EXCEPTION 'status_in must be an array'; END IF;
+ IF p_filters?'work_order_id' AND ((p_filters->>'work_order_id')::bigint IS NULL OR (p_filters->>'work_order_id')::bigint<1) THEN RAISE EXCEPTION 'Invalid work order id'; END IF;
  IF p_filters?'maximum_id' THEN PERFORM (p_filters->>'maximum_id')::bigint; END IF;
  sort_col:=columns_map->>coalesce(p_filters->>'sort_key','id');
  sort_dir:=lower(coalesce(p_filters->>'sort_dir','desc'));
@@ -7148,6 +7172,7 @@ BEGIN
  WITH base AS MATERIALIZED (
   SELECT wo.* FROM public.lab_work_orders wo
   WHERE wo.lab_organization_id=$1 AND wo.archived_at IS NULL
+   AND (NOT $2?'work_order_id' OR wo.id=($2->>'work_order_id')::bigint)
    AND ($3 OR $4 OR ($5 AND $7 IN (lower(trim(coalesce(wo.tehnician_model,''))),lower(trim(coalesce(wo.tehnician1_modelare,''))),lower(trim(coalesce(wo.tehnician2_cer_fin,'')))) ) OR ($6 AND public.doctor_matches_partner(wo.nume_partener)))
    AND ($8 IS NULL OR coalesce(wo.data_receptie,wo.created_at)>=($8::timestamp AT TIME ZONE 'Europe/Bucharest'))
    AND ($9 IS NULL OR coalesce(wo.data_receptie,wo.created_at)<(($9+1)::timestamp AT TIME ZONE 'Europe/Bucharest'))
@@ -8422,6 +8447,26 @@ $$;
 REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) FROM public;
 REVOKE ALL ON FUNCTION public.resolve_work_order_price_snapshot(uuid,text,text,text,numeric,numeric) FROM authenticated;
 -- END db/schema/20_functions/resolve_work_order_price_snapshot.sql
+
+-- BEGIN db/schema/20_functions/resolve_work_order_qr.sql
+CREATE OR REPLACE FUNCTION public.resolve_work_order_qr(p_lab_organization_id uuid,p_token uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE wo record; page jsonb;
+BEGIN
+ IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+ SELECT lab_organization_id,id INTO wo FROM public.lab_work_orders WHERE lab_organization_id=p_lab_organization_id AND qr_token=p_token AND archived_at IS NULL;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ IF NOT coalesce(public.can_access_work_order(wo.lab_organization_id,wo.id),false) THEN RETURN NULL; END IF;
+ -- Reuse the bounded read's role-specific financial/assignment masks.
+ page:=public.get_work_orders_page(wo.lab_organization_id,jsonb_build_object(
+   'work_order_id',wo.id,'reception_from',NULL,'reception_to',NULL,'hide_old',false
+ ),1,0);
+ RETURN page->'rows'->0;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.resolve_work_order_qr(uuid,uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.resolve_work_order_qr(uuid,uuid) TO authenticated;
+-- END db/schema/20_functions/resolve_work_order_qr.sql
 
 -- BEGIN db/schema/20_functions/resolve_work_order_technician_costs.sql
 -- Canonical catalog lookup shared by assignment creation and scope adjustments.

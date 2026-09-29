@@ -317,6 +317,7 @@ function abortActiveRequests(){
 }
 
 function resetRuntimeState(){
+  closeScannedWorkOrder();
   clearTimeout(toothPriceEstimateTimer);
   toothPriceEstimateTimer=null;
   toothPriceEstimateRequest++;
@@ -726,6 +727,7 @@ function showApp(){
   appShell.classList.remove("hidden");
   applyRoleUI();
   applyDesktopPanelState();
+  void openScannedWorkOrder();
 }
 
 function showLogin(){
@@ -1810,7 +1812,7 @@ async function exportProductionCaseSheet(orderId){
       return;
     }
 
-    renderPhysicalCaseSheet(order,draft);
+    await renderCaseSheetWithQr(order,draft);
   }catch(err){
     alert(`Nu am putut exporta fișa lucrării #${id}: ${err.message}`);
   }finally{
@@ -3682,7 +3684,7 @@ function buildCaseReportFromOrderForm(){
 }
 
 
-function renderPhysicalCaseSheet(order,draft){
+function renderPhysicalCaseSheet(order,draft,qrMarkup="",reportWindow=null){
   const selected=orderedSelectedTeeth(draft.selected);
   if(!selected.length){
     alert("Select at least one tooth before printing the case sheet.");
@@ -3694,7 +3696,7 @@ function renderPhysicalCaseSheet(order,draft){
     return false;
   }
 
-  const reportWindow=window.open("","_blank","width=1050,height=850");
+  reportWindow=reportWindow||window.open("","_blank","width=1050,height=850");
   if(!reportWindow){
     alert("The print window was blocked by the browser. Please allow pop-ups for this site.");
     return false;
@@ -3740,6 +3742,10 @@ function renderPhysicalCaseSheet(order,draft){
   .case-meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px;margin-top:11px}
   .meta-item span{display:block;color:#777066;font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
   .meta-item strong{font-size:10pt}
+  .case-qr{display:flex;gap:10px;align-items:center;margin-top:10px;break-inside:avoid;font-size:8pt;line-height:1.5}
+  .case-qr a{display:block;flex:0 0 32mm;width:32mm;height:32mm}
+  .case-qr svg{display:block;width:32mm;height:32mm;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .qr-draft-note{font-size:8pt;color:#74695b}
   .chart-wrap{border:1px solid #ddd6cd;border-radius:8px;padding:4px;background:#f6f5f3}
   .chart-wrap{break-inside:avoid;print-color-adjust:exact;-webkit-print-color-adjust:exact}
   .chart-wrap .dental-chart-svg{display:block;width:100%;height:300px}
@@ -3800,6 +3806,7 @@ function renderPhysicalCaseSheet(order,draft){
         <div class="meta-item"><span>Partener</span><strong>${escapeHtml(order.partner)||"—"}</strong></div>
         <div class="meta-item"><span>Dată</span><strong>${fmtDate(order.deadline)}</strong></div>
       </div>
+      ${qrMarkup}
     </div>
 
     <div class="chart-wrap">
@@ -3856,7 +3863,7 @@ async function printCaseSheet(){
   }
 
   await saveActiveCaseSheet(false);
-  renderPhysicalCaseSheet(order,draft);
+  await renderCaseSheetWithQr(order,draft);
 }
 
 async function printOrderCaseSheet(){
@@ -3887,7 +3894,7 @@ async function printOrderCaseSheet(){
     await persistPatientCase(existingId,orderCaseDraft);
   }
 
-  renderPhysicalCaseSheet(order,orderCaseDraft);
+  await renderCaseSheetWithQr(order,orderCaseDraft);
 }
 
 function renderTechnicians(){
@@ -5231,6 +5238,7 @@ function openModal(){
   modalBackdrop.setAttribute("aria-hidden","false");
 }
 function closeModal(){
+  closeScannedWorkOrder();
   closeOrderToothPopover();
   if(!modalBackdrop) return;
   modalBackdrop.classList.add("hidden");
@@ -10051,7 +10059,7 @@ renderCalendar=function(){
 initializeDashboardPagination();
 
 setInterval(()=>{
-  if(auth&&!dashboardState.pendingKey&&!dashboardState.exporting)loadAll(false).catch(()=>{});
+  if(auth&&!qrOpening&&!qrModalContext&&!dashboardState.pendingKey&&!dashboardState.exporting)loadAll(false).catch(()=>{});
 },AUTO_REFRESH_MS);
 
 if(window.location.protocol==="file:"){

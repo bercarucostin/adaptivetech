@@ -18,7 +18,7 @@
   const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
   function environment(){
     const box={innerHTML:'current'},hint={textContent:'current',classList:{add(){},remove(){}}};
-    const env={auth:{user:{User_ID:'admin',Role:'Admin',Technician_Name:'Denis'}},authEpoch:1,
+    const env={closeScannedWorkOrder(){},auth:{user:{User_ID:'admin',Role:'Admin',Technician_Name:'Denis'}},authEpoch:1,
       toothPriceEstimateRequest:7,toothPriceEstimateTimer:42,orderId:{value:'19'},priceHint:hint,
       $:()=>box,box,can:()=>env.pricing,isTechnician:()=>env.auth?.user.Role==='Technician',
       isManagement:()=>['Admin','Manager'].includes(env.auth?.user.Role),pricing:true,

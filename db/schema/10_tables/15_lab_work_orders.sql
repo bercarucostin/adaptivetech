@@ -120,3 +120,7 @@ BEGIN
             );
     END IF;
 END $$;
+
+-- Random stable QR reference for both existing and future work orders.
+ALTER TABLE public.lab_work_orders ADD COLUMN IF NOT EXISTS qr_token uuid NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS lab_work_orders_qr_token_key ON public.lab_work_orders(qr_token);
