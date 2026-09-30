@@ -141,6 +141,8 @@ test('Build Folder Tree embeds lib/drive-tree.js and roots at the new folder', (
   const code = byName('Build Folder Tree').parameters.jsCode;
   assert.ok(code.includes(sharedBlock('lib/drive-tree.js')), 'Code node has drifted from lib/drive-tree.js');
   assert.ok(code.includes("const KB_ROOT_ID = '1g7SDhQdmKB-MVs5R21gZypwpKLPzee0q';"));
+  assert.ok(code.includes('return [{ json: { query, folders, topFolders } }];'),
+    'Build Folder Tree must pass topFolders on to the classification branch');
 });
 
 test('Drive: Knowledge Base lists files with the query Build Folder Tree built', () => {

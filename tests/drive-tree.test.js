@@ -80,3 +80,21 @@ test('exactly MAX_FOLDERS folders is allowed', () => {
   for (let i = 0; i < MAX_FOLDERS; i++) listing.push(folder('f' + i, 'F' + i, ROOT));
   assert.strictEqual(Object.keys(buildFolderTree(listing, ROOT).folders).length, 150);
 });
+
+test('topFolders lists the root\'s direct children with descriptions, sorted by name', () => {
+  const { topFolders } = buildFolderTree([
+    { id: 'p600', name: 'PARTNER 600', parents: [ROOT], mimeType: FOLDER_MIME, description: '#product' },
+    { id: 'svc', name: 'Service', parents: ['p600'], mimeType: FOLDER_MIME, description: '#shared' },
+    { id: 'common', name: 'DOCUMENTATIE COMUNA', parents: [ROOT], mimeType: FOLDER_MIME, description: 'toate #shared' },
+    { id: 'p200', name: 'PARTNER 200', parents: [ROOT], mimeType: FOLDER_MIME },
+  ], ROOT);
+  assert.deepStrictEqual(topFolders, [
+    { id: 'common', name: 'DOCUMENTATIE COMUNA', description: 'toate #shared' },
+    { id: 'p200', name: 'PARTNER 200', description: '' },
+    { id: 'p600', name: 'PARTNER 600', description: '#product' },
+  ]);
+});
+
+test('topFolders is empty when the root has no folders', () => {
+  assert.deepStrictEqual(buildFolderTree([], ROOT).topFolders, []);
+});
