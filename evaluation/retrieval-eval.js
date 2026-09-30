@@ -430,6 +430,7 @@ function group(q) {
   if (q.id.startsWith('L')) return 'exact terms';
   if (q.id.startsWith('R')) return 'real (from chat history)';
   if (q.id.startsWith('G')) return 'multi-fact';
+  if (q.id.startsWith('W')) return 'checked WhatsApp runs';
   return 'follow-up';
 }
 

@@ -271,6 +271,49 @@
         { "role": "product", "group": "reset", "folder": "PARTNER 600", "heading": "%Procedura de reset%" },
         { "role": "product", "group": "je", "folder": "PARTNER 600", "heading": "7. Inregistrarea%" } ] },
 
+    { "id": "W1", "kind": "any", "product": null, "question": "eroare 40",
+      "history": [ { "role": "user", "content": "cum pun si eu un sertar la p300" }, { "role": "assistant", "content": "Partner 300 are o interfață RS232 (UART) pentru periferice, inclusiv sertar." } ],
+      "answer": "Eroare 40 = DEPASIRE 24 H. Se tipareste raportul zilnic Z: MENIU (MENIU CASIER) -> [MOD Z] -> TOTAL -> [RAPORT ZILNIC - Z].",
+      "bot_2026_09_30": "partly right: meaning and fix right, Z-report key path improvised (no RAPOARTE menu); Z-report chunk not retrieved",
+      "gold": [
+        { "role": "product", "group": "meaning", "folder": "PARTNER %", "heading": "%ERORI%", "content": "%eroare 40%" },
+        { "role": "product", "group": "z-report", "folder": "PARTNER %", "heading": "%Rapoarte cu stergere Z%", "content": "%RAPORT ZILNIC%" } ] },
+    { "id": "W2", "kind": "any", "product": null, "question": "cum se acceseaza mod s?",
+      "history": [ { "role": "user", "content": "eroare 40" }, { "role": "assistant", "content": "Eroare 40 înseamnă DEPASIRE 24 H; tipăriți raportul Z." } ],
+      "answer": "MENIU -> sageti pana la MOD S -> TOTAL -> parola 20100102 -> TOTAL. Parola se schimba din MOD S -> [PROG. PAROLA S] (4 cifre, se confirma).",
+      "bot_2026_09_30": "right",
+      "gold": [
+        { "role": "product", "folder": "PARTNER %", "heading": "%Parole de acces%", "content": "%20100102%" },
+        { "role": "product", "folder": "PARTNER %", "heading": "%MOD S%", "content": "%20100102%" } ] },
+    { "id": "W3", "kind": "any", "product": "PARTNER 200", "question": "cum se emite un bon fiscal pe partner 200?",
+      "history": [ { "role": "user", "content": "cum se acceseaza mod s?" }, { "role": "assistant", "content": "MENIU -> MOD S -> TOTAL -> parola 20100102 -> TOTAL." } ],
+      "note": "The Partner 200 user manual has no sales section (partial extraction); the other models' 4.2 / 5.2 sections are the answer.",
+      "answer": "Logare vanzator (ex. 1, [MENIU]/[ANUL BON MENIU], parola, [MENIU]); vanzare PLU: numarul PLU, tasta [PLU] ([R/A PLU]), suma primita, [TOTAL] (TOTAL inchide bonul, SUBTOTAL arata totalul). Date client optional: [SHIFT] [CIF/X], 3 randuri x 32 caractere optionale, rand 4 CIF max 10 caractere obligatoriu, [TOTAL].",
+      "bot_2026_09_30": "wrong: sale steps invented; the other models' sales sections were not retrieved (client-data part right)",
+      "gold": [
+        { "role": "product", "group": "sale", "folder": "PARTNER %", "heading": "%nzarea cu preturi memorate%" } ] },
+    { "id": "W4", "kind": "shared", "product": null, "question": "cum se exporta un xml pe stick?",
+      "history": [ { "role": "user", "content": "cum se emite un bon fiscal pe partner 200?" }, { "role": "assistant", "content": "Introduceți PLU-ul, apoi TOTAL pentru a închide bonul." } ],
+      "answer": "MENIU -> [MOD S] -> parola -> [Export fisiere XML] -> TOTAL; A: interval DE LA / PANA LA zi,luna,an; B: DE LA / PANA LA numarul zilei fiscale Z. Stick-ul se conecteaza la USB (cu echipamentul oprit).",
+      "bot_2026_09_30": "right",
+      "gold": [
+        { "role": "product", "folder": "PARTNER %", "heading": "%Exportul fisierelor XML%" },
+        { "role": "shared", "folder": "DOCUMENTATIE COMUNA", "heading": "ExportXml" } ] },
+    { "id": "W5", "kind": "product", "product": "PARTNER 200", "question": "eroare ppp link pe partner 200",
+      "history": [ { "role": "user", "content": "cum se exporta un xml pe stick?" }, { "role": "assistant", "content": "MOD S -> Export fisiere XML -> TOTAL, apoi alegeți intervalul." } ],
+      "answer": "Eroare 111 = ERR PPP link (GPRS). Verificare: meniul de service 05925935859 [MENIU] -> 'Gprs Signal Test' (nivel semnal) si 'Gprs PING Test'; sau rapid [SHIFT] [TOTAL] -> 'verificare retea'. Se verifica SIM-ul activat (GPRS PARA / GPRS ACTIVE) sau se alege alta interfata din PROGRAMARE -> Net Interface.",
+      "bot_2026_09_30": "partly right: meaning right, 'Diagnostice GPRS' menu invented; the documented checks (shared 2.4.4) were not retrieved",
+      "gold": [
+        { "role": "product", "group": "meaning", "folder": "PARTNER 200", "heading": "%ERORI%", "content": "%111%PPP%" },
+        { "role": "shared", "group": "checks", "folder": "DOCUMENTATIE COMUNA", "heading": "2.4.4%" } ] },
+    { "id": "W6", "kind": "any", "product": null, "question": "am pierdut un rasport Z, as dori sa il tiparesc, cum il tiparesc?",
+      "history": [ { "role": "user", "content": "eroare ppp link pe partner 200" }, { "role": "assistant", "content": "Eroare 111: ERR PPP link (GPRS). Verificați cartela SIM și semnalul." } ],
+      "answer": "Copia raportului Z se tipareste din jurnalul electronic: MENIU CASIER -> [MOD X] -> TOTAL -> [RAPORT DIN JE] -> TIPARIRE -> DETALIAT -> categoria RAPORT Z -> intervalul (DE LA DATA / LA DATA sau DE LA NR / LA NR, ex. DE LA 0111 PANA LA 0111). Raportul periodic din memoria fiscala contine doar totalizatoare, nu e o copie.",
+      "bot_2026_09_30": "wrong: sent to the fiscal-memory periodic report; the JE menu chunk was not retrieved",
+      "gold": [
+        { "role": "product", "group": "menu", "folder": "PARTNER %", "content": "%RAPORT DIN JE%" },
+        { "role": "product", "group": "detail", "folder": "PARTNER %", "content": "%RAPORT Z = Rapoartele%" } ] },
+
     { "id": "F1", "kind": "product", "product": "PARTNER 600", "question": "si cum schimb memoria fiscala?",
       "history": [
         { "role": "user", "content": "am un partner 600" },
