@@ -142,3 +142,48 @@ test('both answering prompts explain the [FOLDER] chunk label', () => {
   assert.ok(message.includes('4. When the documentation contains product-specific info (e.g. Partner 200, Partner 600), ' +
     'ensure your answer matches the correct product. ' + FOLDER_RULE + '\n'));
 });
+
+test('the retrieval chain runs history, folders, optimizer, search, prompt in order', () => {
+  assert.deepStrictEqual(targets('Unified Input'), [['Load Chat History']]);
+  assert.deepStrictEqual(targets('Load Chat History'), [['Load KB Folders']]);
+  assert.deepStrictEqual(targets('Load KB Folders'), [['Build Optimizer Request']]);
+  assert.deepStrictEqual(targets('Build Optimizer Request'), [['Optimize Query']]);
+  assert.deepStrictEqual(targets('Optimize Query'), [['Parse Optimized Query']]);
+  assert.deepStrictEqual(targets('Parse Optimized Query'), [['Retrieve Docs']]);
+  assert.deepStrictEqual(targets('Retrieve Docs'), [['Build Prompt']]);
+});
+
+test('Merge History + RAG is gone without a trace', () => {
+  assert.strictEqual(byName('Merge History + RAG'), undefined);
+  assert.ok(!JSON.stringify(wf).includes('Merge History + RAG'));
+});
+
+test('a new user with no history or an empty knowledge base still reaches the optimizer', () => {
+  assert.strictEqual(byName('Load Chat History').alwaysOutputData, true);
+  assert.strictEqual(byName('Load KB Folders').alwaysOutputData, true);
+});
+
+test('Load KB Folders runs once and reads kinds from kb_folders', () => {
+  const node = byName('Load KB Folders');
+  assert.strictEqual(node.executeOnce, true, 'it receives one item per history row');
+  const q = node.parameters.query;
+  assert.ok(q.includes('left join kb_folders k using (folder)'));
+  assert.ok(q.includes("coalesce(k.kind, 'product') as kind"));
+  assert.ok(q.includes("metadata->>'source' = 'knowledge_base'"));
+  assert.deepStrictEqual(node.credentials, byName('Load Chat History').credentials);
+});
+
+test('the optimizer sends the request built from lib/retrieval-scope.js', () => {
+  const build = byName('Build Optimizer Request').parameters.jsCode;
+  assert.ok(build.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
+  assert.ok(build.includes('buildOptimizerRequest(question, history, folders)'));
+  const oq = byName('Optimize Query');
+  assert.strictEqual(oq.parameters.jsonBody, '={{ JSON.stringify($json.request) }}');
+  assert.strictEqual(oq.retryOnFail, true);
+});
+
+test('Parse Optimized Query validates the scope with lib/retrieval-scope.js', () => {
+  const code = byName('Parse Optimized Query').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
+  assert.ok(code.includes('parseOptimizedQuery(raw, question, folders)'));
+});

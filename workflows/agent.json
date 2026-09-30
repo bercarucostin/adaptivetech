@@ -764,7 +764,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 200, temperature: 0.3, system: 'You are a search query optimizer for a technical support knowledge base. Given the raw user question, produce a JSON object with two fields:\\n- \"semantic\": a natural-language sentence that captures the intent and meaning (optimized for embedding similarity search)\\n- \"lexical\": a concise keyword query with exact technical terms, product names, error codes, and action words (optimized for full-text search)\\n\\nReturn ONLY valid JSON. No markdown, no explanation, no extra text. What you produce has to be in the same language as the raw question.', messages: [{ role: 'user', content: $json.question }] }) }}",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
         "options": {
           "timeout": 30000
         }
@@ -1019,7 +1019,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse the Optimize Query output into { query (semantic), lexical } for the hybrid-search sub-workflow.\nlet semantic = '', lexical = '';\ntry {\n  const raw = ($json.content?.[0]?.text || '{}').replace(/^```json\\s*/i, '').replace(/\\s*```$/, '');\n  const parsed = JSON.parse(raw);\n  semantic = parsed.semantic || '';\n  lexical = parsed.lexical || '';\n} catch (e) {}\nconst fallback = $('Unified Input').first().json.question || '';\nreturn [{ json: { query: semantic || fallback, lexical: lexical || semantic || fallback } }];"
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Build Optimizer Request\", \"Parse Optimized Query\",\n// \"Build Prompt\" and \"Normalize For Agent\" Code nodes in workflows/agent.json.\n// tests/agent-workflow.test.js fails if they drift apart.\n\nconst OPTIMIZER_MODEL = 'claude-haiku-4-5';\nconst HISTORY_TURNS = 6;\nconst HISTORY_CHARS = 300;\n\nconst OPTIMIZER_SYSTEM = [\n  'You are a search query optimizer for a technical support knowledge base.',\n  'The knowledge base is organised in folders. Each PRODUCT FOLDER holds documentation for one product; SHARED FOLDERS hold documentation that applies to every product.',\n  '',\n  'Given the QUESTION, and the RECENT CONVERSATION for context, return a JSON object with three fields:',\n  '- \"scope\": the product folder the user is asking about, copied exactly from PRODUCT FOLDERS, or null when no product is named or implied in the question or the recent conversation. Never a shared folder.',\n  '- \"semantic\": a natural-language sentence that captures the intent (optimized for embedding similarity search).',\n  '- \"lexical\": a concise keyword query with exact technical terms, error codes, menu names and action words (optimized for full-text search).',\n  '',\n  'Leave product and model names out of \"semantic\" and \"lexical\": \"scope\" carries them. Keep every other exact term.',\n  'When the question is a follow-up (\"and how do I reset it?\"), use the conversation to make the queries self-contained.',\n  'Return ONLY valid JSON. No markdown, no explanation. \"semantic\" and \"lexical\" must be in the same language as the QUESTION.',\n].join('\\n');\n\n// n8n_chat_histories rows, newest first as Load Chat History returns them, to\n// [{ role, content }] oldest first. Rows that are not a human or ai message --\n// including the empty item alwaysOutputData emits for a new user -- are skipped.\nfunction historyFromRows(rows) {\n  const out = [];\n  for (const row of [...(rows || [])].reverse()) {\n    let msg = row && row.message;\n    if (typeof msg === 'string') {\n      try { msg = JSON.parse(msg); } catch (e) { continue; }\n    }\n    if (!msg || typeof msg.content !== 'string' || !msg.content) continue;\n    if (msg.type === 'human') out.push({ role: 'user', content: msg.content });\n    else if (msg.type === 'ai') out.push({ role: 'assistant', content: msg.content });\n  }\n  return out;\n}\n\nfunction foldersOfKind(folders, kind) {\n  return (folders || []).filter((f) => f && f.folder && f.kind === kind).map((f) => f.folder);\n}\n\n// The Anthropic Messages body for Optimize Query.\nfunction buildOptimizerRequest(question, history, folders) {\n  const recent = (history || []).slice(-HISTORY_TURNS).map((m) =>\n    (m.role === 'user' ? 'User: ' : 'Assistant: ') + String(m.content).slice(0, HISTORY_CHARS));\n  const content = [\n    'PRODUCT FOLDERS: ' + JSON.stringify(foldersOfKind(folders, 'product')),\n    'SHARED FOLDERS: ' + JSON.stringify(foldersOfKind(folders, 'shared')),\n    '',\n    'RECENT CONVERSATION:',\n    recent.length ? recent.join('\\n') : '(none)',\n    '',\n    'QUESTION:',\n    String(question || ''),\n  ].join('\\n');\n  return {\n    model: OPTIMIZER_MODEL,\n    max_tokens: 300,\n    temperature: 0.3,\n    system: OPTIMIZER_SYSTEM,\n    messages: [{ role: 'user', content }],\n  };\n}\n\n// The optimizer's answer as { query, lexical, scope } for Retrieve Docs.\n// scope survives only if it is exactly a listed product folder; retrieval never\n// fails because of it.\nfunction parseOptimizedQuery(rawText, question, folders) {\n  let semantic = '';\n  let lexical = '';\n  let scope = null;\n  try {\n    const parsed = JSON.parse(String(rawText || '')\n      .replace(/^\\s*```(?:json)?\\s*/i, '')\n      .replace(/\\s*```\\s*$/, ''));\n    if (parsed && typeof parsed === 'object') {\n      semantic = typeof parsed.semantic === 'string' ? parsed.semantic : '';\n      lexical = typeof parsed.lexical === 'string' ? parsed.lexical : '';\n      scope = parsed.scope;\n    }\n  } catch (e) { /* fall back to the question below */ }\n  const products = foldersOfKind(folders, 'product');\n  const fallback = String(question || '');\n  return {\n    query: semantic || fallback,\n    lexical: lexical || semantic || fallback,\n    scope: typeof scope === 'string' && products.includes(scope) ? scope : null,\n  };\n}\n\n// The product line and the folder rule both answer prompts use.\nfunction scopePrompt(scope, folders) {\n  const shared = foldersOfKind(folders, 'shared').map((f) => '[' + f + ']');\n  const sharedSentence = shared.length\n    ? 'Documents from ' + shared.join(', ') + ', and documents with no folder label, apply to every product.'\n    : 'Documents with no folder label apply to every product.';\n  const rule = [\n    'Each document begins with the folder it came from in square brackets, e.g. [FOLDER NAME].',\n    sharedSentence,\n    'A document from any other folder applies only to the product that folder is named after.',\n    \"When USER'S PRODUCT is known, answer from that product's documents and the shared documents.\",\n    \"If only another product's document covers the question, you may use it, but say explicitly that it comes from the documentation for that other product and that the steps may differ.\",\n    \"When USER'S PRODUCT is not stated and the documentation gives different answers for different products, ask which product the user has. When it gives the same answer for every product, answer directly.\",\n  ].join(' ');\n  return { productLine: \"USER'S PRODUCT: \" + (scope || 'not stated'), rule };\n}\n\n// ---- n8n glue ----\n// { query, lexical, scope } for Retrieve Docs; Build Prompt and Normalize For\n// Agent read scope from here.\nconst raw = $json.content?.[0]?.text || '';\nconst question = $('Unified Input').first().json.question || '';\nconst folders = $('Load KB Folders').all().map((item) => item.json).filter((f) => f && f.folder);\nreturn [{ json: parseOptimizedQuery(raw, question, folders) }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1061,8 +1061,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        896,
-        352
+        448,
+        432
       ],
       "id": "a707194b-5e31-46bf-a2b5-160d7e0e02f8",
       "name": "Load Chat History",
@@ -1071,24 +1071,8 @@
           "id": "Rlo7S13CLihXk7eq",
           "name": "Postgres account"
         }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {
-          "includeUnpaired": true
-        }
       },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1120,
-        448
-      ],
-      "id": "4c4c67ff-329a-45ae-b61c-bf92f00d8ee2",
-      "name": "Merge History + RAG"
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1629,6 +1613,42 @@
           "name": "WhatsApp account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select d.folder, coalesce(k.kind, 'product') as kind\nfrom (select distinct metadata->>'folder' as folder\n      from documents\n      where metadata->>'source' = 'knowledge_base'\n        and coalesce(metadata->>'folder', '') <> '') d\nleft join kb_folders k using (folder)\norder by 1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        432
+      ],
+      "id": "e5a0b000-0000-4000-8000-000000000001",
+      "name": "Load KB Folders",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Build Optimizer Request\", \"Parse Optimized Query\",\n// \"Build Prompt\" and \"Normalize For Agent\" Code nodes in workflows/agent.json.\n// tests/agent-workflow.test.js fails if they drift apart.\n\nconst OPTIMIZER_MODEL = 'claude-haiku-4-5';\nconst HISTORY_TURNS = 6;\nconst HISTORY_CHARS = 300;\n\nconst OPTIMIZER_SYSTEM = [\n  'You are a search query optimizer for a technical support knowledge base.',\n  'The knowledge base is organised in folders. Each PRODUCT FOLDER holds documentation for one product; SHARED FOLDERS hold documentation that applies to every product.',\n  '',\n  'Given the QUESTION, and the RECENT CONVERSATION for context, return a JSON object with three fields:',\n  '- \"scope\": the product folder the user is asking about, copied exactly from PRODUCT FOLDERS, or null when no product is named or implied in the question or the recent conversation. Never a shared folder.',\n  '- \"semantic\": a natural-language sentence that captures the intent (optimized for embedding similarity search).',\n  '- \"lexical\": a concise keyword query with exact technical terms, error codes, menu names and action words (optimized for full-text search).',\n  '',\n  'Leave product and model names out of \"semantic\" and \"lexical\": \"scope\" carries them. Keep every other exact term.',\n  'When the question is a follow-up (\"and how do I reset it?\"), use the conversation to make the queries self-contained.',\n  'Return ONLY valid JSON. No markdown, no explanation. \"semantic\" and \"lexical\" must be in the same language as the QUESTION.',\n].join('\\n');\n\n// n8n_chat_histories rows, newest first as Load Chat History returns them, to\n// [{ role, content }] oldest first. Rows that are not a human or ai message --\n// including the empty item alwaysOutputData emits for a new user -- are skipped.\nfunction historyFromRows(rows) {\n  const out = [];\n  for (const row of [...(rows || [])].reverse()) {\n    let msg = row && row.message;\n    if (typeof msg === 'string') {\n      try { msg = JSON.parse(msg); } catch (e) { continue; }\n    }\n    if (!msg || typeof msg.content !== 'string' || !msg.content) continue;\n    if (msg.type === 'human') out.push({ role: 'user', content: msg.content });\n    else if (msg.type === 'ai') out.push({ role: 'assistant', content: msg.content });\n  }\n  return out;\n}\n\nfunction foldersOfKind(folders, kind) {\n  return (folders || []).filter((f) => f && f.folder && f.kind === kind).map((f) => f.folder);\n}\n\n// The Anthropic Messages body for Optimize Query.\nfunction buildOptimizerRequest(question, history, folders) {\n  const recent = (history || []).slice(-HISTORY_TURNS).map((m) =>\n    (m.role === 'user' ? 'User: ' : 'Assistant: ') + String(m.content).slice(0, HISTORY_CHARS));\n  const content = [\n    'PRODUCT FOLDERS: ' + JSON.stringify(foldersOfKind(folders, 'product')),\n    'SHARED FOLDERS: ' + JSON.stringify(foldersOfKind(folders, 'shared')),\n    '',\n    'RECENT CONVERSATION:',\n    recent.length ? recent.join('\\n') : '(none)',\n    '',\n    'QUESTION:',\n    String(question || ''),\n  ].join('\\n');\n  return {\n    model: OPTIMIZER_MODEL,\n    max_tokens: 300,\n    temperature: 0.3,\n    system: OPTIMIZER_SYSTEM,\n    messages: [{ role: 'user', content }],\n  };\n}\n\n// The optimizer's answer as { query, lexical, scope } for Retrieve Docs.\n// scope survives only if it is exactly a listed product folder; retrieval never\n// fails because of it.\nfunction parseOptimizedQuery(rawText, question, folders) {\n  let semantic = '';\n  let lexical = '';\n  let scope = null;\n  try {\n    const parsed = JSON.parse(String(rawText || '')\n      .replace(/^\\s*```(?:json)?\\s*/i, '')\n      .replace(/\\s*```\\s*$/, ''));\n    if (parsed && typeof parsed === 'object') {\n      semantic = typeof parsed.semantic === 'string' ? parsed.semantic : '';\n      lexical = typeof parsed.lexical === 'string' ? parsed.lexical : '';\n      scope = parsed.scope;\n    }\n  } catch (e) { /* fall back to the question below */ }\n  const products = foldersOfKind(folders, 'product');\n  const fallback = String(question || '');\n  return {\n    query: semantic || fallback,\n    lexical: lexical || semantic || fallback,\n    scope: typeof scope === 'string' && products.includes(scope) ? scope : null,\n  };\n}\n\n// The product line and the folder rule both answer prompts use.\nfunction scopePrompt(scope, folders) {\n  const shared = foldersOfKind(folders, 'shared').map((f) => '[' + f + ']');\n  const sharedSentence = shared.length\n    ? 'Documents from ' + shared.join(', ') + ', and documents with no folder label, apply to every product.'\n    : 'Documents with no folder label apply to every product.';\n  const rule = [\n    'Each document begins with the folder it came from in square brackets, e.g. [FOLDER NAME].',\n    sharedSentence,\n    'A document from any other folder applies only to the product that folder is named after.',\n    \"When USER'S PRODUCT is known, answer from that product's documents and the shared documents.\",\n    \"If only another product's document covers the question, you may use it, but say explicitly that it comes from the documentation for that other product and that the steps may differ.\",\n    \"When USER'S PRODUCT is not stated and the documentation gives different answers for different products, ask which product the user has. When it gives the same answer for every product, answer directly.\",\n  ].join(' ');\n  return { productLine: \"USER'S PRODUCT: \" + (scope || 'not stated'), rule };\n}\n\n// ---- n8n glue ----\nconst question = $('Unified Input').first().json.question || '';\nconst history = historyFromRows($('Load Chat History').all().map((item) => item.json));\nconst folders = $('Load KB Folders').all().map((item) => item.json).filter((f) => f && f.folder);\nreturn [{ json: { request: buildOptimizerRequest(question, history, folders) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        432
+      ],
+      "id": "e5a0b000-0000-4000-8000-000000000002",
+      "name": "Build Optimizer Request"
     }
   ],
   "pinData": {},
@@ -1966,11 +1986,6 @@
             "node": "Load Chat History",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Optimize Query",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -2001,9 +2016,9 @@
       "main": [
         [
           {
-            "node": "Merge History + RAG",
+            "node": "Build Prompt",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -2012,18 +2027,7 @@
       "main": [
         [
           {
-            "node": "Merge History + RAG",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge History + RAG": {
-      "main": [
-        [
-          {
-            "node": "Build Prompt",
+            "node": "Load KB Folders",
             "type": "main",
             "index": 0
           }
@@ -2224,6 +2228,28 @@
         [
           {
             "node": "Send \"Validated\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load KB Folders": {
+      "main": [
+        [
+          {
+            "node": "Build Optimizer Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Optimizer Request": {
+      "main": [
+        [
+          {
+            "node": "Optimize Query",
             "type": "main",
             "index": 0
           }
