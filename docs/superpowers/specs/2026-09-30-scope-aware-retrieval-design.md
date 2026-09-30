@@ -1,5 +1,10 @@
 # Scope-aware retrieval — design
 
+> **Partly superseded** by [2026-09-30-retrieval-redesign.md](2026-09-30-retrieval-redesign.md).
+> The folder classification (`kb_folders`, filled by ingestion) still stands. The query
+> optimizer, its `scope` and product-free queries, and the `USER'S PRODUCT` line were
+> measured, found to hurt retrieval, and removed.
+
 Date: 2026-09-30
 Branch: `partner-prod` (the agent workflow lives only there)
 Touches: [workflows/agent.json](../../../workflows/agent.json),

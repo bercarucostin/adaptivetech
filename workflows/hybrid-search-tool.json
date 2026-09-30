@@ -17,12 +17,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpQueryAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'models/gemini-embedding-001', content: { parts: [{ text: $json.query || '' }] }, taskType: 'RETRIEVAL_QUERY', outputDimensionality: 1536 }) }}",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
         "options": {
           "timeout": 30000
         }
@@ -30,7 +30,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        224,
+        448,
         0
       ],
       "id": "e64291b9-edcb-40d2-b6e7-8546e54268ef",
@@ -45,12 +45,12 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build a hybrid_search() call so the 1536-dim vector and any\n// comma/quote-bearing lexical text are passed safely (no positional queryReplacement).\nconst EXPECTED_DIMS = 1536;\n\n// L2-normalize. gemini-embedding-001 only returns pre-normalized vectors\n// at 3072 dims; at 1536 the API leaves them unnormalized.\nfunction l2normalize(v) {\n  let norm = 0;\n  for (const x of v) norm += x * x;\n  norm = Math.sqrt(norm);\n  return norm > 0 ? v.map(x => x / norm) : v;\n}\n\nconst trigger = $('When Executed by Another Workflow').first().json || {};\nconst lexical = String(trigger.lexical || trigger.query || '');\nlet filter = trigger.filter || '{}';\nif (typeof filter !== 'string') filter = JSON.stringify(filter);\nif (!filter.trim()) filter = '{}';\n\nconst embedding = $json.embedding && $json.embedding.values;\nif (!Array.isArray(embedding)) {\n  throw new Error('Embedding failed: ' + JSON.stringify($json).slice(0, 300));\n}\n\n// Fail here, at the source, rather than on the Postgres cast.\nif (embedding.length !== EXPECTED_DIMS) {\n  throw new Error('Query embedding is ' + embedding.length + ' dims, expected ' +\n    EXPECTED_DIMS + ' - check outputDimensionality on the Embed Query node.');\n}\n\nconst vector = '[' + l2normalize(embedding).join(',') + ']';\n\nreturn [{ json: { lexical, vector, filter } }];"
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Build Embed Request\" and \"Build Search SQL\" Code\n// nodes in workflows/hybrid-search-tool.json; SEARCH_SQL is the query of its\n// \"Run Semantic Search\" node. tests/search-workflow.test.js fails if they drift.\n//\n// Retrieval, as measured by evaluation/ (see docs/superpowers/specs/\n// 2026-09-30-retrieval-redesign.md):\n// - semantic only: the keyword branch lowered the ranking at every weight tried;\n// - the question alone, fused with the question plus the previous user message\n//   (weight CONTEXT_WEIGHT), so follow-ups like \"Dar P300?\" find their topic\n//   without an unrelated earlier message taking over;\n// - the last SHARED_SLOTS places go to the best chunks from shared folders\n//   (kb_folders.kind = 'shared') that are not already in the list, so a named\n//   product's manuals cannot push shared documentation out.\n\nconst EMBED_DIMS = 1536;\nconst SEARCH_K = 15;           // chunks the answer model receives\nconst SEARCH_POOL = 50;        // candidates per ranking before fusion\nconst SEARCH_RRF_K = 50;\nconst CONTEXT_WEIGHT = 0.3;    // weight of the question-plus-previous-message ranking\nconst SHARED_SLOTS = 3;\n\nfunction embedPart(text) {\n  return {\n    model: 'models/gemini-embedding-001',\n    content: { parts: [{ text: String(text || '') }] },\n    taskType: 'RETRIEVAL_QUERY',\n    outputDimensionality: EMBED_DIMS,\n  };\n}\n\n// The batchEmbedContents body: the question, then the question with context if any.\nfunction embedRequest(query, contextQuery) {\n  const requests = [embedPart(query)];\n  if (contextQuery) requests.push(embedPart(contextQuery));\n  return { requests };\n}\n\n// gemini-embedding-001 only returns unit vectors at 3072 dims; at 1536 we normalize.\nfunction toVector(values) {\n  if (!Array.isArray(values)) throw new Error('Embedding failed: no values');\n  if (values.length !== EMBED_DIMS) {\n    throw new Error('Query embedding is ' + values.length + ' dims, expected ' + EMBED_DIMS +\n      ' - check outputDimensionality in the embed request.');\n  }\n  const norm = Math.sqrt(values.reduce((s, x) => s + x * x, 0));\n  return '[' + (norm > 0 ? values.map((x) => x / norm) : values).join(',') + ']';\n}\n\n// The three parameters of SEARCH_SQL from the batchEmbedContents answer.\nfunction searchParams(embeddings, filter) {\n  if (!Array.isArray(embeddings) || !embeddings.length) {\n    throw new Error('Embedding failed: ' + String(JSON.stringify(embeddings)).slice(0, 300));\n  }\n  let f = filter || '{}';\n  if (typeof f !== 'string') f = JSON.stringify(f);\n  return {\n    vector: toVector(embeddings[0].values),\n    context_vector: embeddings[1] ? toVector(embeddings[1].values) : '',\n    filter: f.trim() || '{}',\n  };\n}\n\n// $1 question vector, $2 context vector or '', $3 metadata filter (jsonb, '{}' = none).\n// Shared slots are only kept when there is no filter.\nconst SEARCH_SQL = `with params as (\n  select $1::vector(1536) as v,\n         nullif($2, '')::vector(1536) as cv,\n         coalesce(nullif($3, ''), '{}')::jsonb as filter\n),\nalone as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.v as dist\n        from documents d, params p\n        where p.filter = '{}'::jsonb or d.metadata @> p.filter\n        order by d.embedding <=> p.v, d.id\n        limit ${SEARCH_POOL}) s\n),\nwith_context as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.cv as dist\n        from documents d, params p\n        where p.cv is not null and (p.filter = '{}'::jsonb or d.metadata @> p.filter)\n        order by d.embedding <=> p.cv, d.id\n        limit ${SEARCH_POOL}) s\n),\nfused as (\n  select coalesce(a.id, c.id) as id,\n         coalesce(${1 - CONTEXT_WEIGHT} / (${SEARCH_RRF_K} + a.rk), 0)\n         + coalesce(${CONTEXT_WEIGHT} / (${SEARCH_RRF_K} + c.rk), 0) as score\n  from alone a full outer join with_context c on c.id = a.id\n),\ntop as (\n  select id, row_number() over (order by score desc, id) as pos\n  from fused\n  order by score desc, id\n  limit ${SEARCH_K}\n),\nshared as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id,\n               ${1 - CONTEXT_WEIGHT} * (d.embedding <=> p.v) + ${CONTEXT_WEIGHT} * (d.embedding <=> coalesce(p.cv, p.v)) as dist\n        from documents d\n        join kb_folders k on k.folder = d.metadata->>'folder' and k.kind = 'shared'\n        cross join params p\n        where p.filter = '{}'::jsonb\n          and d.id not in (select id from top)\n        order by dist, d.id\n        limit ${SHARED_SLOTS}) s\n),\npicked as (\n  select id, pos from top where pos <= ${SEARCH_K} - (select count(*) from shared)\n  union all\n  select id, ${SEARCH_K} - (select count(*) from shared) + rk from shared\n)\nselect d.id, d.content, d.metadata, pk.pos as rank\nfrom picked pk\njoin documents d on d.id = pk.id\norder by pk.pos`;\n\n// ---- n8n glue ----\nconst trigger = $('When Executed by Another Workflow').first().json || {};\nreturn [{ json: searchParams($json.embeddings, trigger.filter) }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
+        672,
         0
       ],
       "id": "9c5c5c40-77f1-483f-9124-0e0cad4700f2",
@@ -59,19 +59,19 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM hybrid_search($1::text, $2::vector(1536), $3::jsonb, 15, 0.5, 0.5)",
+        "query": "with params as (\n  select $1::vector(1536) as v,\n         nullif($2, '')::vector(1536) as cv,\n         coalesce(nullif($3, ''), '{}')::jsonb as filter\n),\nalone as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.v as dist\n        from documents d, params p\n        where p.filter = '{}'::jsonb or d.metadata @> p.filter\n        order by d.embedding <=> p.v, d.id\n        limit 50) s\n),\nwith_context as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.cv as dist\n        from documents d, params p\n        where p.cv is not null and (p.filter = '{}'::jsonb or d.metadata @> p.filter)\n        order by d.embedding <=> p.cv, d.id\n        limit 50) s\n),\nfused as (\n  select coalesce(a.id, c.id) as id,\n         coalesce(0.7 / (50 + a.rk), 0)\n         + coalesce(0.3 / (50 + c.rk), 0) as score\n  from alone a full outer join with_context c on c.id = a.id\n),\ntop as (\n  select id, row_number() over (order by score desc, id) as pos\n  from fused\n  order by score desc, id\n  limit 15\n),\nshared as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id,\n               0.7 * (d.embedding <=> p.v) + 0.3 * (d.embedding <=> coalesce(p.cv, p.v)) as dist\n        from documents d\n        join kb_folders k on k.folder = d.metadata->>'folder' and k.kind = 'shared'\n        cross join params p\n        where p.filter = '{}'::jsonb\n          and d.id not in (select id from top)\n        order by dist, d.id\n        limit 3) s\n),\npicked as (\n  select id, pos from top where pos <= 15 - (select count(*) from shared)\n  union all\n  select id, 15 - (select count(*) from shared) + rk from shared\n)\nselect d.id, d.content, d.metadata, pk.pos as rank\nfrom picked pk\njoin documents d on d.id = pk.id\norder by pk.pos",
         "options": {
-          "queryReplacement": "={{ [$json.lexical, $json.vector, $json.filter] }}"
+          "queryReplacement": "={{ [$json.vector, $json.context_vector, $json.filter] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        672,
+        896,
         0
       ],
       "id": "b211d6ee-1157-43c3-be49-dbfbf926ad80",
-      "name": "Run Hybrid Search",
+      "name": "Run Semantic Search",
       "credentials": {
         "postgres": {
           "id": "Rlo7S13CLihXk7eq",
@@ -86,16 +86,40 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        896,
+        1120,
         0
       ],
       "id": "9647b3ce-5b9a-4b42-88e6-9e79bf1eea6c",
       "name": "Format Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Build Embed Request\" and \"Build Search SQL\" Code\n// nodes in workflows/hybrid-search-tool.json; SEARCH_SQL is the query of its\n// \"Run Semantic Search\" node. tests/search-workflow.test.js fails if they drift.\n//\n// Retrieval, as measured by evaluation/ (see docs/superpowers/specs/\n// 2026-09-30-retrieval-redesign.md):\n// - semantic only: the keyword branch lowered the ranking at every weight tried;\n// - the question alone, fused with the question plus the previous user message\n//   (weight CONTEXT_WEIGHT), so follow-ups like \"Dar P300?\" find their topic\n//   without an unrelated earlier message taking over;\n// - the last SHARED_SLOTS places go to the best chunks from shared folders\n//   (kb_folders.kind = 'shared') that are not already in the list, so a named\n//   product's manuals cannot push shared documentation out.\n\nconst EMBED_DIMS = 1536;\nconst SEARCH_K = 15;           // chunks the answer model receives\nconst SEARCH_POOL = 50;        // candidates per ranking before fusion\nconst SEARCH_RRF_K = 50;\nconst CONTEXT_WEIGHT = 0.3;    // weight of the question-plus-previous-message ranking\nconst SHARED_SLOTS = 3;\n\nfunction embedPart(text) {\n  return {\n    model: 'models/gemini-embedding-001',\n    content: { parts: [{ text: String(text || '') }] },\n    taskType: 'RETRIEVAL_QUERY',\n    outputDimensionality: EMBED_DIMS,\n  };\n}\n\n// The batchEmbedContents body: the question, then the question with context if any.\nfunction embedRequest(query, contextQuery) {\n  const requests = [embedPart(query)];\n  if (contextQuery) requests.push(embedPart(contextQuery));\n  return { requests };\n}\n\n// gemini-embedding-001 only returns unit vectors at 3072 dims; at 1536 we normalize.\nfunction toVector(values) {\n  if (!Array.isArray(values)) throw new Error('Embedding failed: no values');\n  if (values.length !== EMBED_DIMS) {\n    throw new Error('Query embedding is ' + values.length + ' dims, expected ' + EMBED_DIMS +\n      ' - check outputDimensionality in the embed request.');\n  }\n  const norm = Math.sqrt(values.reduce((s, x) => s + x * x, 0));\n  return '[' + (norm > 0 ? values.map((x) => x / norm) : values).join(',') + ']';\n}\n\n// The three parameters of SEARCH_SQL from the batchEmbedContents answer.\nfunction searchParams(embeddings, filter) {\n  if (!Array.isArray(embeddings) || !embeddings.length) {\n    throw new Error('Embedding failed: ' + String(JSON.stringify(embeddings)).slice(0, 300));\n  }\n  let f = filter || '{}';\n  if (typeof f !== 'string') f = JSON.stringify(f);\n  return {\n    vector: toVector(embeddings[0].values),\n    context_vector: embeddings[1] ? toVector(embeddings[1].values) : '',\n    filter: f.trim() || '{}',\n  };\n}\n\n// $1 question vector, $2 context vector or '', $3 metadata filter (jsonb, '{}' = none).\n// Shared slots are only kept when there is no filter.\nconst SEARCH_SQL = `with params as (\n  select $1::vector(1536) as v,\n         nullif($2, '')::vector(1536) as cv,\n         coalesce(nullif($3, ''), '{}')::jsonb as filter\n),\nalone as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.v as dist\n        from documents d, params p\n        where p.filter = '{}'::jsonb or d.metadata @> p.filter\n        order by d.embedding <=> p.v, d.id\n        limit ${SEARCH_POOL}) s\n),\nwith_context as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id, d.embedding <=> p.cv as dist\n        from documents d, params p\n        where p.cv is not null and (p.filter = '{}'::jsonb or d.metadata @> p.filter)\n        order by d.embedding <=> p.cv, d.id\n        limit ${SEARCH_POOL}) s\n),\nfused as (\n  select coalesce(a.id, c.id) as id,\n         coalesce(${1 - CONTEXT_WEIGHT} / (${SEARCH_RRF_K} + a.rk), 0)\n         + coalesce(${CONTEXT_WEIGHT} / (${SEARCH_RRF_K} + c.rk), 0) as score\n  from alone a full outer join with_context c on c.id = a.id\n),\ntop as (\n  select id, row_number() over (order by score desc, id) as pos\n  from fused\n  order by score desc, id\n  limit ${SEARCH_K}\n),\nshared as (\n  select id, row_number() over (order by dist, id) as rk\n  from (select d.id,\n               ${1 - CONTEXT_WEIGHT} * (d.embedding <=> p.v) + ${CONTEXT_WEIGHT} * (d.embedding <=> coalesce(p.cv, p.v)) as dist\n        from documents d\n        join kb_folders k on k.folder = d.metadata->>'folder' and k.kind = 'shared'\n        cross join params p\n        where p.filter = '{}'::jsonb\n          and d.id not in (select id from top)\n        order by dist, d.id\n        limit ${SHARED_SLOTS}) s\n),\npicked as (\n  select id, pos from top where pos <= ${SEARCH_K} - (select count(*) from shared)\n  union all\n  select id, ${SEARCH_K} - (select count(*) from shared) + rk from shared\n)\nselect d.id, d.content, d.metadata, pk.pos as rank\nfrom picked pk\njoin documents d on d.id = pk.id\norder by pk.pos`;\n\n// ---- n8n glue ----\n// query from Retrieve Docs or the agent tool; context_query only from Retrieve Docs.\nreturn [{ json: { request: embedRequest($json.query || '', $json.context_query || '') } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "e5a0b000-0000-4000-8000-000000000011",
+      "name": "Build Embed Request"
     }
   ],
   "pinData": {},
   "connections": {
     "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Embed Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Embed Request": {
       "main": [
         [
           {
@@ -121,14 +145,14 @@
       "main": [
         [
           {
-            "node": "Run Hybrid Search",
+            "node": "Run Semantic Search",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Run Hybrid Search": {
+    "Run Semantic Search": {
       "main": [
         [
           {

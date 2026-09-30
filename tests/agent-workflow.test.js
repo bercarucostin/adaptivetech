@@ -123,47 +123,38 @@ test('the confirmation names the technician', () => {
   assert.ok(body.includes('technician_name') && body.includes('service_unit'));
 });
 
-test('Build Prompt explains the [FOLDER] chunk label and names the user\'s product', () => {
-  // Run the Code node and read the real prompt it builds.
-  const code = byName('Build Prompt').parameters.jsCode;
-  const FOLDERS = [
-    { folder: 'DOCUMENTATIE COMUNA', kind: 'shared' },
-    { folder: 'PARTNER 200', kind: 'product' },
-  ];
-  const nodes = {
-    'Unified Input': { first: { question: 'q', sessionId: 's', from: 'f' }, all: [] },
-    'Load Chat History': { first: {}, all: [] },
-    'Retrieve Docs': { first: { response: '[PARTNER 200] docs' }, all: [] },
-    'Parse Optimized Query': { first: { query: 'q', lexical: 'q', scope: 'PARTNER 200' }, all: [] },
-    'Load KB Folders': { first: FOLDERS[0], all: FOLDERS },
-  };
-  const stub = (name) => ({
-    first: () => ({ json: nodes[name].first }),
-    all: () => nodes[name].all.map((json) => ({ json })),
-  });
-  const out = new Function('$', code)(stub)[0].json;
-  assert.ok(out.system.includes('3. Each document begins with the folder it came from in square brackets'));
-  assert.ok(out.system.includes('Documents from [DOCUMENTATIE COMUNA], and documents with no folder label, apply to every product.'));
-  const last = out.messages[out.messages.length - 1].content;
-  assert.ok(last.startsWith("USER'S PRODUCT: PARTNER 200\n\nRELEVANT DOCUMENTATION:\n[PARTNER 200] docs"));
-});
+// ---- retrieval: no optimizer; see docs/superpowers/specs/2026-09-30-retrieval-redesign.md
 
-test('the retrieval chain runs history, folders, optimizer, search, prompt in order', () => {
+const FOLDERS = [
+  { folder: 'DOCUMENTATIE COMUNA', kind: 'shared' },
+  { folder: 'PARTNER 200', kind: 'product' },
+];
+
+// Runs a Code node against stubbed upstream nodes: { name: { first, all } }.
+function runCode(name, nodes) {
+  const stub = (n) => ({
+    first: () => ({ json: nodes[n].first }),
+    all: () => nodes[n].all.map((json) => ({ json })),
+  });
+  return new Function('$', byName(name).parameters.jsCode)(stub);
+}
+
+test('the retrieval chain runs history, folders, search request, search, prompt in order', () => {
   assert.deepStrictEqual(targets('Unified Input'), [['Load Chat History']]);
   assert.deepStrictEqual(targets('Load Chat History'), [['Load KB Folders']]);
-  assert.deepStrictEqual(targets('Load KB Folders'), [['Build Optimizer Request']]);
-  assert.deepStrictEqual(targets('Build Optimizer Request'), [['Optimize Query']]);
-  assert.deepStrictEqual(targets('Optimize Query'), [['Parse Optimized Query']]);
-  assert.deepStrictEqual(targets('Parse Optimized Query'), [['Retrieve Docs']]);
+  assert.deepStrictEqual(targets('Load KB Folders'), [['Build Search Request']]);
+  assert.deepStrictEqual(targets('Build Search Request'), [['Retrieve Docs']]);
   assert.deepStrictEqual(targets('Retrieve Docs'), [['Build Prompt']]);
 });
 
-test('Merge History + RAG is gone without a trace', () => {
-  assert.strictEqual(byName('Merge History + RAG'), undefined);
-  assert.ok(!JSON.stringify(wf).includes('Merge History + RAG'));
+test('the query optimizer is gone without a trace', () => {
+  for (const name of ['Build Optimizer Request', 'Optimize Query', 'Parse Optimized Query', 'Merge History + RAG']) {
+    assert.strictEqual(byName(name), undefined, name);
+    assert.ok(!JSON.stringify(wf).includes(name), name + ' is still referenced');
+  }
 });
 
-test('a new user with no history or an empty knowledge base still reaches the optimizer', () => {
+test('a new user with no history or an empty knowledge base still reaches the search', () => {
   assert.strictEqual(byName('Load Chat History').alwaysOutputData, true);
   assert.strictEqual(byName('Load KB Folders').alwaysOutputData, true);
 });
@@ -178,55 +169,68 @@ test('Load KB Folders runs once and reads kinds from kb_folders', () => {
   assert.deepStrictEqual(node.credentials, byName('Load Chat History').credentials);
 });
 
-test('the optimizer sends the request built from lib/retrieval-scope.js', () => {
-  const build = byName('Build Optimizer Request').parameters.jsCode;
-  assert.ok(build.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
-  assert.ok(build.includes('buildOptimizerRequest(question, history, folders)'));
-  const oq = byName('Optimize Query');
-  assert.strictEqual(oq.parameters.jsonBody, '={{ JSON.stringify($json.request) }}');
-  assert.strictEqual(oq.retryOnFail, true);
+test('Build Search Request sends the question and, with history, the previous user message', () => {
+  const code = byName('Build Search Request').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/retrieval-context.js')), 'Code node has drifted from lib/retrieval-context.js');
+  const history = [
+    { message: { type: 'ai', content: 'Ce model aveți?' } },
+    { message: { type: 'human', content: 'cum conectez si eu un sertar?' } },
+  ];
+  const out = runCode('Build Search Request', {
+    'Unified Input': { first: { question: 'partner 200 am' }, all: [] },
+    'Load Chat History': { first: history[0], all: history },
+  });
+  assert.deepStrictEqual(out, [{ json: { query: 'partner 200 am', context_query: 'cum conectez si eu un sertar?\npartner 200 am' } }]);
+
+  const first = runCode('Build Search Request', {
+    'Unified Input': { first: { question: 'Eroare 40?' }, all: [] },
+    'Load Chat History': { first: {}, all: [{}] },
+  });
+  assert.deepStrictEqual(first, [{ json: { query: 'Eroare 40?', context_query: '' } }]);
 });
 
-test('Parse Optimized Query validates the scope with lib/retrieval-scope.js', () => {
-  const code = byName('Parse Optimized Query').parameters.jsCode;
-  assert.ok(code.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
-  assert.ok(code.includes('parseOptimizedQuery(raw, question, folders)'));
-});
-
-test('Build Prompt gives the answer model the product and the generated folder rule', () => {
+test('Build Prompt explains the [FOLDER] label with a rule generated from kb_folders', () => {
   const code = byName('Build Prompt').parameters.jsCode;
-  assert.ok(code.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
-  assert.ok(code.includes('const scope = scopePrompt(optimized.scope, kbFolders);'));
-  assert.ok(code.includes("content: scope.productLine + '\\n\\nRELEVANT DOCUMENTATION:\\n' + chunks"));
-  assert.ok(code.includes("'3. ' + scope.rule,"));
-  assert.ok(!code.includes('never apply it to another machine'), 'the old hard-coded folder rule is gone');
+  assert.ok(code.includes(sharedBlock('lib/retrieval-context.js')), 'Code node has drifted from lib/retrieval-context.js');
   assert.ok(!code.includes('DOCUMENTATIE COMUNA'), 'no folder name in the prompt code');
+  const out = runCode('Build Prompt', {
+    'Unified Input': { first: { question: 'q', sessionId: 's', from: 'f' }, all: [] },
+    'Load Chat History': { first: {}, all: [] },
+    'Retrieve Docs': { first: { response: '[PARTNER 200] docs' }, all: [] },
+    'Load KB Folders': { first: FOLDERS[0], all: FOLDERS },
+  })[0].json;
+  assert.ok(out.system.includes('3. Each document begins with the folder it came from in square brackets'));
+  assert.ok(out.system.includes('Documents from [DOCUMENTATIE COMUNA], and documents with no folder label, apply to every product.'));
+  assert.ok(out.system.includes("The user's product is the one named in the question or earlier in the conversation."));
+  const last = out.messages[out.messages.length - 1].content;
+  assert.ok(last.startsWith('RELEVANT DOCUMENTATION:\n[PARTNER 200] docs'));
+  assert.ok(!JSON.stringify(out).includes("USER'S PRODUCT"));
 });
 
-test('the fallback agent gets the same product line and folder rule', () => {
+test('the fallback agent gets the same folder rule', () => {
   const norm = byName('Normalize For Agent').parameters.jsCode;
-  assert.ok(norm.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
-  assert.ok(norm.includes('productLine: scope.productLine,'));
-  assert.ok(norm.includes('folderRule: scope.rule'));
+  assert.ok(norm.includes(sharedBlock('lib/retrieval-context.js')), 'Code node has drifted from lib/retrieval-context.js');
+  assert.ok(norm.includes('folderRule: folderRule(kbFolders)'));
+  assert.ok(!norm.includes('productLine'));
   const agent = byName('AI Agent1').parameters;
-  assert.ok(agent.text.includes('$json.productLine'));
   assert.ok(agent.text.includes("'\\n\\nFOLDER RULE:\\n' + $json.folderRule"));
+  assert.ok(!agent.text.includes('productLine'));
   assert.ok(agent.options.systemMessage.includes('4. Follow the FOLDER RULE given with the question'));
+  assert.ok(!agent.options.systemMessage.includes("USER'S PRODUCT"));
   assert.ok(!agent.options.systemMessage.includes('DOCUMENTATIE COMUNA'));
 });
 
 test('the fallback agent is not told to search once per product', () => {
-  // The tool query now leaves product names out; a per-product search would
-  // either put them back or repeat the same query.
   const message = byName('AI Agent1').parameters.options.systemMessage;
   assert.ok(!/one call per product/i.test(message));
   assert.ok(!/Partner 200 vs Partner 600/.test(message));
   assert.ok(message.includes('call it again with a different description of the task'));
 });
 
-test('the knowledge base tool no longer asks for product names', () => {
+test('the knowledge base tool keeps the product name the user gave', () => {
+  // A product name in the query pulls that product's chunks up (evaluation/).
   const p = byName('Knowledge Base (Hybrid Search)').parameters;
-  assert.ok(!/include product name/i.test(p.description));
-  assert.ok(!/once PER product/i.test(p.description));
-  assert.ok(p.workflowInputs.value.query.includes('Leave out product and model names'));
+  assert.ok(p.workflowInputs.value.query.includes('include the product or model name when the user gave one'));
+  assert.ok(!p.workflowInputs.value.query.includes('Leave out product'));
 });
+

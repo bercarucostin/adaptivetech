@@ -1,9 +1,9 @@
 'use strict';
 
-// ---8<--- SHARED START ---8<---
-// Copied verbatim into the "Build Optimizer Request", "Parse Optimized Query",
-// "Build Prompt" and "Normalize For Agent" Code nodes in workflows/agent.json.
-// tests/agent-workflow.test.js fails if they drift apart.
+// The query optimizer as it ran in production until 2026-09-30 (Haiku rewrote the
+// question into semantic + lexical queries and a product scope). No longer used by
+// the bot; kept so evaluation/retrieval-eval.js can still score it as the 'prod'
+// baseline. Do not change OPTIMIZER_SYSTEM: the cached answers are keyed on it.
 
 const OPTIMIZER_MODEL = 'claude-haiku-4-5';
 const HISTORY_TURNS = 6;
@@ -109,7 +109,6 @@ function scopePrompt(scope, folders) {
   ].join(' ');
   return { productLine: "USER'S PRODUCT: " + (scope || 'not stated'), rule };
 }
-// ---8<--- SHARED END ---8<---
 
 module.exports = {
   historyFromRows, buildOptimizerRequest, parseOptimizedQuery, scopePrompt,

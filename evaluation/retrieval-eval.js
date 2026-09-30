@@ -17,7 +17,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Client } = require('pg');
-const { buildOptimizerRequest, parseOptimizedQuery, historyFromRows } = require('../lib/retrieval-scope.js');
+const { buildOptimizerRequest, parseOptimizedQuery, historyFromRows } = require('./baseline-optimizer.js');
+const { SEARCH_SQL } = require('../lib/semantic-search.js');
+const { searchRequest } = require('../lib/retrieval-context.js');
 
 const ROOT = __dirname;
 const CACHE_DIR = path.join(ROOT, '.cache');
@@ -36,6 +38,8 @@ const FOLD_TO = 'aaissttAAISSTT';
 //         'optimizer' (the rewrite's scope).
 // mode:   how a known product shapes the results (see retrieve()).
 const VARIANTS = {
+  'shipped':             { shipped: true },
+  'noise-shipped':       { shipped: true, noise: true },
   'prod':                { query: 'optimizer', lex: 'and', fold: false },
   'raw':                 { query: 'raw',       lex: 'and', fold: false },
   'raw-or':              { query: 'raw',       lex: 'or',  fold: false },
@@ -230,7 +234,20 @@ async function search(db, { lexText, embedding, lex, fold: doFold, folders, limi
   return r.rows;
 }
 
+// The production path: lib/retrieval-context.js builds the request,
+// lib/semantic-search.js's SEARCH_SQL runs it, exactly as hybrid-search-tool does.
+async function retrieveShipped(db, q, variant, ctx) {
+  let history = q.history || [];
+  if (variant.noise && !history.length) history = [{ role: 'user', content: ctx.unrelated }];
+  const req = searchRequest(q.question, history);
+  const v = await embed(req.query);
+  const cv = req.context_query ? await embed(req.context_query) : null;
+  const r = await db.query(SEARCH_SQL, ['[' + v.join(',') + ']', cv ? '[' + cv.join(',') + ']' : '', '{}']);
+  return { rows: r.rows.map((row) => ({ id: row.id, folder: row.metadata.folder })), scope: null };
+}
+
 async function retrieve(db, q, variant, ctx) {
+  if (variant.shipped) return retrieveShipped(db, q, variant, ctx);
   let text = q.question;
   let scope = null;
   if (variant.query === 'optimizer' || variant.scope === 'optimizer') {
