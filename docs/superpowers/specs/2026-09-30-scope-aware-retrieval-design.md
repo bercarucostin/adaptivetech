@@ -263,8 +263,18 @@ Questions whose answer is only in a shared folder, each asked without and with a
 Plus two product-only questions, to check nothing regresses: "ce acumulator are partner 300" and
 "procedura de reset partner touch evo".
 
-Pass: every shared-answer question has its answer chunk in the top 15 in both variants, and the
-product-only questions still retrieve their product's chunk in the top 5. Also check the first
+Plus two product-less questions, sent to the bot on WhatsApp in a fresh conversation, to check the
+answer prompt's clarifying rule:
+
+- "cum schimb memoria fiscala": the steps differ between products (P200 through the top cover
+  with the motherboard removed, P300 through the bottom cover with the ribbon under the battery).
+  Expected: the bot asks which product the user has.
+- "care este parola pentru MOD S": the answer (20100102) is the same in every product's
+  documentation. Expected: the bot answers directly, without asking.
+
+Pass: every shared-answer question has its answer chunk in the top 15 in both variants, the
+product-only questions still retrieve their product's chunk in the top 5, and both product-less
+questions behave as expected. Also check the first
 ingestion run classifies the 7 existing folders as expected (5 product, 2 shared). If shared chunks
 still drop out, the next step is two filtered searches (product folder + shared folders), which this
 design does not include.
