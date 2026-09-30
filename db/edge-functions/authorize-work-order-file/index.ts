@@ -35,7 +35,7 @@ function norm(value: unknown) {
 }
 
 const allowedExtensions = new Set([
-  "zip", "stl", "ply", "obj", "pdf", "jpg", "jpeg", "png",
+  "zip", "rar", "stl", "ply", "obj", "pdf", "jpg", "jpeg", "png",
 ]);
 
 Deno.serve(async (req) => {

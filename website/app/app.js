@@ -5925,7 +5925,7 @@ async function loadOrderCaseForEdit(order){
 }
 
 
-const CASE_FILE_EXTENSIONS=new Set(["zip","stl","ply","obj","pdf","jpg","jpeg","png"]);
+const CASE_FILE_EXTENSIONS=new Set(["zip","rar","stl","ply","obj","pdf","jpg","jpeg","png"]);
 
 function caseFileExtension(name){
   const parts=String(name||"").toLowerCase().split(".");
@@ -5957,7 +5957,7 @@ function renderCaseFileQueue(){
     }[state]||state;
 
     return `<div class="case-file-row ${escapeHtml(state)}">
-      <div class="case-file-icon">${caseFileExtension(file.name)==="zip"?"ZIP":"FILE"}</div>
+      <div class="case-file-icon">${["zip","rar"].includes(caseFileExtension(file.name))?caseFileExtension(file.name).toUpperCase():"FILE"}</div>
       <div class="case-file-main">
         <strong>${escapeHtml(file.name)}</strong>
         <span>${humanFileSize(file.size)} · ${escapeHtml(stateText)}</span>
@@ -5998,7 +5998,7 @@ function renderSavedCaseFiles(){
 
   caseFileList.innerHTML=caseFilesSaved.map(file=>`
     <div class="case-file-row saved">
-      <div class="case-file-icon">${caseFileExtension(file.original_file_name)==="zip"?"ZIP":"FILE"}</div>
+      <div class="case-file-icon">${["zip","rar"].includes(caseFileExtension(file.original_file_name))?caseFileExtension(file.original_file_name).toUpperCase():"FILE"}</div>
       <div class="case-file-main">
         <strong>${escapeHtml(file.original_file_name||"Fișier")}</strong>
         <span>${humanFileSize(file.file_size_bytes)} · ${fmtDate(file.created_at)}</span>
@@ -8853,7 +8853,7 @@ function humanChatMount(){
         <div id="humanChatPending" class="human-chat-pending hidden"></div>
 
         <form id="humanChatComposer" class="human-chat-composer">
-          <label class="human-chat-attach-btn" title="Adaugă fișiere">
+          <label class="human-chat-attach-btn" title="Adaugă fișiere, inclusiv ZIP / RAR (max. 25 MB / fișier)">
             📎
             <input id="humanChatFileInput" type="file" multiple hidden>
           </label>
