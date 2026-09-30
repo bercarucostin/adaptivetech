@@ -44,14 +44,16 @@ test('Build Search SQL turns the embeddings and the trigger filter into the thre
   assert.ok(code.includes(sharedBlock('lib/semantic-search.js')), 'Code node has drifted from lib/semantic-search.js');
   const values = Array.from({ length: EMBED_DIMS }, () => 1);
   const out = runCode('Build Search SQL', { embeddings: [{ values }] },
-    { 'When Executed by Another Workflow': { query: 'q' } })[0].json;
+    { 'When Executed by Another Workflow': { query: 'Eroare 40?' } })[0].json;
   assert.strictEqual(out.context_vector, '');
   assert.strictEqual(out.filter, '{}');
+  assert.strictEqual(out.keywords, 'Eroare or 40', 'keywords come from the question as typed');
   assert.strictEqual(JSON.parse(out.vector).length, EMBED_DIMS);
 });
 
-test('Run Semantic Search runs SEARCH_SQL with the three parameters', () => {
+test('Run Semantic Search runs SEARCH_SQL with the four parameters', () => {
   const node = byName('Run Semantic Search');
   assert.strictEqual(node.parameters.query, SEARCH_SQL);
-  assert.strictEqual(node.parameters.options.queryReplacement, '={{ [$json.vector, $json.context_vector, $json.filter] }}');
+  assert.strictEqual(node.parameters.options.queryReplacement,
+    '={{ [$json.vector, $json.context_vector, $json.filter, $json.keywords] }}');
 });

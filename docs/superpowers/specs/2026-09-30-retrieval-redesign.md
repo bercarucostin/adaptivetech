@@ -57,18 +57,20 @@ own-product and shared-doc hits.
 1. No optimizer. `Build Search Request` sends the question as typed, plus the previous user
    message followed by the question (`context_query`) when there is history.
 2. `hybrid-search-tool` embeds both in one `batchEmbedContents` call and runs `SEARCH_SQL`:
-   - two semantic rankings of 50, fused by reciprocal rank at 0.7 (question) and 0.3
-     (with context);
-   - the top 15, whose last places (up to 3) go to the best `kb_folders.kind = 'shared'`
-     chunks not already present, ranked the same 0.7 / 0.3 way, but only if a shared chunk
-     is at most 0.03 farther (same combined distance) than the farthest chunk already in
-     the list. No shared slots when a filter is passed.
+   - three rankings of 50, fused by reciprocal rank: the question alone (0.63, or 0.9
+     without history), the question with context (0.27), and an any-word keyword search
+     on the question with diacritics removed on both sides (0.1);
+   - the top 20, whose last places (up to 3) go to the best `kb_folders.kind = 'shared'`
+     chunks not already present, ranked 0.7 / 0.3 by distance to the two vectors, but only
+     if a shared chunk is at most 0.03 farther than the farthest chunk already in the list.
+     No shared slots when a filter is passed.
 3. Both answer prompts get the folder rule from `folderRule(kb_folders)`. The product
    comes from the question or the conversation, with no separate product line.
 4. The fallback agent's knowledge-base tool keeps product names in its queries.
 
-`hybrid_search()` and the `fts` column stay in the database, unused, so the keyword
-branch can be measured again.
+The keyword branch computes the folded `to_tsvector` per row at query time (a sequential
+scan, fine at ~460 chunks). If the corpus grows by an order of magnitude, add a stored
+folded tsvector column with a GIN index. `hybrid_search()` and the `fts` column are unused.
 
 ## Follow-up: shared slots only when relevant
 
@@ -86,8 +88,38 @@ questions where every fact is in the top 15.
 | **margin 0.03 (shipped)** | **99%** | **100%** | **67%** | **100% / 56%** |
 
 Not fixed, and not caused by the slots: for the Partner 300 drawer the adapter cable ranks
-21st and TEST SERTAR 25th, below "cash in/out of the drawer" sections. A 20-chunk list
-raises complete@15 to 78%, at the cost of a longer prompt; not shipped.
+21st and TEST SERTAR 25th, below "cash in/out of the drawer" sections.
+
+## Follow-up: keyword branch and a 20-chunk list
+
+The set grew to 92 questions: 9 multi-fact questions from other topics (motherboard, SD
+journal card, GPRS and Wi-Fi to ANAF, fiscalization) and the last 6 production answers,
+checked against the documents (2 right, 2 partly right, 2 wrong; every wrong or partial
+answer lacked a needed chunk in the retrieved list).
+
+An earlier comparison of keyword weights was wrong: the harness ran the keyword-only
+ranking with an integer weight, SQL divided integers, every score was 0, and the keyword
+list came out in chunk-id order. Fixed (weights are always written with decimals, and a
+test forbids integer weights in `SEARCH_SQL`); the numbers below are the corrected ones.
+
+| Design (92 questions) | found in list | MRR | all facts found | with unrelated history: all facts |
+|---|---|---|---|---|
+| old optimizer, hybrid AND | 91% | 0.60 | 29% | — |
+| semantic, 15 | 97% | 0.82 | 57% | 43% |
+| keyword 0.1 / 0.2 / 0.3, 15 | 97 / 97 / 96% | 0.80 / 0.78 / 0.76 | 57 / 57 / 52% | — |
+| semantic, 20 | 97% | 0.82 | 62% | 52% |
+| **keyword 0.1, 20 (shipped)** | **97%** | **0.80** | **67%** | **62%** |
+| keyword 0.2, 20 | 97% | 0.78 | 67% | 62% |
+| keyword 0.3, 20 | 97% | 0.76 | 71% | 67% |
+
+Keyword 0.1 with 20 chunks loses no answer, keeps exact terms (error codes, file names)
+ranked first (MRR 1.00; 0.92 at weight 0.2), and loses nothing on the non-drawer
+multi-fact questions (67%, the same as semantic). Weight 0.3 completes more drawer
+answers but drops the other multi-fact questions to 56%.
+
+Still open, and not fixable by either search: answers whose second fact sits in a chapter
+the first one only points to ("vezi capitolul 5"), and vague follow-ups ("si dupa ce am
+montat-o?") that carry no topic of their own.
 
 ## Known data gaps (not retrieval problems)
 

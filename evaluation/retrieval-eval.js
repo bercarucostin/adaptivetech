@@ -18,7 +18,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Client } = require('pg');
 const { buildOptimizerRequest, parseOptimizedQuery, historyFromRows } = require('./baseline-optimizer.js');
-const { SEARCH_SQL, buildSearchSql } = require('../lib/semantic-search.js');
+const { SEARCH_SQL, buildSearchSql, keywordQuery } = require('../lib/semantic-search.js');
 const { searchRequest } = require('../lib/retrieval-context.js');
 
 const ROOT = __dirname;
@@ -60,6 +60,12 @@ const VARIANTS = {
   'kw-0.25':             { keywords: true, lexWeight: 0.25 },
   'kw-0-k20':            { keywords: true, lexWeight: 0, k: 20 },
   'kw-0.2-k20':          { keywords: true, lexWeight: 0.2, k: 20 },
+  'kw-0.1-k20':          { keywords: true, lexWeight: 0.1, k: 20 },
+  'kw-0.3-k20':          { keywords: true, lexWeight: 0.3, k: 20 },
+  'kw-0.5-k20':          { keywords: true, lexWeight: 0.5, k: 20 },
+  'noise-kw-0-k15':      { keywords: true, lexWeight: 0, noise: true },
+  'noise-kw-0.1-k20':    { keywords: true, lexWeight: 0.1, k: 20, noise: true },
+  'noise-kw-0.3-k20':    { keywords: true, lexWeight: 0.3, k: 20, noise: true },
   'noise-kw-0-k20':      { keywords: true, lexWeight: 0, k: 20, noise: true },
   'noise-kw-0.2-k20':    { keywords: true, lexWeight: 0.2, k: 20, noise: true },
   'noise-kw-0.25':       { keywords: true, lexWeight: 0.25, noise: true },
@@ -230,7 +236,10 @@ async function resolveGold(db, q) {
 // One hybrid search, the same RRF fusion as db/hybrid_search.sql, with the
 // variant's switches. Returns [{ id, folder }] best first, up to `limit`.
 async function search(db, { lexText, embedding, lex, fold: doFold, folders, limit, wFts = 0.5 }) {
-  const wSem = 1 - wFts;
+  // Always written with decimals: an integer weight (0 or 1) would make SQL divide
+  // integers, 1 / (50 + rank) = 0, and tie every score.
+  const wSem = (1 - wFts).toFixed(4);
+  wFts = Number(wFts).toFixed(4);
   // lex 'none': an empty tsquery matches nothing, leaving the semantic branch alone.
   const tsInput = lex === 'none' ? '' : (lex === 'or' ? anyWord(lexText) : lexText);
   const r = await db.query(`
@@ -277,7 +286,7 @@ async function retrieveShipped(db, q, variant, ctx) {
   let sql = variant.margin === undefined ? SEARCH_SQL : buildSearchSql({ sharedMargin: variant.margin });
   // Experiment only: a longer list than the 15 the answer model gets today.
   if (variant.k) sql = sql.replace(/limit 15\n\)/, 'limit ' + variant.k + '\n)').replace(/\b15 - \(/g, variant.k + ' - (');
-  const r = await db.query(sql, ['[' + v.join(',') + ']', cv ? '[' + cv.join(',') + ']' : '', '{}']);
+  const r = await db.query(sql, ['[' + v.join(',') + ']', cv ? '[' + cv.join(',') + ']' : '', '{}', keywordQuery(req.query)]);
   return { rows: r.rows.map((row) => ({ id: row.id, folder: row.metadata.folder })), scope: null };
 }
 
@@ -302,6 +311,10 @@ async function retrieveWithKeywords(db, q, variant, ctx) {
     cur.score += w / (RRF_K + i + 1);
     fused.set(r.id, cur);
   });
+  if (process.env.SHOW_IDS === q.id) {
+    console.log('       alone:   ' + alone.slice(0, 8).map((r) => r.id).join(' '));
+    console.log('       keyword: ' + keyword.slice(0, 8).map((r) => r.id).join(' '));
+  }
   const semW = 1 - (variant.lexWeight || 0);
   add(alone, semW * (cv ? 0.7 : 1));
   add(withCtx, semW * 0.3);
@@ -520,6 +533,7 @@ async function main() {
             ' own=' + String(r.s.ownCount).padEnd(4) + ' lexicalHits=' + String(lexHits).padEnd(3) + r.q.question);
           if (r.ctx.optimized) console.log('       optimizer: ' + JSON.stringify(r.ctx.optimized));
           console.log('       folders: ' + JSON.stringify(folderCounts));
+          if (process.env.SHOW_IDS && r.q.id === process.env.SHOW_IDS) console.log('       ids: ' + r.out.rows.map((x) => x.id).join(' '));
         }
       }
       table.push(...summarize(name, results));
