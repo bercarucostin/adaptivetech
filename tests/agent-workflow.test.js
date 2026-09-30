@@ -123,24 +123,29 @@ test('the confirmation names the technician', () => {
   assert.ok(body.includes('technician_name') && body.includes('service_unit'));
 });
 
-test('both answering prompts explain the [FOLDER] chunk label', () => {
-  const FOLDER_RULE = 'Each document begins with the folder it came from in square brackets, e.g. [PARTNER 200]. ' +
-    'A document from a machine folder applies only to that machine — never apply it to another machine. ' +
-    '[DOCUMENTATIE COMUNA] applies to all machines.';
-
-  // Build Prompt: run the Code node's string-building and read the real prompt.
+test('Build Prompt explains the [FOLDER] chunk label and names the user\'s product', () => {
+  // Run the Code node and read the real prompt it builds.
   const code = byName('Build Prompt').parameters.jsCode;
+  const FOLDERS = [
+    { folder: 'DOCUMENTATIE COMUNA', kind: 'shared' },
+    { folder: 'PARTNER 200', kind: 'product' },
+  ];
+  const nodes = {
+    'Unified Input': { first: { question: 'q', sessionId: 's', from: 'f' }, all: [] },
+    'Load Chat History': { first: {}, all: [] },
+    'Retrieve Docs': { first: { response: '[PARTNER 200] docs' }, all: [] },
+    'Parse Optimized Query': { first: { query: 'q', lexical: 'q', scope: 'PARTNER 200' }, all: [] },
+    'Load KB Folders': { first: FOLDERS[0], all: FOLDERS },
+  };
   const stub = (name) => ({
-    first: () => ({ json: name === 'Unified Input' ? { question: 'q', sessionId: 's', from: 'f' } : { response: 'docs' } }),
-    all: () => [],
+    first: () => ({ json: nodes[name].first }),
+    all: () => nodes[name].all.map((json) => ({ json })),
   });
-  const system = new Function('$', code)(stub)[0].json.system;
-  assert.ok(system.includes('3. When the documentation contains product-specific info (e.g. Partner 200, Partner 600), ' +
-    'ensure your answer matches the correct product. ' + FOLDER_RULE));
-
-  const message = byName('AI Agent1').parameters.options.systemMessage;
-  assert.ok(message.includes('4. When the documentation contains product-specific info (e.g. Partner 200, Partner 600), ' +
-    'ensure your answer matches the correct product. ' + FOLDER_RULE + '\n'));
+  const out = new Function('$', code)(stub)[0].json;
+  assert.ok(out.system.includes('3. Each document begins with the folder it came from in square brackets'));
+  assert.ok(out.system.includes('Documents from [DOCUMENTATIE COMUNA], and documents with no folder label, apply to every product.'));
+  const last = out.messages[out.messages.length - 1].content;
+  assert.ok(last.startsWith("USER'S PRODUCT: PARTNER 200\n\nRELEVANT DOCUMENTATION:\n[PARTNER 200] docs"));
 });
 
 test('the retrieval chain runs history, folders, optimizer, search, prompt in order', () => {
@@ -186,4 +191,33 @@ test('Parse Optimized Query validates the scope with lib/retrieval-scope.js', ()
   const code = byName('Parse Optimized Query').parameters.jsCode;
   assert.ok(code.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
   assert.ok(code.includes('parseOptimizedQuery(raw, question, folders)'));
+});
+
+test('Build Prompt gives the answer model the product and the generated folder rule', () => {
+  const code = byName('Build Prompt').parameters.jsCode;
+  assert.ok(code.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
+  assert.ok(code.includes('const scope = scopePrompt(optimized.scope, kbFolders);'));
+  assert.ok(code.includes("content: scope.productLine + '\\n\\nRELEVANT DOCUMENTATION:\\n' + chunks"));
+  assert.ok(code.includes("'3. ' + scope.rule,"));
+  assert.ok(!code.includes('never apply it to another machine'), 'the old hard-coded folder rule is gone');
+  assert.ok(!code.includes('DOCUMENTATIE COMUNA'), 'no folder name in the prompt code');
+});
+
+test('the fallback agent gets the same product line and folder rule', () => {
+  const norm = byName('Normalize For Agent').parameters.jsCode;
+  assert.ok(norm.includes(sharedBlock('lib/retrieval-scope.js')), 'Code node has drifted from lib/retrieval-scope.js');
+  assert.ok(norm.includes('productLine: scope.productLine,'));
+  assert.ok(norm.includes('folderRule: scope.rule'));
+  const agent = byName('AI Agent1').parameters;
+  assert.ok(agent.text.includes('$json.productLine'));
+  assert.ok(agent.text.includes("'\\n\\nFOLDER RULE:\\n' + $json.folderRule"));
+  assert.ok(agent.options.systemMessage.includes('4. Follow the FOLDER RULE given with the question'));
+  assert.ok(!agent.options.systemMessage.includes('DOCUMENTATIE COMUNA'));
+});
+
+test('the knowledge base tool no longer asks for product names', () => {
+  const p = byName('Knowledge Base (Hybrid Search)').parameters;
+  assert.ok(!/include product name/i.test(p.description));
+  assert.ok(!/once PER product/i.test(p.description));
+  assert.ok(p.workflowInputs.value.query.includes('Leave out product and model names'));
 });
