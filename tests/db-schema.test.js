@@ -33,3 +33,14 @@ test('the migration swaps the index inside one transaction', () => {
   assert.strictEqual(statements[statements.length - 1].trim().toLowerCase(), 'commit;', 'COMMIT must come last');
   assert.ok(sql.includes('having count(*) > 1'), 'the header must carry the pre-check query for conflicting rows');
 });
+
+test('kb_folders is defined with its kind and decided_by checks', () => {
+  for (const rel of ['db/kb_folders.sql', 'db/migrations/2026-09-30-kb-folders.sql']) {
+    const sql = read(rel);
+    assert.ok(sql.includes('create table if not exists public.kb_folders ('), rel + ': table');
+    assert.match(sql, /folder\s+text\s+primary key/, rel + ': folder is the key');
+    assert.ok(sql.includes("check (kind in ('shared', 'product'))"), rel + ': kind check');
+    assert.ok(sql.includes("check (decided_by in ('drive', 'llm', 'manual'))"), rel + ': decided_by check');
+    assert.match(sql, /decided_at\s+timestamptz\s+not null\s+default now\(\)/, rel + ': decided_at');
+  }
+});
