@@ -48,6 +48,11 @@ test('the optimizer request lists folders by kind, then the question', () => {
   assert.ok(req.system.includes('"scope"') && req.system.includes('"semantic"') && req.system.includes('"lexical"'));
 });
 
+test('the optimizer is told a question about several products has no scope', () => {
+  const { system } = buildOptimizerRequest('diferenta dintre partner200 si partner600', [], FOLDERS);
+  assert.ok(system.includes('or when the question is about more than one product (for example a comparison)'));
+});
+
 test('the optimizer sees at most 6 turns of 300 characters each', () => {
   const history = Array.from({ length: 8 }, (_, i) => ({
     role: i % 2 ? 'assistant' : 'user', content: 't' + i + ' ' + 'x'.repeat(400),

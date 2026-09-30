@@ -215,6 +215,15 @@ test('the fallback agent gets the same product line and folder rule', () => {
   assert.ok(!agent.options.systemMessage.includes('DOCUMENTATIE COMUNA'));
 });
 
+test('the fallback agent is not told to search once per product', () => {
+  // The tool query now leaves product names out; a per-product search would
+  // either put them back or repeat the same query.
+  const message = byName('AI Agent1').parameters.options.systemMessage;
+  assert.ok(!/one call per product/i.test(message));
+  assert.ok(!/Partner 200 vs Partner 600/.test(message));
+  assert.ok(message.includes('call it again with a different description of the task'));
+});
+
 test('the knowledge base tool no longer asks for product names', () => {
   const p = byName('Knowledge Base (Hybrid Search)').parameters;
   assert.ok(!/include product name/i.test(p.description));
