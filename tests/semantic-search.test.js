@@ -2,8 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-  embedRequest, searchParams, SEARCH_SQL,
-  SEARCH_K, SEARCH_POOL, CONTEXT_WEIGHT, SHARED_SLOTS, EMBED_DIMS,
+  embedRequest, searchParams, buildSearchSql, SEARCH_SQL,
+  SEARCH_K, SEARCH_POOL, CONTEXT_WEIGHT, SHARED_SLOTS, SHARED_MARGIN, EMBED_DIMS,
 } = require('../lib/semantic-search.js');
 
 const vec = (x) => Array.from({ length: EMBED_DIMS }, () => x);
@@ -55,4 +55,24 @@ test('the search SQL fuses two rankings and keeps slots for shared folders', () 
   assert.ok(SEARCH_SQL.includes('0.7 * (d.embedding <=> p.v) + 0.3 * (d.embedding <=> coalesce(p.cv, p.v))'),
     'shared slots are ranked with the context too, so "partner 600" after a question finds that topic');
   assert.ok(!/websearch_to_tsquery|ts_rank|fts/.test(SEARCH_SQL), 'no keyword branch');
+});
+
+test('SEARCH_SQL is the builder with the chosen shared margin', () => {
+  // 0.03: shared docs still reach every question that needs them, with or without an
+  // unrelated earlier message, and irrelevant ones no longer push product chunks out.
+  assert.strictEqual(SHARED_MARGIN, 0.03);
+  assert.strictEqual(SEARCH_SQL, buildSearchSql({ sharedMargin: SHARED_MARGIN }));
+  assert.ok(SEARCH_SQL.includes('where dist <= (select worst from cutoff) + 0.03'));
+});
+
+test('without a margin the shared slots are always filled', () => {
+  const sql = buildSearchSql({ sharedMargin: null });
+  assert.ok(!sql.includes('worst'));
+});
+
+test('with a margin a shared chunk must be about as close as the list it joins', () => {
+  const sql = buildSearchSql({ sharedMargin: 0.02 });
+  assert.ok(sql.includes('max(0.7 * (d.embedding <=> p.v) + 0.3 * (d.embedding <=> coalesce(p.cv, p.v))) as worst'),
+    'the cutoff is the farthest chunk already in the list, measured the same way');
+  assert.ok(sql.includes('where dist <= (select worst from cutoff) + 0.02'));
 });

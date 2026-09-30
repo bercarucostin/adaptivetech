@@ -18,7 +18,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Client } = require('pg');
 const { buildOptimizerRequest, parseOptimizedQuery, historyFromRows } = require('./baseline-optimizer.js');
-const { SEARCH_SQL } = require('../lib/semantic-search.js');
+const { SEARCH_SQL, buildSearchSql } = require('../lib/semantic-search.js');
 const { searchRequest } = require('../lib/retrieval-context.js');
 
 const ROOT = __dirname;
@@ -40,6 +40,20 @@ const FOLD_TO = 'aaissttAAISSTT';
 const VARIANTS = {
   'shipped':             { shipped: true },
   'noise-shipped':       { shipped: true, noise: true },
+  // Shared slots only for shared chunks about as close as the list (margin on the cutoff).
+  'margin-always':       { shipped: true, margin: null },
+  'margin-0':            { shipped: true, margin: 0 },
+  'margin-0.01':         { shipped: true, margin: 0.01 },
+  'margin-0.02':         { shipped: true, margin: 0.02 },
+  'margin-0.04':         { shipped: true, margin: 0.04 },
+  'margin-0.08':         { shipped: true, margin: 0.08 },
+  'no-reserve':          { shipped: true, margin: -1 },
+  'margin-0.02-k20':     { shipped: true, margin: 0.02, k: 20 },
+  'margin-0.03':         { shipped: true, margin: 0.03 },
+  'noise-margin-0.03':   { shipped: true, noise: true, margin: 0.03 },
+  'noise-margin-0':      { shipped: true, noise: true, margin: 0 },
+  'noise-margin-0.02':   { shipped: true, noise: true, margin: 0.02 },
+  'noise-margin-0.04':   { shipped: true, noise: true, margin: 0.04 },
   'prod':                { query: 'optimizer', lex: 'and', fold: false },
   'raw':                 { query: 'raw',       lex: 'and', fold: false },
   'raw-or':              { query: 'raw',       lex: 'or',  fold: false },
@@ -190,7 +204,11 @@ async function resolveGold(db, q) {
         and coalesce(metadata->>'section_heading', '') ilike $3
         and content ilike $4`,
       [sel.folder, sel.file || '%', sel.heading || '%', sel.content || '%']);
-    for (const row of r.rows) out.set(row.id, Object.assign({ role: sel.role }, row));
+    for (const row of r.rows) {
+      const cur = out.get(row.id) || Object.assign({ role: sel.role, groups: [] }, row);
+      if (sel.group && !cur.groups.includes(sel.group)) cur.groups.push(sel.group);
+      out.set(row.id, cur);
+    }
   }
   return out;
 }
@@ -242,7 +260,10 @@ async function retrieveShipped(db, q, variant, ctx) {
   const req = searchRequest(q.question, history);
   const v = await embed(req.query);
   const cv = req.context_query ? await embed(req.context_query) : null;
-  const r = await db.query(SEARCH_SQL, ['[' + v.join(',') + ']', cv ? '[' + cv.join(',') + ']' : '', '{}']);
+  let sql = variant.margin === undefined ? SEARCH_SQL : buildSearchSql({ sharedMargin: variant.margin });
+  // Experiment only: a longer list than the 15 the answer model gets today.
+  if (variant.k) sql = sql.replace(/limit 15\n\)/, 'limit ' + variant.k + '\n)').replace(/\b15 - \(/g, variant.k + ' - (');
+  const r = await db.query(sql, ['[' + v.join(',') + ']', cv ? '[' + cv.join(',') + ']' : '', '{}']);
   return { rows: r.rows.map((row) => ({ id: row.id, folder: row.metadata.folder })), scope: null };
 }
 
@@ -320,7 +341,13 @@ function score(q, gold, rows) {
   const shared = rankOf((g) => g.role === 'shared');
   const goldFolders = new Set([...gold.values()].map((g) => g.folder));
   const hitFolders = new Set(rows.filter((r) => gold.has(r.id)).map((r) => r.folder));
+  // Questions whose answer needs several facts (groups): complete = every group retrieved.
+  const groups = new Set([...gold.values()].flatMap((g) => g.groups));
+  const hitGroups = new Set(rows.filter((r) => gold.has(r.id)).flatMap((r) => gold.get(r.id).groups));
   return {
+    hasGroups: groups.size > 1,
+    complete: groups.size > 1 && [...groups].every((g) => hitGroups.has(g)),
+    groupsHit: hitGroups.size + '/' + groups.size,
     hit5: first !== null && first <= 5,
     hit15: first !== null,
     rr: first ? 1 / first : 0,
@@ -337,7 +364,7 @@ function score(q, gold, rows) {
 function group(q) {
   if (q.id.startsWith('SP')) return 'shared, product named';
   if (q.id.startsWith('S')) return 'shared, no product';
-  if (q.id.startsWith('P')) return 'product named';
+  if (q.id.startsWith('P') || q.id.startsWith('D')) return 'product named';
   if (q.id.startsWith('M')) return 'no product, differs';
   if (q.id.startsWith('L')) return 'exact terms';
   if (q.id.startsWith('R')) return 'real (from chat history)';
@@ -356,6 +383,7 @@ function summarize(name, results) {
     const own = s.filter((x) => x.hasOwn);
     const shared = s.filter((x) => x.hasShared);
     const multi = rs.filter((r) => r.q.kind === 'multi').map((r) => r.s.coverage);
+    const grouped = s.filter((x) => x.hasGroups);
     lines.push({
       variant: name, group: g, n: rs.length,
       'hit@5': pct(s.filter((x) => x.hit5).length, s.length),
@@ -364,6 +392,7 @@ function summarize(name, results) {
       'own product@15': pct(own.filter((x) => x.own15).length, own.length),
       'shared@15': pct(shared.filter((x) => x.shared15).length, shared.length),
       'multi coverage': multi.length ? Math.round((100 * multi.reduce((a, x) => a + x, 0)) / multi.length) + '%' : '-',
+      'complete@15': pct(grouped.filter((x) => x.complete).length, grouped.length),
     });
   }
   return lines;
@@ -387,6 +416,22 @@ async function main() {
       return;
     }
 
+    if (cmd === 'groups') {
+      // Where each needed fact ranks in a plain semantic search on the question (top 60).
+      for (const q of questions) {
+        const gold = golds.get(q.id);
+        const groups = [...new Set([...gold.values()].flatMap((g) => g.groups))];
+        if (groups.length < 2) continue;
+        const rows = await search(db, { lexText: '', embedding: await embed(q.question), lex: 'none', limit: 60 });
+        const ranks = groups.map((g) => {
+          const i = rows.findIndex((r) => gold.has(r.id) && gold.get(r.id).groups.includes(g));
+          return g + '=' + (i < 0 ? '>60' : i + 1);
+        });
+        console.log(q.id.padEnd(4), ranks.join('  ').padEnd(40), q.question);
+      }
+      return;
+    }
+
     const names = cmd === 'detail' ? args.slice(0, 1) : (args.length ? args : Object.keys(VARIANTS));
     const table = [];
     for (const name of names) {
@@ -405,6 +450,7 @@ async function main() {
           for (const row of r.out.rows) folderCounts[row.folder] = (folderCounts[row.folder] || 0) + 1;
           const lexHits = r.out.rows.filter((x) => x.lexical_hit).length;
           console.log((r.s.hit15 ? 'ok  ' : 'MISS') + ' ' + r.q.id.padEnd(4) + ' first=' + String(r.s.first).padEnd(4) +
+            (r.s.hasGroups ? ' groups=' + r.s.groupsHit : '') +
             ' own=' + String(r.s.ownCount).padEnd(4) + ' lexicalHits=' + String(lexHits).padEnd(3) + r.q.question);
           if (r.ctx.optimized) console.log('       optimizer: ' + JSON.stringify(r.ctx.optimized));
           console.log('       folders: ' + JSON.stringify(folderCounts));

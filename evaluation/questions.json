@@ -74,9 +74,24 @@
     { "id": "P8", "kind": "product", "product": "PARTNER TOUCH EVO", "question": "cum schimb cardul sd cu jurnalul electronic la touch evo",
       "gold": [ { "role": "product", "folder": "PARTNER TOUCH EVO", "heading": "6. Schimbare dispozitiv memorare JE%" } ] },
     { "id": "P9", "kind": "product", "product": "PARTNER 600", "question": "cum conectez sertarul de bani la partner 600",
-      "gold": [ { "role": "product", "folder": "PARTNER 600", "content": "%interfa%sertar%" } ] },
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 600", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "cable", "folder": "PARTNER 600", "heading": "%Cablul adaptor%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 600", "content": "%TEST SERTAR%" } ] },
     { "id": "P10", "kind": "product", "product": "PARTNER 200", "question": "cum adaug sertar la partner 200",
-      "gold": [ { "role": "product", "folder": "PARTNER 200", "content": "%interfa%sertar%" } ] },
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 200", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 200", "content": "%TEST SERTAR%" } ] },
+    { "id": "D1", "kind": "product", "product": "PARTNER 300", "question": "cum pun si eu un sertar la p300",
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 300", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "cable", "folder": "PARTNER 300", "heading": "%Cablul adaptor%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 300", "content": "%TEST SERTAR%" } ] },
+    { "id": "D2", "kind": "product", "product": "PARTNER TOUCH EVO", "question": "cum conectez un sertar la touch evo",
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER TOUCH EVO", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "cable", "folder": "PARTNER TOUCH EVO", "heading": "%Cablul adaptor%" },
+        { "role": "product", "group": "test", "folder": "PARTNER TOUCH EVO", "content": "%TEST SERTAR%" } ] },
     { "id": "P11", "kind": "product", "product": "PARTNER PF 80K", "question": "ce tip de hartie foloseste pf 80k",
       "gold": [ { "role": "product", "folder": "PARTNER PF 80K", "heading": "%Incarcare hartie%" } ] },
     { "id": "P12", "kind": "product", "product": "PARTNER 600", "question": "cum programez un produs plu pe partner 600",
@@ -87,8 +102,8 @@
       "gold": [ { "role": "product", "folder": "PARTNER 300", "heading": "5.1 Rapoarte cu stergere Z%" } ] },
     { "id": "P15", "kind": "shared", "product": "PARTNER 600", "question": "cum inlocuiesc certificatul digital la partner 600",
       "gold": [
-        { "role": "product", "folder": "PARTNER 600", "heading": "12. INLOCUIREA%" },
-        { "role": "shared", "folder": "DOCUMENTATIE COMUNA", "file": "Procedura de inlocuire certificat digital%" } ] },
+        { "role": "product", "group": "product", "folder": "PARTNER 600", "heading": "12. INLOCUIREA%" },
+        { "role": "shared", "group": "shared", "folder": "DOCUMENTATIE COMUNA", "file": "Procedura de inlocuire certificat digital%" } ] },
     { "id": "P16", "kind": "product", "product": "PARTNER PF 80K", "question": "care sunt parolele de acces la partner pf 80k",
       "gold": [ { "role": "product", "folder": "PARTNER PF 80K", "heading": "1. Parole de acces%" } ] },
     { "id": "P17", "kind": "product", "product": "PARTNER 600", "question": "cum configurez wifi pe partner 600",
@@ -172,7 +187,9 @@
     { "id": "R17", "kind": "product", "product": "PARTNER 200", "question": "Doresc sa aflu cu ce moxel de baterii merge P200",
       "gold": [ { "role": "product", "folder": "PARTNER 200", "file": "fisa caracteristici tehnice%" } ] },
     { "id": "R18", "kind": "product", "product": "PARTNER 200", "question": "vreau sa stiu cum conectez si eu sertarul la partner 200",
-      "gold": [ { "role": "product", "folder": "PARTNER 200", "content": "%interfa%sertar%" } ] },
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 200", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 200", "content": "%TEST SERTAR%" } ] },
     { "id": "R19", "kind": "product", "product": "PARTNER 200", "question": "Cum se modifica la Partner 20 ora de vara?",
       "gold": [ { "role": "product", "folder": "PARTNER 200", "heading": "%data si ora%" } ] },
     { "id": "R20", "kind": "any", "product": null, "question": "Vânzarea cu pret liber",
@@ -188,14 +205,22 @@
       "history": [
         { "role": "user", "content": "cum conectez si eu un sertar?" },
         { "role": "assistant", "content": "Ce model de casă de marcat aveți?" } ],
-      "gold": [ { "role": "product", "folder": "PARTNER 200", "content": "%interfa%sertar%" } ] },
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 200", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 200", "content": "%TEST SERTAR%" } ] },
+    { "id": "R25", "kind": "product", "product": "PARTNER 300", "question": "cum pun si eu un sertar la p300",
+      "history": [ { "role": "user", "content": "ce zici sefule" }, { "role": "assistant", "content": "Bună! Cu ce vă pot ajuta?" } ],
+      "gold": [
+        { "role": "product", "group": "interface", "folder": "PARTNER 300", "content": "%interfa%sertar%" },
+        { "role": "product", "group": "cable", "folder": "PARTNER 300", "heading": "%Cablul adaptor%" },
+        { "role": "product", "group": "test", "folder": "PARTNER 300", "content": "%TEST SERTAR%" } ] },
     { "id": "R24", "kind": "product", "product": "PARTNER 600", "question": "partner 600",
       "history": [
         { "role": "user", "content": "cum inlocuiesc certificatul digital" },
         { "role": "assistant", "content": "Ce model de aparat fiscal aveți? Procedura diferă ușor în funcție de model." } ],
       "gold": [
-        { "role": "product", "folder": "PARTNER 600", "heading": "12. INLOCUIREA%" },
-        { "role": "shared", "folder": "DOCUMENTATIE COMUNA", "file": "Procedura de inlocuire certificat digital%" } ] },
+        { "role": "product", "group": "product", "folder": "PARTNER 600", "heading": "12. INLOCUIREA%" },
+        { "role": "shared", "group": "shared", "folder": "DOCUMENTATIE COMUNA", "file": "Procedura de inlocuire certificat digital%" } ] },
 
     { "id": "F1", "kind": "product", "product": "PARTNER 600", "question": "si cum schimb memoria fiscala?",
       "history": [

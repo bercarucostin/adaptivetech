@@ -59,14 +59,35 @@ own-product and shared-doc hits.
 2. `hybrid-search-tool` embeds both in one `batchEmbedContents` call and runs `SEARCH_SQL`:
    - two semantic rankings of 50, fused by reciprocal rank at 0.7 (question) and 0.3
      (with context);
-   - the top 15, whose last 3 places go to the best `kb_folders.kind = 'shared'` chunks not
-     already present, ranked the same 0.7 / 0.3 way. No shared slots when a filter is passed.
+   - the top 15, whose last places (up to 3) go to the best `kb_folders.kind = 'shared'`
+     chunks not already present, ranked the same 0.7 / 0.3 way, but only if a shared chunk
+     is at most 0.03 farther (same combined distance) than the farthest chunk already in
+     the list. No shared slots when a filter is passed.
 3. Both answer prompts get the folder rule from `folderRule(kb_folders)`. The product
    comes from the question or the conversation, with no separate product line.
 4. The fallback agent's knowledge-base tool keeps product names in its queries.
 
 `hybrid_search()` and the `fts` column stay in the database, unused, so the keyword
 branch can be measured again.
+
+## Follow-up: shared slots only when relevant
+
+The first version always filled 3 shared slots. In production, "cum pun si eu un sertar la
+p300" got firmware, Bluetooth and certificate docs in them. The set then got questions
+whose answer needs several facts, e.g. a drawer needs the interface line, the adapter
+cable section and the service menu's TEST SERTAR. A new metric, complete@15, counts the
+questions where every fact is in the top 15.
+
+| Shared slots | hit@15 | shared@15 | complete@15 | with unrelated history: shared@15 / complete@15 |
+|---|---|---|---|---|
+| none | 97% | 93% | 56% | — |
+| always 3 | 99% | 100% | 56% | 100% / 56% |
+| margin 0.02 | 99% | 100% | 67% | 96% / 56% |
+| **margin 0.03 (shipped)** | **99%** | **100%** | **67%** | **100% / 56%** |
+
+Not fixed, and not caused by the slots: for the Partner 300 drawer the adapter cable ranks
+21st and TEST SERTAR 25th, below "cash in/out of the drawer" sections. A 20-chunk list
+raises complete@15 to 78%, at the cost of a longer prompt; not shipped.
 
 ## Known data gaps (not retrieval problems)
 
