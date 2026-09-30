@@ -222,6 +222,55 @@
         { "role": "product", "group": "product", "folder": "PARTNER 600", "heading": "12. INLOCUIREA%" },
         { "role": "shared", "group": "shared", "folder": "DOCUMENTATIE COMUNA", "file": "Procedura de inlocuire certificat digital%" } ] },
 
+    { "id": "G1", "kind": "product", "product": "PARTNER 300", "question": "cum schimb memoria fiscala la partner 300, pas cu pas",
+      "note": "The section says: replace, then do the reset of chapter 5. (Its two chunks overlap, so they are one fact here.)",
+      "gold": [
+        { "role": "product", "group": "steps", "folder": "PARTNER 300", "heading": "%Schimbarea memoriei fiscale%" },
+        { "role": "product", "group": "reset", "folder": "PARTNER 300", "heading": "%Procedura de reset%" } ] },
+    { "id": "G2", "kind": "product", "product": "PARTNER 600", "question": "cum inlocuiesc placa de baza la partner 600",
+      "note": "The section requires the reset (chapter 5) and, with a new SD card, registering it (chapter 7).",
+      "gold": [
+        { "role": "product", "group": "steps", "folder": "PARTNER 600", "heading": "%placa de baza%" },
+        { "role": "product", "group": "reset", "folder": "PARTNER 600", "heading": "%Procedura de reset%" },
+        { "role": "product", "group": "je", "folder": "PARTNER 600", "heading": "7. Inregistrarea%" } ] },
+    { "id": "G3", "kind": "product", "product": "PARTNER TOUCH EVO", "question": "am de schimbat placa de baza la un touch evo, ce trebuie facut",
+      "gold": [
+        { "role": "product", "group": "steps", "folder": "PARTNER TOUCH EVO", "heading": "%placa de baza%" },
+        { "role": "product", "group": "reset", "folder": "PARTNER TOUCH EVO", "heading": "%Procedura de reset%" },
+        { "role": "product", "group": "je", "folder": "PARTNER TOUCH EVO", "heading": "7. Inregistrarea%" } ] },
+    { "id": "G4", "kind": "product", "product": "PARTNER 300", "question": "cum schimb cardul microSD de jurnal electronic la partner 300",
+      "note": "After the swap the device shows JE NEINREGISTRAT; chapter 7 registers the card.",
+      "gold": [
+        { "role": "product", "group": "change", "folder": "PARTNER 300", "heading": "6. Schimbare dispozitiv memorare JE%" },
+        { "role": "product", "group": "register", "folder": "PARTNER 300", "heading": "7. Inregistrarea%" } ] },
+    { "id": "G5", "kind": "product", "product": "PARTNER 600", "question": "cum fac partner 600 sa transmita la ANAF prin GPRS",
+      "gold": [
+        { "role": "product", "group": "sim", "folder": "PARTNER 600", "heading": "%Activare cartela SIM%" },
+        { "role": "product", "group": "interface", "folder": "PARTNER 600", "heading": "2.2.20 Alegerea interfetei%" } ] },
+    { "id": "G6", "kind": "product", "product": "PARTNER 300", "question": "am pus o cartela sim in p300, cum o activez si cum aleg sa trimita prin ea la anaf?",
+      "gold": [
+        { "role": "product", "group": "sim", "folder": "PARTNER 300", "heading": "%Activare cartela SIM%" },
+        { "role": "product", "group": "interface", "folder": "PARTNER 300", "heading": "2.2.20 Alegerea interfetei%" } ] },
+    { "id": "G8", "kind": "product", "product": "PARTNER 300", "question": "care sunt toti pasii de fiscalizare la partner 300?",
+      "note": "One section in four overlapping chunks; complete needs chunk 1 (preparation) and one holding the CIF step.",
+      "gold": [
+        { "role": "product", "group": "prepare", "folder": "PARTNER 300", "heading": "%fiscalizare%", "content": "%A. Pregatirea%" },
+        { "role": "product", "group": "header", "folder": "PARTNER 300", "heading": "%fiscalizare%", "content": "%PROGRAMARE LINII ANTET%" },
+        { "role": "product", "group": "cif", "folder": "PARTNER 300", "heading": "%fiscalizare%", "content": "%codul de inregistrare fiscala%" } ] },
+    { "id": "G9", "kind": "product", "product": "PARTNER TOUCH EVO", "question": "cum conectez touch evo la wifi si il fac sa trimita la anaf prin wifi",
+      "gold": [
+        { "role": "product", "group": "wifi", "folder": "PARTNER TOUCH EVO", "heading": "2.1 Setarea parametrilor%Wifi%" },
+        { "role": "product", "group": "interface", "folder": "PARTNER TOUCH EVO", "heading": "%Alegerea interfetei%" } ] },
+    { "id": "G10", "kind": "product", "product": "PARTNER 600", "question": "si dupa ce am montat-o ce mai trebuie facut?",
+      "history": [
+        { "role": "user", "content": "trebuie sa inlocuiesc placa de baza la un partner 600" },
+        { "role": "assistant", "content": "Înainte de înlocuire, păstrați cardul SD din placa veche și tipăriți raportul Z." } ],
+      "note": "The motherboard section lists what follows (reset, chapter 5; SD registration, chapter 7).",
+      "gold": [
+        { "role": "product", "group": "steps", "folder": "PARTNER 600", "heading": "%placa de baza%" },
+        { "role": "product", "group": "reset", "folder": "PARTNER 600", "heading": "%Procedura de reset%" },
+        { "role": "product", "group": "je", "folder": "PARTNER 600", "heading": "7. Inregistrarea%" } ] },
+
     { "id": "F1", "kind": "product", "product": "PARTNER 600", "question": "si cum schimb memoria fiscala?",
       "history": [
         { "role": "user", "content": "am un partner 600" },

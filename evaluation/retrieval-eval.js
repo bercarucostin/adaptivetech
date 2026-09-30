@@ -49,6 +49,20 @@ const VARIANTS = {
   'margin-0.08':         { shipped: true, margin: 0.08 },
   'no-reserve':          { shipped: true, margin: -1 },
   'margin-0.02-k20':     { shipped: true, margin: 0.02, k: 20 },
+  // Keyword branch added to the shipped design (any word, diacritics folded).
+  'kw-0':                { keywords: true, lexWeight: 0 },
+  'kw-0.1':              { keywords: true, lexWeight: 0.1 },
+  'kw-0.2':              { keywords: true, lexWeight: 0.2 },
+  'kw-0.3':              { keywords: true, lexWeight: 0.3 },
+  'kw-0.5':              { keywords: true, lexWeight: 0.5 },
+  'noise-kw-0.2':        { keywords: true, lexWeight: 0.2, noise: true },
+  'noise-kw-0.3':        { keywords: true, lexWeight: 0.3, noise: true },
+  'kw-0.25':             { keywords: true, lexWeight: 0.25 },
+  'kw-0-k20':            { keywords: true, lexWeight: 0, k: 20 },
+  'kw-0.2-k20':          { keywords: true, lexWeight: 0.2, k: 20 },
+  'noise-kw-0-k20':      { keywords: true, lexWeight: 0, k: 20, noise: true },
+  'noise-kw-0.2-k20':    { keywords: true, lexWeight: 0.2, k: 20, noise: true },
+  'noise-kw-0.25':       { keywords: true, lexWeight: 0.25, noise: true },
   'margin-0.03':         { shipped: true, margin: 0.03 },
   'noise-margin-0.03':   { shipped: true, noise: true, margin: 0.03 },
   'noise-margin-0':      { shipped: true, noise: true, margin: 0 },
@@ -267,8 +281,53 @@ async function retrieveShipped(db, q, variant, ctx) {
   return { rows: r.rows.map((row) => ({ id: row.id, folder: row.metadata.folder })), scope: null };
 }
 
+// The shipped design with a keyword branch added (experiment): three rankings fused by
+// reciprocal rank -- question (0.7), question with context (0.3), both scaled by
+// (1 - lexWeight) -- plus any-word keyword search on the question (lexWeight), then
+// the shipped shared-slot rule (margin on the combined distance).
+async function retrieveWithKeywords(db, q, variant, ctx) {
+  let history = q.history || [];
+  if (variant.noise && !history.length) history = [{ role: 'user', content: ctx.unrelated }];
+  const req = searchRequest(q.question, history);
+  const v = await embed(req.query);
+  const cv = req.context_query ? await embed(req.context_query) : null;
+  const alone = await search(db, { lexText: '', embedding: v, lex: 'none', limit: POOL });
+  const withCtx = cv ? await search(db, { lexText: '', embedding: cv, lex: 'none', limit: POOL }) : [];
+  const keyword = variant.lexWeight
+    ? await search(db, { lexText: req.query, embedding: null, lex: 'or', fold: true, limit: POOL, wFts: 1 })
+    : [];
+  const fused = new Map();
+  const add = (list, w) => list.forEach((r, i) => {
+    const cur = fused.get(r.id) || { id: r.id, folder: r.folder, score: 0 };
+    cur.score += w / (RRF_K + i + 1);
+    fused.set(r.id, cur);
+  });
+  const semW = 1 - (variant.lexWeight || 0);
+  add(alone, semW * (cv ? 0.7 : 1));
+  add(withCtx, semW * 0.3);
+  add(keyword, variant.lexWeight || 0);
+  const k = variant.k || K;
+  let rows = [...fused.values()].sort((a, b) => b.score - a.score || a.id - b.id).slice(0, k);
+
+  // Shared slots, as in SEARCH_SQL: up to 3, only within the margin of the farthest chunk.
+  const vs = '[' + v.join(',') + ']';
+  const cvs = cv ? '[' + cv.join(',') + ']' : vs;
+  const distSql = `0.7 * (d.embedding <=> $1::vector) + 0.3 * (d.embedding <=> $2::vector)`;
+  const worst = (await db.query(`select max(${distSql}) as w from documents d where d.id = any($3::bigint[])`,
+    [vs, cvs, rows.map((r) => r.id)])).rows[0].w;
+  const sharedRows = (await db.query(`
+    select d.id, d.metadata->>'folder' as folder, ${distSql} as dist
+    from documents d join kb_folders k on k.folder = d.metadata->>'folder' and k.kind = 'shared'
+    where not (d.id = any($3::bigint[]))
+    order by dist, d.id limit 3`, [vs, cvs, rows.map((r) => r.id)])).rows
+    .filter((s) => s.dist <= worst + 0.03);
+  rows = rows.slice(0, k - sharedRows.length).concat(sharedRows.map((s) => ({ id: s.id, folder: s.folder })));
+  return { rows, scope: null };
+}
+
 async function retrieve(db, q, variant, ctx) {
   if (variant.shipped) return retrieveShipped(db, q, variant, ctx);
+  if (variant.keywords) return retrieveWithKeywords(db, q, variant, ctx);
   let text = q.question;
   let scope = null;
   if (variant.query === 'optimizer' || variant.scope === 'optimizer') {
@@ -333,7 +392,9 @@ async function retrieve(db, q, variant, ctx) {
 }
 
 // ---------------------------------------------------------------- scoring
-function score(q, gold, rows) {
+function score(q, gold, allRows) {
+  // Metrics are named @15 but count the whole list a variant returns (20 for the k20 experiments).
+  const rows = allRows;
   const ids = rows.map((r) => r.id);
   const rankOf = (pred) => { const i = ids.findIndex((id) => gold.has(id) && pred(gold.get(id))); return i < 0 ? null : i + 1; };
   const first = rankOf(() => true);
@@ -368,6 +429,7 @@ function group(q) {
   if (q.id.startsWith('M')) return 'no product, differs';
   if (q.id.startsWith('L')) return 'exact terms';
   if (q.id.startsWith('R')) return 'real (from chat history)';
+  if (q.id.startsWith('G')) return 'multi-fact';
   return 'follow-up';
 }
 
@@ -411,7 +473,10 @@ async function main() {
       for (const q of questions) {
         const g = [...golds.get(q.id).values()];
         console.log(q.id.padEnd(4), (g.length ? '' : 'NO GOLD  ') + q.question);
-        for (const c of g) console.log('       ' + c.id, c.role.padEnd(7), '[' + c.folder + ']', c.file, '—', c.heading);
+        for (const c of g) {
+          console.log('       ' + c.id, c.role.padEnd(7), (c.groups.length ? '{' + c.groups.join(',') + '} ' : '') +
+            '[' + c.folder + ']', c.file, '—', c.heading);
+        }
       }
       return;
     }
