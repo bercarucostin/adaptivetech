@@ -717,6 +717,143 @@
       ],
       "id": "b7d1e2f0-0004-4000-8000-00000000a004",
       "name": "Check Failures"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT folder, kind, decided_by FROM kb_folders",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4496,
+        -1600
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000001",
+      "name": "Load Folder Kinds",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Plan Folder Classification\" and \"Build Folder\n// Kinds SQL\" Code nodes in workflows/ingestion.json.\n// tests/ingestion-workflow.test.js fails if they drift apart.\n\nconst FOLDER_KINDS = ['shared', 'product'];\n// File names shown to the classifier per folder: enough to show what the\n// folder holds without letting one large folder grow the prompt.\nconst MAX_FILES_PER_FOLDER = 30;\n\nconst CLASSIFIER_SYSTEM = [\n  'You classify the top-level folders of a technical-support knowledge base that covers a family of products.',\n  'A folder is \"product\" when its documents apply to one specific product or model, for example a folder named after a model.',\n  'A folder is \"shared\" when its documents apply to every product: common procedures, general documentation, and accessories or software used with all products.',\n  'Use the folder name, its file names, and the list of all top-level folders for context.',\n  'Return ONLY a JSON object that maps each folder to classify, by its exact name, to \"shared\" or \"product\".',\n].join('\\n');\n\n// '#shared' or '#product' anywhere in a Drive folder description, any case.\n// Both tags, or neither, is no decision.\nfunction driveTag(description) {\n  const s = String(description || '').toLowerCase();\n  const shared = /#shared\\b/.test(s);\n  const product = /#product\\b/.test(s);\n  if (shared === product) return null;\n  return shared ? 'shared' : 'product';\n}\n\nfunction classifierRequest(allNames, toClassify, filesByFolder) {\n  const lines = ['ALL TOP-LEVEL FOLDERS:'];\n  for (const name of allNames) lines.push('- ' + name);\n  lines.push('', 'FOLDERS TO CLASSIFY, with some of their file names:');\n  for (const name of toClassify) {\n    lines.push('', '## ' + name);\n    const files = (filesByFolder[name] || []).slice(0, MAX_FILES_PER_FOLDER);\n    if (!files.length) lines.push('(no files yet)');\n    for (const file of files) lines.push('- ' + file);\n  }\n  return {\n    systemInstruction: { parts: [{ text: CLASSIFIER_SYSTEM }] },\n    contents: [{ role: 'user', parts: [{ text: lines.join('\\n') }] }],\n    generationConfig: { temperature: 0, responseMimeType: 'application/json' },\n  };\n}\n\n// What this run must write, and what it must ask the classifier.\n//   topFolders:    [{ id, name, description }], the root's direct children\n//   existingRows:  [{ folder, kind, decided_by }] from kb_folders\n//   filesByFolder: { <folder name>: [file names] }\n// Returns { overrides, toClassify, request }:\n//   overrides:  [{ folder, kind }], Drive tags that differ from the stored row\n//   toClassify: folder names with no tag and no row, sorted\n//   request:    the Gemini generateContent body, or null when toClassify is empty\nfunction planClassification(topFolders, existingRows, filesByFolder) {\n  const rows = new Map();\n  for (const row of existingRows || []) if (row && row.folder) rows.set(row.folder, row);\n  const tags = new Map();\n  for (const f of topFolders || []) {\n    if (!f || !f.name || tags.has(f.name)) continue;\n    const tag = driveTag(f.description);\n    if (tag) tags.set(f.name, tag);\n  }\n  const names = [...new Set((topFolders || []).map((f) => f && f.name).filter(Boolean))].sort();\n\n  const overrides = [];\n  const toClassify = [];\n  for (const name of names) {\n    const tag = tags.get(name);\n    const row = rows.get(name);\n    if (tag) {\n      if (!row || row.kind !== tag || row.decided_by !== 'drive') overrides.push({ folder: name, kind: tag });\n    } else if (!row) {\n      toClassify.push(name);\n    }\n  }\n  const request = toClassify.length ? classifierRequest(names, toClassify, filesByFolder || {}) : null;\n  return { overrides, toClassify, request };\n}\n\n// The classifier's JSON answer, reduced to listed folders with a valid kind.\n// Anything unreadable yields {}: those folders stay unclassified until the\n// next run.\nfunction parseClassification(rawText, toClassify) {\n  let parsed;\n  try {\n    parsed = JSON.parse(String(rawText || '')\n      .replace(/^\\s*```(?:json)?\\s*/i, '')\n      .replace(/\\s*```\\s*$/, ''));\n  } catch (e) {\n    return {};\n  }\n  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};\n  const out = {};\n  for (const name of toClassify || []) {\n    const kind = typeof parsed[name] === 'string' ? parsed[name].trim().toLowerCase() : '';\n    if (FOLDER_KINDS.includes(kind)) out[name] = kind;\n  }\n  return out;\n}\n\nfunction sqlString(s) {\n  return \"'\" + String(s).replace(/'/g, \"''\") + \"'\";\n}\n\n// One statement. Drive rows replace whatever is stored; LLM rows only fill\n// gaps, so they never overwrite a Drive, manual or earlier LLM decision.\nfunction upsertSql(overrides, classified) {\n  const values = [];\n  const seen = new Set();\n  for (const o of overrides || []) {\n    if (seen.has(o.folder)) continue;\n    seen.add(o.folder);\n    values.push('(' + sqlString(o.folder) + ', ' + sqlString(o.kind) + \", 'drive')\");\n  }\n  for (const [folder, kind] of Object.entries(classified || {})) {\n    if (seen.has(folder)) continue;\n    seen.add(folder);\n    values.push('(' + sqlString(folder) + ', ' + sqlString(kind) + \", 'llm')\");\n  }\n  if (!values.length) return '';\n  return 'INSERT INTO kb_folders (folder, kind, decided_by) VALUES ' + values.join(', ') +\n    ' ON CONFLICT (folder) DO UPDATE SET kind = EXCLUDED.kind, decided_by = EXCLUDED.decided_by, decided_at = now()' +\n    \" WHERE EXCLUDED.decided_by = 'drive'\";\n}\n\n// ---- n8n glue ----\n// Runs before the file sync (it sits above Sync Check on the canvas). Nothing\n// here throws on bad data: a folder that cannot be classified now is left for\n// the next run, and the sync must not stop because of it.\nconst tree = $('Build Folder Tree').first().json || {};\nconst folders = tree.folders || {};\nconst existing = $('Load Folder Kinds').all().map((item) => item.json).filter((row) => row && row.folder);\nconst filesByFolder = {};\nfor (const item of $('Drive: Knowledge Base').all()) {\n  const file = item.json || {};\n  const parent = (file.parents || []).find((p) => folders[p]);\n  if (!parent || !file.name) continue;\n  const label = folders[parent].label;\n  (filesByFolder[label] = filesByFolder[label] || []).push(file.name);\n}\nconst plan = planClassification(tree.topFolders || [], existing, filesByFolder);\nfor (const o of plan.overrides) console.log('folder \"' + o.folder + '\" set to ' + o.kind + ' by drive');\nif (plan.toClassify.length) console.log('classifying new folder(s): ' + plan.toClassify.join(', '));\nreturn [{ json: plan }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4720,
+        -1600
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000002",
+      "name": "Plan Folder Classification"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "d4f0a000-0000-4000-8000-000000000003-c1",
+              "leftValue": "={{ !!$json.request }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4944,
+        -1600
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000003",
+      "name": "Needs Classification?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5168,
+        -1696
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000004",
+      "name": "Classify Folders",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "Sn4u54Xr5kgDae8s",
+          "name": "Gemini API Key Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---8<--- SHARED START ---8<---\n// Copied verbatim into the \"Plan Folder Classification\" and \"Build Folder\n// Kinds SQL\" Code nodes in workflows/ingestion.json.\n// tests/ingestion-workflow.test.js fails if they drift apart.\n\nconst FOLDER_KINDS = ['shared', 'product'];\n// File names shown to the classifier per folder: enough to show what the\n// folder holds without letting one large folder grow the prompt.\nconst MAX_FILES_PER_FOLDER = 30;\n\nconst CLASSIFIER_SYSTEM = [\n  'You classify the top-level folders of a technical-support knowledge base that covers a family of products.',\n  'A folder is \"product\" when its documents apply to one specific product or model, for example a folder named after a model.',\n  'A folder is \"shared\" when its documents apply to every product: common procedures, general documentation, and accessories or software used with all products.',\n  'Use the folder name, its file names, and the list of all top-level folders for context.',\n  'Return ONLY a JSON object that maps each folder to classify, by its exact name, to \"shared\" or \"product\".',\n].join('\\n');\n\n// '#shared' or '#product' anywhere in a Drive folder description, any case.\n// Both tags, or neither, is no decision.\nfunction driveTag(description) {\n  const s = String(description || '').toLowerCase();\n  const shared = /#shared\\b/.test(s);\n  const product = /#product\\b/.test(s);\n  if (shared === product) return null;\n  return shared ? 'shared' : 'product';\n}\n\nfunction classifierRequest(allNames, toClassify, filesByFolder) {\n  const lines = ['ALL TOP-LEVEL FOLDERS:'];\n  for (const name of allNames) lines.push('- ' + name);\n  lines.push('', 'FOLDERS TO CLASSIFY, with some of their file names:');\n  for (const name of toClassify) {\n    lines.push('', '## ' + name);\n    const files = (filesByFolder[name] || []).slice(0, MAX_FILES_PER_FOLDER);\n    if (!files.length) lines.push('(no files yet)');\n    for (const file of files) lines.push('- ' + file);\n  }\n  return {\n    systemInstruction: { parts: [{ text: CLASSIFIER_SYSTEM }] },\n    contents: [{ role: 'user', parts: [{ text: lines.join('\\n') }] }],\n    generationConfig: { temperature: 0, responseMimeType: 'application/json' },\n  };\n}\n\n// What this run must write, and what it must ask the classifier.\n//   topFolders:    [{ id, name, description }], the root's direct children\n//   existingRows:  [{ folder, kind, decided_by }] from kb_folders\n//   filesByFolder: { <folder name>: [file names] }\n// Returns { overrides, toClassify, request }:\n//   overrides:  [{ folder, kind }], Drive tags that differ from the stored row\n//   toClassify: folder names with no tag and no row, sorted\n//   request:    the Gemini generateContent body, or null when toClassify is empty\nfunction planClassification(topFolders, existingRows, filesByFolder) {\n  const rows = new Map();\n  for (const row of existingRows || []) if (row && row.folder) rows.set(row.folder, row);\n  const tags = new Map();\n  for (const f of topFolders || []) {\n    if (!f || !f.name || tags.has(f.name)) continue;\n    const tag = driveTag(f.description);\n    if (tag) tags.set(f.name, tag);\n  }\n  const names = [...new Set((topFolders || []).map((f) => f && f.name).filter(Boolean))].sort();\n\n  const overrides = [];\n  const toClassify = [];\n  for (const name of names) {\n    const tag = tags.get(name);\n    const row = rows.get(name);\n    if (tag) {\n      if (!row || row.kind !== tag || row.decided_by !== 'drive') overrides.push({ folder: name, kind: tag });\n    } else if (!row) {\n      toClassify.push(name);\n    }\n  }\n  const request = toClassify.length ? classifierRequest(names, toClassify, filesByFolder || {}) : null;\n  return { overrides, toClassify, request };\n}\n\n// The classifier's JSON answer, reduced to listed folders with a valid kind.\n// Anything unreadable yields {}: those folders stay unclassified until the\n// next run.\nfunction parseClassification(rawText, toClassify) {\n  let parsed;\n  try {\n    parsed = JSON.parse(String(rawText || '')\n      .replace(/^\\s*```(?:json)?\\s*/i, '')\n      .replace(/\\s*```\\s*$/, ''));\n  } catch (e) {\n    return {};\n  }\n  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};\n  const out = {};\n  for (const name of toClassify || []) {\n    const kind = typeof parsed[name] === 'string' ? parsed[name].trim().toLowerCase() : '';\n    if (FOLDER_KINDS.includes(kind)) out[name] = kind;\n  }\n  return out;\n}\n\nfunction sqlString(s) {\n  return \"'\" + String(s).replace(/'/g, \"''\") + \"'\";\n}\n\n// One statement. Drive rows replace whatever is stored; LLM rows only fill\n// gaps, so they never overwrite a Drive, manual or earlier LLM decision.\nfunction upsertSql(overrides, classified) {\n  const values = [];\n  const seen = new Set();\n  for (const o of overrides || []) {\n    if (seen.has(o.folder)) continue;\n    seen.add(o.folder);\n    values.push('(' + sqlString(o.folder) + ', ' + sqlString(o.kind) + \", 'drive')\");\n  }\n  for (const [folder, kind] of Object.entries(classified || {})) {\n    if (seen.has(folder)) continue;\n    seen.add(folder);\n    values.push('(' + sqlString(folder) + ', ' + sqlString(kind) + \", 'llm')\");\n  }\n  if (!values.length) return '';\n  return 'INSERT INTO kb_folders (folder, kind, decided_by) VALUES ' + values.join(', ') +\n    ' ON CONFLICT (folder) DO UPDATE SET kind = EXCLUDED.kind, decided_by = EXCLUDED.decided_by, decided_at = now()' +\n    \" WHERE EXCLUDED.decided_by = 'drive'\";\n}\n\n// ---- n8n glue ----\n// Input is the classifier response (true branch) or the plan itself (false\n// branch, nothing to classify). A failed classifier call arrives here as an\n// item with an error field and yields no classifications.\nconst plan = $('Plan Folder Classification').first().json;\nconst input = $input.first().json || {};\nconst raw = (input.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');\nconst classified = plan.request ? parseClassification(raw, plan.toClassify) : {};\nfor (const [folder, kind] of Object.entries(classified)) {\n  console.log('folder \"' + folder + '\" classified as ' + kind + ' by llm');\n}\nconst missing = plan.toClassify.filter((f) => !classified[f]);\nif (missing.length) console.log('left unclassified, retried on the next run: ' + missing.join(', '));\nconst sql = upsertSql(plan.overrides, classified);\nreturn sql ? [{ json: { query: sql } }] : [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5392,
+        -1600
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000005",
+      "name": "Build Folder Kinds SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5616,
+        -1600
+      ],
+      "id": "d4f0a000-0000-4000-8000-000000000006",
+      "name": "Save Folder Kinds",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "Rlo7S13CLihXk7eq",
+          "name": "Postgres account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -1016,6 +1153,11 @@
             "node": "Sync Check",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Load Folder Kinds",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1102,6 +1244,68 @@
         [
           {
             "node": "Process One File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Folder Kinds": {
+      "main": [
+        [
+          {
+            "node": "Plan Folder Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Folder Classification": {
+      "main": [
+        [
+          {
+            "node": "Needs Classification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Classification?": {
+      "main": [
+        [
+          {
+            "node": "Classify Folders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Folder Kinds SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Folders": {
+      "main": [
+        [
+          {
+            "node": "Build Folder Kinds SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Folder Kinds SQL": {
+      "main": [
+        [
+          {
+            "node": "Save Folder Kinds",
             "type": "main",
             "index": 0
           }

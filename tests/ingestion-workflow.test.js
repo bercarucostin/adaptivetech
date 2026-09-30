@@ -121,7 +121,9 @@ test('the knowledge base listing walks the folder tree in order', () => {
   assert.deepStrictEqual(targets('Drive: All Folders'), [['Build Folder Tree']]);
   assert.deepStrictEqual(targets('Build Folder Tree'), [['Drive: Knowledge Base']]);
   assert.deepStrictEqual(targets('Drive: Knowledge Base'), [['Build Drive Manifest']]);
-  assert.deepStrictEqual(targets('Build Drive Manifest'), [['Sync Check']]);
+  // Sync Check is the file sync; Load Folder Kinds is the folder classification
+  // branch, which runs first (see "the classification branch runs before the file sync").
+  assert.deepStrictEqual(targets('Build Drive Manifest'), [['Sync Check', 'Load Folder Kinds']]);
 });
 
 test('Drive: All Folders lists every folder and always reaches Build Folder Tree', () => {
@@ -346,4 +348,67 @@ test('an empty file listing still reaches the zero-files guard', () => {
   assert.strictEqual(byName('Drive: Knowledge Base').alwaysOutputData, true);
   const { buildManifest } = require('../lib/drive-manifest.js');
   assert.throws(() => buildManifest([{}], {}), /Refusing to run the orphan sweep/);
+});
+
+test('the folder classification branch hangs off Build Drive Manifest, in order', () => {
+  const fromManifest = targets('Build Drive Manifest')[0];
+  assert.ok(fromManifest.includes('Sync Check'), 'the file sync is still connected');
+  assert.ok(fromManifest.includes('Load Folder Kinds'));
+  assert.deepStrictEqual(targets('Load Folder Kinds'), [['Plan Folder Classification']]);
+  assert.deepStrictEqual(targets('Plan Folder Classification'), [['Needs Classification?']]);
+  assert.deepStrictEqual(targets('Needs Classification?'), [['Classify Folders'], ['Build Folder Kinds SQL']]);
+  assert.deepStrictEqual(targets('Classify Folders'), [['Build Folder Kinds SQL']]);
+  assert.deepStrictEqual(targets('Build Folder Kinds SQL'), [['Save Folder Kinds']]);
+});
+
+test('the classification branch runs before the file sync', () => {
+  // n8n v1 runs sibling branches top to bottom on the canvas. Check Failures
+  // throws when any file failed, so classification must come first or a
+  // single bad file would stop new folders from ever being classified.
+  assert.strictEqual(wf.settings.executionOrder, 'v1');
+  assert.ok(byName('Load Folder Kinds').position[1] < byName('Sync Check').position[1]);
+});
+
+test('Load Folder Kinds survives an empty table and runs once', () => {
+  const node = byName('Load Folder Kinds');
+  assert.strictEqual(node.parameters.operation, 'executeQuery');
+  assert.match(node.parameters.query, /SELECT folder, kind, decided_by FROM kb_folders/);
+  assert.strictEqual(node.alwaysOutputData, true, 'an empty kb_folders must not stop the branch');
+  assert.strictEqual(node.executeOnce, true);
+  assert.deepStrictEqual(node.credentials, byName('Sync Check').credentials);
+});
+
+test('a failed classifier call cannot stop the sync', () => {
+  const node = byName('Classify Folders');
+  assert.strictEqual(node.onError, 'continueRegularOutput');
+  assert.strictEqual(node.retryOnFail, true);
+  assert.strictEqual(node.parameters.url, byName('Gemini Text Extraction').parameters.url);
+  assert.strictEqual(node.parameters.jsonBody, '={{ JSON.stringify($json.request) }}');
+  assert.deepStrictEqual(node.credentials, byName('Gemini Text Extraction').credentials);
+});
+
+test('Needs Classification? only calls the classifier when there is a request', () => {
+  const cond = byName('Needs Classification?').parameters.conditions.conditions[0];
+  assert.strictEqual(cond.leftValue, '={{ !!$json.request }}');
+  assert.deepStrictEqual(cond.operator, { type: 'boolean', operation: 'true', singleValue: true });
+});
+
+test('Save Folder Kinds runs the built statement once', () => {
+  const node = byName('Save Folder Kinds');
+  assert.strictEqual(node.parameters.query, byName('Sync Check').parameters.query);
+  assert.strictEqual(node.executeOnce, true);
+  assert.deepStrictEqual(node.credentials, byName('Sync Check').credentials);
+});
+
+test('both classification Code nodes embed lib/folder-kinds.js', () => {
+  const plan = byName('Plan Folder Classification').parameters.jsCode;
+  const sql = byName('Build Folder Kinds SQL').parameters.jsCode;
+  for (const code of [plan, sql]) {
+    assert.ok(code.includes(sharedBlock('lib/folder-kinds.js')), 'Code node has drifted from lib/folder-kinds.js');
+  }
+  assert.ok(plan.includes('planClassification(tree.topFolders || [], existing, filesByFolder)'));
+  assert.ok(sql.includes('parseClassification(raw, plan.toClassify)'));
+  assert.ok(sql.includes('upsertSql(plan.overrides, classified)'));
+  assert.ok(sql.includes('return sql ? [{ json: { query: sql } }] : [];'),
+    'nothing to write must end the branch, not run an empty query');
 });
