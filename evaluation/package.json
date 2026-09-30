@@ -1,0 +1,8 @@
+{
+  "name": "retrieval-eval",
+  "private": true,
+  "description": "Retrieval evaluation harness for the knowledge base (read-only against the documents table).",
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

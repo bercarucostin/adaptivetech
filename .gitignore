@@ -1,3 +1,7 @@
 # Local agent scratch: git worktrees and plan-execution ledgers
 .claude/worktrees/
 .superpowers/
+
+# Retrieval eval: dependencies and cached embeddings / optimizer answers
+evaluation/node_modules/
+evaluation/.cache/
