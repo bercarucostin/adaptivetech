@@ -254,11 +254,23 @@ of the chunk holding the answer, with the current optimizer and the new one.
 Questions whose answer is only in a shared folder, each asked without and with a product:
 
 1. cum adaug sertar (+ la partner 200)
-2. cum inlocuiesc certificatul digital (+ la partner 600)
-3. cum activez cartela SIM vodafone (+ pe partner 300)
-4. cum fac update de firmware de pe stick (+ la partner 200)
-5. cum pun CIF-ul clientului pe bon (+ la partner 600)
-6. cum conectez tastatura virtuala de pe telefon (+ la partner 300)
+2. cum activez cartela SIM vodafone (+ pe partner 300)
+3. cum fac update de firmware de pe stick (+ la partner 200)
+4. cum pun CIF-ul clientului pe bon (+ la partner 600)
+5. cum conectez tastatura virtuala de pe telefon (+ la partner 300)
+
+Before the run, confirm each one really is shared-only: list the folders and sections whose chunks
+mention the topic (the first line of every chunk is `[FOLDER] file — section`). A question whose
+answer also sits in product manuals moves to the group below.
+
+Plus one question whose answer is in the shared folder and also in every product's service manual,
+with one small per-product difference: "cum inlocuiesc certificatul digital" (+ la partner 600).
+`DOCUMENTATIE COMUNA` has the procedure, and the service manuals of Partner 200 and 600 (§12),
+Partner 300 (§12), PF 80K (§16) and Touch EVO (§14) each repeat it. The difference is the port for
+the USB stick: microUSB on Partner 200 and 300, one of the two USB ports on Partner 600. Expected:
+without a product the bot asks which product the user has (a deliberate choice: on fiscal hardware
+one extra message is cheaper than a wrong port); with the product it answers with that product's
+port.
 
 Plus two product-only questions, to check nothing regresses: "ce acumulator are partner 300" and
 "procedura de reset partner touch evo".
@@ -273,8 +285,8 @@ answer prompt's clarifying rule:
   documentation. Expected: the bot answers directly, without asking.
 
 Pass: every shared-answer question has its answer chunk in the top 15 in both variants, the
-product-only questions still retrieve their product's chunk in the top 5, and both product-less
-questions behave as expected. Also check the first
+product-only questions still retrieve their product's chunk in the top 5, and the certificate
+question and both product-less questions behave as expected. Also check the first
 ingestion run classifies the 7 existing folders as expected (5 product, 2 shared). If shared chunks
 still drop out, the next step is two filtered searches (product folder + shared folders), which this
 design does not include.
