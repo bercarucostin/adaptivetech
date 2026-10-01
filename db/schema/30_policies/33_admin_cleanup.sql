@@ -12,3 +12,5 @@ DO $$ DECLARE f record;BEGIN
  END LOOP;
 END; $$;
 GRANT EXECUTE ON FUNCTION public.admin_storage_usage(),public.admin_cleanup_preview(text,date,date),public.admin_cleanup_status(uuid,integer,integer),public.admin_cleanup_jobs(integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_cleanup_confirm(uuid,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_cleanup_claim(uuid,uuid),public.admin_cleanup_files(uuid,bigint,uuid,integer,integer),public.admin_cleanup_checkpoint(uuid,bigint,uuid,text[],boolean),public.admin_cleanup_finish(uuid,bigint,uuid,boolean,text),public.admin_cleanup_due(integer),public.admin_cleanup_reconcile_finish(uuid,bigint,uuid,boolean) TO service_role;
