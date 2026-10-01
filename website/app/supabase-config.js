@@ -15,11 +15,8 @@ window.FLOWRISE_SUPABASE = {
   turnstileSiteKey: "0x4AAAAAAFFL9iWjfd20FstQ",
   adminUsersFunction: "admin-users",
 
-  // Current Free-plan UI cap.
-  currentUploadLimitMB: 45,
-
-  // Future target after moving to a paid plan.
-  futureUploadLimitMB: 200
+  // Work-order file cap on Supabase Pro: 1 GB (1,024 MB).
+  currentUploadLimitMB: 1024
 };
 
 

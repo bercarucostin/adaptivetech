@@ -214,12 +214,8 @@ function supabaseConfigured(){
   );
 }
 function currentUploadLimitMB(){
-  const value=Number(SUPABASE_CONFIG?.currentUploadLimitMB||45);
-  return Number.isFinite(value)&&value>0?value:45;
-}
-function futureUploadLimitMB(){
-  const value=Number(SUPABASE_CONFIG?.futureUploadLimitMB||200);
-  return Number.isFinite(value)&&value>0?value:200;
+  const value=Number(SUPABASE_CONFIG?.currentUploadLimitMB||1024);
+  return Number.isFinite(value)&&value>0?value:1024;
 }
 function humanFileSize(bytes){
   const n=Number(bytes||0);
@@ -6159,7 +6155,7 @@ function renderCaseFilesUI(){
   const maxMB=currentUploadLimitMB();
 
   if(caseFilesPlanBadge){
-    caseFilesPlanBadge.textContent=`Free · max ${maxMB} MB în aplicație`;
+    caseFilesPlanBadge.textContent=`Max. ${humanFileSize(maxMB*1024*1024)} / fișier`;
   }
 
   if(!configured){
@@ -6205,7 +6201,7 @@ function validateCaseFileSelection(files){
       continue;
     }
     if(Number(file.size)>maxBytes){
-      errors.push(`${file.name}: ${humanFileSize(file.size)} depășește limita curentă de ${currentUploadLimitMB()} MB`);
+      errors.push(`${file.name}: ${humanFileSize(file.size)} depășește limita curentă de ${humanFileSize(maxBytes)}`);
       continue;
     }
     file._uploadState="queued";

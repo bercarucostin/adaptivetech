@@ -380,14 +380,14 @@ Deno.serve(async (req) => {
     const mimeType = String(body?.mime_type || "application/octet-stream");
     const fileKind = String(body?.file_kind || "").trim() || null;
     const ext = extension(fileName);
-    const maxBytes = 45 * 1024 * 1024;
+    const maxBytes = 1024 * 1024 * 1024;
 
     if (!fileName || !allowedExtensions.has(ext)) {
       return json({ message: "File type is not allowed." }, 400);
     }
 
     if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > maxBytes) {
-      return json({ message: "File exceeds the current 45 MB upload limit." }, 400);
+      return json({ message: "File exceeds the current 1 GB upload limit." }, 400);
     }
 
     const objectId = crypto.randomUUID();
