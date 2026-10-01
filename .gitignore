@@ -3,3 +3,4 @@
 deploy/.env
 # Local database backups contain production data and must never be committed.
 /backups/
+/.worktrees/
