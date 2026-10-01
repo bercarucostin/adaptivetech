@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "db/migrations/20261001_lab_partner_orders.sql"
+FILE_AUTH = ROOT / "db/edge-functions/authorize-work-order-file/index.ts"
 
 
 class LabPartnerOrderMigrationTests(unittest.TestCase):
@@ -33,6 +34,12 @@ class LabPartnerOrderMigrationTests(unittest.TestCase):
         self.assertIn("processing_enabled", sql)
         self.assertIn("order_origin='internal'", sql)
         self.assertIn("approval_state='approved'", sql)
+
+    def test_file_authorizer_scopes_lab_partner_to_linked_partner(self):
+        source = FILE_AUTH.read_text()
+        self.assertIn("lab_partner_user_links", source)
+        self.assertIn("link.partner_id !== order.partner_id", source)
+        self.assertIn("Lab Partner can access files only for its assigned partner.", source)
 
 
 if __name__ == "__main__":

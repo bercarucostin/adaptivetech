@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
         id,
         lab_organization_id,
         nume_partener,
+        partner_id,
         status,
         locked,
         tehnician_model,
@@ -153,6 +154,20 @@ Deno.serve(async (req) => {
 
     let role = String(labMembership?.role || "").trim().toLowerCase();
     let clinicOrgId: string | null = null;
+    let labPartnerOwnsOrder = false;
+
+    if (role === "lab partner" || role === "lab_partner") {
+      const { data: link, error: linkError } = await admin
+        .from("lab_partner_user_links")
+        .select("partner_id")
+        .eq("lab_organization_id", lab.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (linkError || !link?.partner_id || link.partner_id !== order.partner_id) {
+        return json({ message: "Lab Partner can access files only for its assigned partner." }, 403);
+      }
+      labPartnerOwnsOrder = true;
+    }
 
     // A Doctor belongs to a Clinic, not to the Lab.
     if (!role) {
@@ -251,6 +266,19 @@ Deno.serve(async (req) => {
           }, 403);
         }
 
+        allowed = true;
+        message = "Allowed";
+      }
+    } else if (role === "lab partner" || role === "lab_partner") {
+      if (!labPartnerOwnsOrder) {
+        return json({ message: "Lab Partner can access files only for its assigned partner." }, 403);
+      }
+      if (action === "list" || action === "download" || action === "upload") {
+        allowed = true;
+        message = "Allowed";
+      } else if (orderLocked || orderStatus !== "notstarted") {
+        return json({ message: "Lab Partner file deletion is allowed only while Status = Not Started." }, 403);
+      } else {
         allowed = true;
         message = "Allowed";
       }
