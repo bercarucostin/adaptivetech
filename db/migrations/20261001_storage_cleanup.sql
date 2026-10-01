@@ -468,6 +468,11 @@ DECLARE r jsonb;v_lab uuid;v_order bigint;old_r jsonb;new_r jsonb;target record;
 BEGIN
  IF TG_TABLE_NAME='lab_work_orders' THEN
   IF TG_OP='INSERT' THEN
+   -- Numeric IDs share the Storage path namespace across labs. Serialize new
+   -- attribution against existing parent locks and invalidate their previews.
+   FOR target IN SELECT lab_organization_id lab,id ord FROM lab_work_orders
+    WHERE id=NEW.id ORDER BY lab_organization_id
+   LOOP PERFORM public.cleanup_touch_order(target.lab,target.ord);END LOOP;
    INSERT INTO lab_work_order_id_watermarks VALUES(NEW.lab_organization_id,NEW.id)
    ON CONFLICT(lab_organization_id) DO UPDATE SET maximum_id=greatest(lab_work_order_id_watermarks.maximum_id,excluded.maximum_id);
    RETURN NEW;
@@ -491,6 +496,12 @@ BEGIN
    FROM (SELECT old_r v UNION ALL SELECT new_r) vals
    LEFT JOIN lab_work_order_stage_assignments a ON a.id=nullif(v->>'assignment_id','')::uuid
    WHERE v IS NOT NULL
+   UNION ALL
+   -- A file assigned to a different order can still conflict with a selected
+   -- Storage path. Lock that path's existing numeric-ID parents as well.
+   SELECT o.lab_organization_id,o.id FROM lab_work_orders o
+   JOIN (SELECT old_r v UNION ALL SELECT new_r) vals
+    ON TG_TABLE_NAME='work_order_files' AND public.cleanup_path_matches(v->>'object_path',o.id)
   ) x WHERE x.ord IS NOT NULL ORDER BY x.lab NULLS LAST,x.ord
  LOOP PERFORM public.cleanup_touch_order(target.lab,target.ord);END LOOP;
  IF TG_OP='DELETE' THEN RETURN OLD;END IF;RETURN NEW;
@@ -782,6 +793,19 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) TO authenticated;
+
+-- Both readers are STABLE and share this request's PostgreSQL snapshot.
+-- Never attach a post-cleanup generation to pre-cleanup clinical content.
+CREATE OR REPLACE FUNCTION public.get_work_order_clinical_snapshot(p_lab_organization_id uuid,p_work_order_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_cleanup jsonb;v_case jsonb;
+BEGIN
+ v_cleanup:=public.get_work_order_cleanup_state(p_lab_organization_id,p_work_order_id);
+ SELECT to_jsonb(c) INTO v_case FROM public.get_patient_case(p_lab_organization_id,p_work_order_id) c;
+ RETURN jsonb_build_object('cleanup',v_cleanup,'case',v_case);
+END; $$;
+REVOKE ALL ON FUNCTION public.get_work_order_clinical_snapshot(uuid,bigint) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_work_order_clinical_snapshot(uuid,bigint) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.admin_cleanup_worker_status(p_job_id uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$

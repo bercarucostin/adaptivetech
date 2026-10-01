@@ -4,7 +4,10 @@ const {db,user,sql,rpc,order}=await fixture();
 try{
  await db.exec(`CREATE FUNCTION is_lab_management(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT public.has_org_role($1,ARRAY['Admin','Manager']) $$;
  CREATE FUNCTION current_legacy_user_id() RETURNS text LANGUAGE sql AS $$ SELECT auth.uid()::text $$;
- CREATE FUNCTION can_access_work_order(uuid,bigint) RETURNS boolean LANGUAGE sql AS $$ SELECT public.has_org_role($1,ARRAY['Admin','Manager','Technician','Doctor']) $$;`);
+ CREATE FUNCTION can_access_work_order(uuid,bigint) RETURNS boolean LANGUAGE sql AS $$ SELECT public.has_org_role($1,ARRAY['Admin','Manager','Technician','Doctor']) $$;
+ CREATE FUNCTION is_lab_technician(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT public.has_org_role($1,ARRAY['Technician']) $$;`);
+ await db.exec(source('db/schema/20_functions/get_patient_case.sql'));
+ await db.exec(source('db/schema/20_functions/admin_cleanup.sql'));
  await db.exec(source('db/schema/20_functions/sanitize_tooth_details.sql'));await db.exec(source('db/schema/20_functions/save_work_order_clinical_case.sql'));
  await order(1);await sql("INSERT INTO lab_work_order_items(lab_organization_id,work_order_id,tooth_number,work_type) VALUES ($1,1,11,'Crown')",[lab]);
  await sql("INSERT INTO lab_patient_cases(lab_organization_id,id,work_order_id,clinic_note,tooth_details_json) VALUES ($1,1,1,'private','{}')",[lab]);
@@ -19,9 +22,11 @@ try{
  await assert.rejects(rpc('save_work_order_clinical_case',[lab,1,{clinic_note:'stale'}]),/Clinical case changed/);
  await assert.rejects(rpc('save_work_order_clinical_case',[lab,1,{clinic_note:'stale',expected_cleanup_revision:'0'}]),/Clinical case changed/);
  await user(10);const state=await rpc('get_work_order_cleanup_state',[lab,1]);assert.equal(state.clinical_cleanup_generation,'1');
+ const snapshot=await rpc('get_work_order_clinical_snapshot',[lab,1]);assert.equal(snapshot.case,null);assert.equal(snapshot.cleanup.clinical_cleanup_generation,'1');
  await db.exec('RESET ROLE');await rpc('save_work_order_clinical_case',[lab,1,{clinic_note:'new',expected_cleanup_revision:state.clinical_cleanup_generation}]);
  assert.equal((await sql('SELECT clinical_cleared_at FROM lab_work_orders')).rows[0].clinical_cleared_at,null);
  assert.equal((await sql('SELECT clinic_note FROM lab_patient_cases')).rows[0].clinic_note,'new');
+ await user(10);const newSnapshot=await rpc('get_work_order_clinical_snapshot',[lab,1]);assert.equal(newSnapshot.case.clinic_note,'new');assert.equal(newSnapshot.cleanup.clinical_cleanup_generation,'1');
  await user(10);await db.exec('RESET ROLE');await assert.rejects(rpc('save_work_order_clinical_case',[lab,1,{clinic_note:'stale'}]),/Clinical case changed/);
  // Compound writes alter aggregate revision before reaching this writer; generation token remains valid.
  await sql('UPDATE lab_work_order_items SET work_type=\'Bridge\'');await user(10);await db.exec('RESET ROLE');await rpc('save_work_order_clinical_case',[lab,1,{clinic_note:'valid compound',expected_cleanup_revision:'1'}]);
@@ -30,5 +35,6 @@ try{
  await user(10);await assert.rejects(rpc('upsert_patient_case',[lab,1,[],{clinic_note:'old',expected_cleanup_revision:'0'}]),/Clinical case changed/);
  assert.equal((await sql('SELECT work_type FROM lab_work_order_items')).rows[0].work_type,'Bridge');
  await user(14);await assert.rejects(rpc('get_work_order_cleanup_state',[lab,1]),/Access denied/);
+ await assert.rejects(rpc('get_work_order_clinical_snapshot',[lab,1]),/Access denied/);
  console.log('PASS: clinical purge preserves finance; stale forms rejected; explicit new saves reset state; compound revision remains valid');
 }finally{await db.close();}

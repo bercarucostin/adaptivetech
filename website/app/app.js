@@ -7607,12 +7607,12 @@ recalcFormPrice=function(){
 
 fetchPatientCase=async function(workOrderId){
   const labId=await resolveLabOrganizationId();
-  const rows=await sbRpc("get_patient_case",{
+  const clinicalSnapshot=await sbRpc("get_work_order_clinical_snapshot",{
     p_lab_organization_id:labId,
     p_work_order_id:Number(workOrderId)
   });
-  const row=Array.isArray(rows)?rows[0]:rows;
-  const cleanup=await sbRpc("get_work_order_cleanup_state",{p_lab_organization_id:labId,p_work_order_id:Number(workOrderId)});
+  const row=clinicalSnapshot.case;
+  const cleanup=clinicalSnapshot.cleanup;
   if(!row)return {...cleanup,work_order_id:Number(workOrderId),selected_teeth:[],tooth_details:{}};
 
   let parsed={};

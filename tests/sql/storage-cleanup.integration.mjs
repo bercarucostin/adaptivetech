@@ -77,6 +77,20 @@ try{
  await user(10);const unknown=await rpc('admin_cleanup_preview',['files','2026-10-06','2026-10-06']);await rpc('admin_cleanup_confirm',[unknown.id,'']);await user(null,true);await rpc('admin_cleanup_claim',[unknown.id,uid(300)]);
  await sql('DELETE FROM storage.objects WHERE name=$1',[file42]);await user(null,true);await rpc('admin_cleanup_finish',[unknown.id,'42',uid(300),false]);
  assert.equal((await rpc('admin_cleanup_claim',[unknown.id,uid(301)])).order_id,'42');
- console.log('PASS: confirmation, expiry, leases, stale revision, revoked role, dependent purge, watermark');
+ // A file that needed globally unique numeric-ID attribution must not become ambiguous.
+ await order(71,lab,'2026-10-07T10:00:00Z');const file71=`work-orders/71/${uid(471)}_scan.zip`;
+ await sql("INSERT INTO work_order_files(legacy_work_order_id,object_path,original_file_name,file_size_bytes) VALUES (71,$1,'scan.zip',100)",[file71]);
+ await user(10);const becameAmbiguous=await rpc('admin_cleanup_preview',['files','2026-10-07','2026-10-07']);await rpc('admin_cleanup_confirm',[becameAmbiguous.id,'']);
+ await order(71,otherLab,'2026-10-07T10:00:00Z');await user(null,true);
+ assert.equal(await rpc('admin_cleanup_claim',[becameAmbiguous.id,uid(300)]),null);
+ assert.equal((await sql('SELECT count(*)::int n FROM work_order_files WHERE object_path=$1',[file71])).rows[0].n,1);
+ await order(72,lab,'2026-10-08T10:00:00Z');const file72=`work-orders/72/${uid(472)}_scan.zip`;
+ await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES ('work-order-files',$1,'{\"size\":100}')",[file72]);
+ await user(10);const guarded=await rpc('admin_cleanup_preview',['files','2026-10-08','2026-10-08']);await rpc('admin_cleanup_confirm',[guarded.id,'']);await user(null,true);await rpc('admin_cleanup_claim',[guarded.id,uid(300)]);
+ await assert.rejects(order(72,otherLab),/curățare/);
+ await assert.rejects(sql("INSERT INTO work_order_files(legacy_work_order_id,lab_organization_id,object_path,original_file_name,file_size_bytes) VALUES (99,$1,$2,'scan.zip',100)",[otherLab,file72]),/curățare/);
+ await user(null,true);await rpc('admin_cleanup_checkpoint',[guarded.id,'72',uid(300),[file72],false]);await rpc('admin_cleanup_finish',[guarded.id,'72',uid(300),true]);
+ await order(72,otherLab);
+ console.log('PASS: confirmation, expiry, leases, stale revision, revoked role, dependent purge, watermark, attribution guard');
  console.log('PASS: scoped previews, actual Storage sizes, RLS, ambiguity, child revision, DST, rerun');
 }finally{await db.close();}
