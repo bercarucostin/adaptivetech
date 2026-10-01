@@ -225,3 +225,7 @@ grant execute on function public.get_public_price_list_history() to authenticate
 -- claim untrue. Paired like the rest.
 revoke all on function public.public_price_document_is_valid(jsonb) from public, anon;
 grant execute on function public.public_price_document_is_valid(jsonb) to authenticated;
+
+-- Cleanup tables are internal; only scoped, authorized RPCs are exposed.
+REVOKE ALL ON public.admin_cleanup_jobs,public.admin_cleanup_items,public.admin_cleanup_files,public.lab_work_order_id_watermarks FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_storage_usage(),public.admin_cleanup_preview(text,date,date),public.admin_cleanup_status(uuid,integer,integer),public.admin_cleanup_jobs(integer) TO authenticated;
