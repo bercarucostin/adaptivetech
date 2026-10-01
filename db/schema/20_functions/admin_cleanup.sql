@@ -246,7 +246,8 @@ BEGIN
    END IF;
    IF j.action<>'clinical' AND (
     EXISTS(SELECT 1 FROM admin_cleanup_files f LEFT JOIN storage.objects s ON s.bucket_id=f.bucket AND s.name=f.object_path
-     WHERE f.item_id=i.id AND NOT f.initial_done AND f.object_version IS DISTINCT FROM CASE WHEN s.name IS NOT NULL THEN md5(coalesce(s.metadata::text,'null')) END) OR
+     WHERE f.item_id=i.id AND NOT f.initial_done AND f.object_version IS DISTINCT FROM CASE WHEN s.name IS NOT NULL THEN md5(coalesce(s.metadata::text,'null')) END
+     AND NOT (s.name IS NULL AND i.state IN ('failed','processing'))) OR
     EXISTS(SELECT 1 FROM storage.objects s WHERE s.bucket_id='work-order-files' AND public.cleanup_path_matches(s.name,i.order_id) AND
      NOT EXISTS(SELECT 1 FROM admin_cleanup_files f WHERE f.item_id=i.id AND f.object_path=s.name))
    ) THEN
@@ -301,7 +302,7 @@ BEGIN
  SELECT * INTO j FROM admin_cleanup_jobs WHERE id=p_job_id;
  IF (SELECT initial_finished FROM admin_cleanup_items WHERE id=v_item) THEN RAISE EXCEPTION 'Use reconciliation finish';END IF;
  IF NOT coalesce(p_storage_success,false) THEN
-  UPDATE admin_cleanup_items SET state='failed',worker_id=NULL,lease_until=NULL,error_code='storage_failed',error_message='Fișierele nu au fost eliminate complet. Operația poate fi reluată.' WHERE id=v_item;
+  UPDATE admin_cleanup_items SET state='failed',worker_id=NULL,lease_until=NULL,error_code=CASE WHEN p_error_code='database_failed' THEN 'database_failed' ELSE 'storage_failed' END,error_message=CASE WHEN p_error_code='database_failed' THEN 'Ștergerea datelor a eșuat. Operația poate fi reluată.' ELSE 'Fișierele nu au fost eliminate complet. Operația poate fi reluată.' END WHERE id=v_item;
   RETURN public.cleanup_refresh_job(j.id);
  END IF;
  IF EXISTS(SELECT 1 FROM admin_cleanup_files WHERE item_id=v_item AND NOT initial_done) THEN RAISE EXCEPTION 'Storage checkpoint incomplete';END IF;
@@ -369,3 +370,19 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.admin_cleanup_worker_status(p_job_id uuid) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_owner uuid;
+BEGIN
+ PERFORM public.cleanup_require_service();SELECT created_by INTO v_owner FROM admin_cleanup_jobs WHERE id=p_job_id;
+ IF v_owner IS NULL THEN RAISE EXCEPTION 'Job not found';END IF;PERFORM public.cleanup_admin_lab(v_owner);RETURN public.cleanup_job_json(p_job_id);
+END; $$;
+CREATE OR REPLACE FUNCTION public.admin_cleanup_yield(p_job_id uuid,p_order_id bigint,p_worker_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_item uuid;
+BEGIN
+ v_item:=public.cleanup_lease(p_job_id,p_order_id,p_worker_id);
+ UPDATE admin_cleanup_items SET state=CASE WHEN initial_finished THEN 'awaiting_uploads' ELSE 'pending' END,worker_id=NULL,lease_until=NULL WHERE id=v_item;
+ RETURN public.cleanup_refresh_job(p_job_id);
+END; $$;

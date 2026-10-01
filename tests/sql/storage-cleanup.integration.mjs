@@ -72,6 +72,11 @@ try{
  await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES ('work-order-files',$1,'{\"size\":100}')",[file41]);
  await user(10);const staleObject=await rpc('admin_cleanup_preview',['files','2026-10-05','2026-10-05']);await rpc('admin_cleanup_confirm',[staleObject.id,'']);
  await sql("UPDATE storage.objects SET metadata='{\"size\":101}' WHERE name=$1",[file41]);await user(null,true);assert.equal(await rpc('admin_cleanup_claim',[staleObject.id,uid(300)]),null);
+ await order(42,lab,'2026-10-06T10:00:00Z');const file42=`work-orders/42/${uid(402)}_scan.zip`;
+ await sql("INSERT INTO storage.objects(bucket_id,name,metadata) VALUES ('work-order-files',$1,'{\"size\":100}')",[file42]);
+ await user(10);const unknown=await rpc('admin_cleanup_preview',['files','2026-10-06','2026-10-06']);await rpc('admin_cleanup_confirm',[unknown.id,'']);await user(null,true);await rpc('admin_cleanup_claim',[unknown.id,uid(300)]);
+ await sql('DELETE FROM storage.objects WHERE name=$1',[file42]);await user(null,true);await rpc('admin_cleanup_finish',[unknown.id,'42',uid(300),false]);
+ assert.equal((await rpc('admin_cleanup_claim',[unknown.id,uid(301)])).order_id,'42');
  console.log('PASS: confirmation, expiry, leases, stale revision, revoked role, dependent purge, watermark');
  console.log('PASS: scoped previews, actual Storage sizes, RLS, ambiguity, child revision, DST, rerun');
 }finally{await db.close();}

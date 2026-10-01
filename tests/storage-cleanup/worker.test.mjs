@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {processCleanupJob} from '../../db/edge-functions/admin-storage-cleanup/worker.mjs';
+function backend({count=1001,fail=false,budget=false}={}){
+ const paths=Array.from({length:count},(_,n)=>({bucket:'work-order-files',path:`work-orders/1/id_${n}.zip`,initial_done:false,reconciled:false}));let claimed=false;const calls=[];let t=0;
+ return {calls,now:()=>t,admin:{rpc:async(name,p)=>{calls.push({name,p});if(name==='admin_cleanup_claim'){if(claimed)return {data:null};claimed=true;return {data:{order_id:'1',file_count:count,reconciliation:false,action:'all'}};}
+ if(name==='admin_cleanup_files')return {data:{files:paths.slice(p.p_offset,p.p_offset+p.p_limit),total:count}};
+ return {data:{id:'job',state:'running'}};},storage:{from:bucket=>({remove:async values=>{calls.push({name:'remove',values,bucket});if(budget)t=25000;return fail?{error:{message:'outage'}}:{data:[]};}})}}};
+}
+test('large manifests delete and checkpoint at most 100 paths per call',async()=>{const b=backend();await processCleanupJob({...b,jobId:'job',workerId:'worker'});assert.equal(b.calls.filter(c=>c.name==='remove').length,11);assert.ok(b.calls.filter(c=>c.name==='remove').every(c=>c.values.length<=100));assert.equal(b.calls.filter(c=>c.name==='admin_cleanup_checkpoint').length,11);assert.equal(b.calls.find(c=>c.name==='admin_cleanup_finish').p.p_storage_success,true);});
+test('Storage failure never permits relational deletion',async()=>{const b=backend({fail:true});await processCleanupJob({...b,jobId:'job',workerId:'worker'});assert.equal(b.calls.find(c=>c.name==='admin_cleanup_finish').p.p_storage_success,false);assert.equal(b.calls.filter(c=>c.name==='admin_cleanup_checkpoint').length,0);});
+test('request budget checkpoints current paths and leaves remaining work resumable',async()=>{const b=backend({budget:true});await processCleanupJob({...b,jobId:'job',workerId:'worker'});assert.equal(b.calls.filter(c=>c.name==='remove').length,1);assert.equal(b.calls.filter(c=>c.name==='admin_cleanup_checkpoint').length,1);assert.equal(b.calls.filter(c=>c.name==='admin_cleanup_finish').length,0);});
+test('lease or role error stops before a destructive Storage call',async()=>{let removed=false;await assert.rejects(processCleanupJob({admin:{rpc:async()=>({error:{message:'Access denied'}}),storage:{from:()=>({remove:async()=>{removed=true;}})}},jobId:'job',workerId:'worker'}));assert.equal(removed,false);});
