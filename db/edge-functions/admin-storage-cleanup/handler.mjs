@@ -1,4 +1,4 @@
-import {readDiskUsage,storageQuota} from './metrics.mjs';
+import {storageQuota} from './metrics.mjs';
 import {rpc,processCleanupJob,runScheduledCleanup} from './worker.mjs';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:cors});
@@ -39,8 +39,7 @@ export function createAdminStorageCleanupHandler({createClient,getEnv,fetch=glob
    if(membershipError||String(membership?.role||'').toLowerCase()!=='admin')return json({message:'Access denied.',code:'access'},403);
    if(operation==='usage'){
     const files=await rpc(caller,'admin_storage_usage');
-    const database=await readDiskUsage({projectRef:getEnv('SUPABASE_PROJECT_REF')||new URL(url).hostname.split('.')[0],token:getEnv('SUPABASE_MANAGEMENT_TOKEN'),fetch});
-    return json({ok:true,usage:{files:{...files,quota_bytes:storageQuota(getEnv('FLOWRISE_STORAGE_QUOTA_BYTES'))},database}});
+    return json({ok:true,usage:{files:{...files,quota_bytes:storageQuota(getEnv('FLOWRISE_STORAGE_QUOTA_BYTES'))}}});
    }
    if(operation==='preview')return json({ok:true,job:await rpc(caller,'admin_cleanup_preview',{p_action:body.action,p_from:body.from,p_to:body.to})});
    if(operation==='jobs')return json({ok:true,jobs:await rpc(caller,'admin_cleanup_jobs',{p_limit:Math.min(body.limit||20,100)})});

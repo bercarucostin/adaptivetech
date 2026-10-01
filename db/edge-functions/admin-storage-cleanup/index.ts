@@ -10,23 +10,6 @@ function storageQuota(value: unknown) {
   if (!/^\d{1,19}$/.test(text) || BigInt(text) <= 0n || BigInt(text) > 9223372036854775807n) throw new Error("Invalid Storage quota configuration");
   return BigInt(text).toString();
 }
-function bytes(value: unknown) {
-  if (typeof value === "number" && !Number.isSafeInteger(value)) throw new Error("Invalid metrics");
-  const text = String(value);
-  if (!/^\d{1,19}$/.test(text)) throw new Error("Invalid metrics");
-  return BigInt(text);
-}
-async function readDiskUsage(projectRef: string, token?: string) {
-  if (!token) return {available:false,reason:"Configurează tokenul pentru măsurarea discului."};
-  if (!/^[a-z0-9]{20}$/.test(projectRef)) return {available:false,reason:"Referința proiectului nu este configurată corect."};
-  try {
-    const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/disk/util`, {headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(8000)});
-    if (!response.ok) return {available:false,reason:response.status === 401 || response.status === 403 ? "Tokenul nu are acces la măsurarea discului." : "Măsurarea discului nu este disponibilă momentan."};
-    const data = await response.json(), metrics = data.metrics || {}, total = bytes(metrics.fs_size_bytes), used = bytes(metrics.fs_used_bytes), free = bytes(metrics.fs_avail_bytes);
-    if (total <= 0n || used > total || free > total || used + free > total || !Number.isFinite(Date.parse(data.timestamp))) throw new Error("Invalid metrics");
-    return {available:true,used_bytes:used.toString(),available_bytes:free.toString(),total_bytes:total.toString(),measured_at:data.timestamp};
-  } catch { return {available:false,reason:"Măsurarea discului nu este disponibilă momentan."}; }
-}
 
 async function rpc(client: any, name: string, params: Record<string, unknown> = {}) {
   const {data,error} = await client.rpc(name,params); if (error) throw error; return data;
@@ -97,8 +80,8 @@ Deno.serve(async (request) => {
     const {data:membership,error:membershipError} = await admin.from("organization_memberships").select("role,status").eq("organization_id",lab.id).eq("user_id",id).eq("status","active").maybeSingle();
     if (membershipError || String(membership?.role || "").toLowerCase() !== "admin") return json({message:"Access denied.",code:"access"},403);
     if (operation === "usage") {
-      const files = await rpc(caller,"admin_storage_usage"), projectRef = Deno.env.get("SUPABASE_PROJECT_REF") || new URL(url).hostname.split(".")[0];
-      return json({ok:true,usage:{files:{...files,quota_bytes:storageQuota(Deno.env.get("FLOWRISE_STORAGE_QUOTA_BYTES"))},database:await readDiskUsage(projectRef,Deno.env.get("SUPABASE_MANAGEMENT_TOKEN"))}});
+      const files = await rpc(caller,"admin_storage_usage");
+      return json({ok:true,usage:{files:{...files,quota_bytes:storageQuota(Deno.env.get("FLOWRISE_STORAGE_QUOTA_BYTES"))}}});
     }
     if (operation === "preview") return json({ok:true,job:await rpc(caller,"admin_cleanup_preview",{p_action:body.action,p_from:body.from,p_to:body.to})});
     if (operation === "jobs") return json({ok:true,jobs:await rpc(caller,"admin_cleanup_jobs",{p_limit:Math.min(body.limit || 20,100)})});

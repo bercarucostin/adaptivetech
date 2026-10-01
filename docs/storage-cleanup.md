@@ -1,8 +1,7 @@
 # Flowrise storage monitoring and cleanup
 
 The Admin configuration tab **Spațiu & curățare** shows live Storage usage
-against the configured quota and actual database disk usage. Its three separate
-actions operate on an inclusive reception-date interval in Europe/Bucharest,
+against the configured quota. Its three separate actions operate on an inclusive reception-date interval in Europe/Bucharest,
 including archived orders. Creation time is used when reception time is missing;
 orders without either timestamp are excluded and counted.
 
@@ -41,15 +40,12 @@ orders remain completed when another fails.
 
    | Secret | Value |
    | --- | --- |
-   | `SUPABASE_MANAGEMENT_TOKEN` | Management API access token with permission to read this project's disk utilization (`infra_disk_config_read`) |
-   | `SUPABASE_PROJECT_REF` | Project reference; defaults to the reference in `SUPABASE_URL` |
    | `FLOWRISE_STORAGE_QUOTA_BYTES` | `100000000000` for the initial 100 GB included Storage quota; adjust when the plan changes |
    | `FLOWRISE_CLEANUP_SCHEDULER_SECRET` | A newly generated random secret of at least 32 characters |
 
    Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
-   `SUPABASE_SERVICE_ROLE_KEY`. Never copy the Management token, service key or
-   scheduler secret into frontend configuration. Missing Management access only
-   makes the disk measurement unavailable; Storage measurements and cleanup remain usable.
+   `SUPABASE_SERVICE_ROLE_KEY`. Never copy the service key or scheduler secret
+   into frontend configuration.
 5. Enable the **Cron** (`pg_cron`), **pg_net** and **Vault** integrations in the
    Supabase project. In Vault, create exactly one secret with each name:
 
@@ -64,7 +60,7 @@ orders remain completed when another fails.
    reading credentials from Vault rather than embedding them in Cron text.
 6. Publish the updated `website/app` assets together (`index.html`, `app.js`,
    `styles.css`, `storage-cleanup.js`). Open **Configurare admin → Spațiu & curățare**
-   with an active Flowrise Admin account and verify the two measurements without
+   with an active Flowrise Admin account and verify the Storage measurement without
    confirming any deletion.
 
 For CLI deployment, this repository's `db/edge-functions` directory must first
@@ -108,15 +104,12 @@ unknown object sizes are identified as partial measurements. The separate 1 GiB
 per-file upload cap is unaffected. Storage billing uses a monthly average, so
 current object size is not a billing forecast.
 
-The disk graph uses the Management API's physical filesystem total, used and
-available bytes, with the reported measurement timestamp. Gray space represents
-reserved capacity. Deleting SQL rows may free reusable space inside PostgreSQL
-without immediately shrinking physical disk usage. This screen does not run
-`VACUUM FULL` or change disk provisioning.
+Deleting SQL rows may free reusable space inside PostgreSQL without immediately
+reducing the disk usage reported in the Supabase dashboard. This screen does not
+run `VACUUM FULL` or change disk provisioning.
 
-If the disk card is unavailable, check the Management token, project reference
-and token permissions. If the entire tab fails, check the core migration and
-Edge deployment. For jobs stuck awaiting reconciliation, inspect Cron run history,
+If the entire tab fails, check the core migration and Edge deployment. For jobs
+stuck awaiting reconciliation, inspect Cron run history,
 Vault secret names, matching scheduler secrets and gateway JWT configuration.
 Never expose secret values while collecting diagnostics.
 
