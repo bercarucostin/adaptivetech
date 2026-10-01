@@ -9,6 +9,7 @@ export async function fixture(){
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.role',true),'') $$;
  GRANT USAGE ON SCHEMA auth TO authenticated,anon,service_role;
+ CREATE FUNCTION public.is_connected_doctor_for_lab(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
  CREATE TYPE membership_status AS ENUM ('active','inactive');
  CREATE TABLE organizations(id uuid PRIMARY KEY,slug text,organization_type text,active boolean);
  CREATE TABLE profiles(id uuid PRIMARY KEY,active boolean);

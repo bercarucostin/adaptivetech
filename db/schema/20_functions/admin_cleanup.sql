@@ -354,3 +354,18 @@ BEGIN
  (state='running' OR (state='awaiting_uploads' AND reconcile_after<=now())) ORDER BY updated_at LIMIT p_limit) j;
  RETURN result;
 END; $$;
+
+
+CREATE OR REPLACE FUNCTION public.get_work_order_cleanup_state(p_lab_organization_id uuid,p_work_order_id bigint) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE result jsonb;
+BEGIN
+ IF auth.uid() IS NULL OR NOT coalesce(public.can_access_work_order(p_lab_organization_id,p_work_order_id),false) OR
+ NOT (public.has_org_role(p_lab_organization_id,ARRAY['Admin','Manager','Technician']) OR public.is_connected_doctor_for_lab(p_lab_organization_id)) THEN RAISE EXCEPTION 'Access denied';END IF;
+ SELECT jsonb_build_object('cleanup_revision',cleanup_revision::text,'clinical_cleanup_generation',clinical_cleanup_generation::text,'clinical_cleared_at',clinical_cleared_at)
+ INTO result FROM lab_work_orders WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;
+ IF result IS NULL THEN RAISE EXCEPTION 'Work Order not found';END IF;
+ RETURN result;
+END; $$;
+REVOKE ALL ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_work_order_cleanup_state(uuid,bigint) TO authenticated;

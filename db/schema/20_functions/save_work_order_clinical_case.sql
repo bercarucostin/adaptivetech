@@ -54,7 +54,7 @@ BEGIN
     p_case:=coalesce(p_case,'{}'::jsonb);
     IF jsonb_typeof(p_case)<>'object' THEN RAISE EXCEPTION 'Clinical case must be an object'; END IF;
     FOR v_key IN SELECT jsonb_object_keys(p_case) LOOP
-        IF v_key NOT IN ('tooth_details','tooth_details_json','clinic_note','shade','method','production_notes') THEN
+        IF v_key NOT IN ('tooth_details','tooth_details_json','clinic_note','shade','method','production_notes','expected_cleanup_revision') THEN
             RAISE EXCEPTION 'Unsupported clinical case field: %',v_key;
         END IF;
         IF v_key IN ('clinic_note','shade','method','production_notes') AND jsonb_typeof(p_case->v_key) NOT IN ('string','null') THEN
@@ -67,6 +67,14 @@ BEGIN
     SELECT * INTO v_order FROM public.lab_work_orders
     WHERE lab_organization_id=p_lab AND id=p_order_id FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Work Order not found'; END IF;
+    -- The cleanup generation is stable during compound item/order saves.
+    -- An aggregate mutation revision would change before this internal writer runs.
+    IF v_order.clinical_cleanup_generation>0 THEN
+        IF p_case='{}'::jsonb AND v_order.nume_pacient IS NULL THEN RETURN NULL; END IF;
+        IF coalesce(p_case->>'expected_cleanup_revision','')<>v_order.clinical_cleanup_generation::text THEN
+            RAISE EXCEPTION 'Clinical case changed after cleanup. Reload the Work Order.';
+        END IF;
+    END IF;
     SELECT * INTO v_case FROM public.lab_patient_cases
     WHERE lab_organization_id=p_lab AND work_order_id=p_order_id ORDER BY id LIMIT 1;
     v_id:=v_case.id;
@@ -115,6 +123,9 @@ BEGIN
         selected_teeth=excluded.selected_teeth,tooth_details_json=excluded.tooth_details_json,
         shade=excluded.shade,method=excluded.method,clinic_note=excluded.clinic_note,production_notes=excluded.production_notes,
         updated_by_user_id=excluded.updated_by_user_id,updated_at=excluded.updated_at;
+    IF v_order.clinical_cleared_at IS NOT NULL THEN
+        UPDATE public.lab_work_orders SET clinical_cleared_at=NULL WHERE lab_organization_id=p_lab AND id=p_order_id;
+    END IF;
     RETURN v_id;
 END; $$;
 REVOKE ALL ON FUNCTION public.save_work_order_clinical_case(uuid,bigint,jsonb) FROM public,authenticated;
