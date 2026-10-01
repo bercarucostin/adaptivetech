@@ -201,6 +201,7 @@ function uiText(value){
 function kpi(label,value,foot){return `<div class="card kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-foot">${foot}</div></div>`;}
 function isTechnician(){return String(auth?.user?.Role||"").toLowerCase()==="technician";}
 function isDoctor(){return String(auth?.user?.Role||"").toLowerCase()==="doctor";}
+function isLabPartner(){const role=String(auth?.user?.Role||"").toLowerCase();return role==="lab partner"||role==="lab_partner";}
 function isAdmin(){return String(auth?.user?.Role||"").toLowerCase()==="admin";}
 function isManager(){return String(auth?.user?.Role||"").toLowerCase()==="manager";}
 function isManagement(){return isAdmin()||isManager();}
