@@ -62,7 +62,7 @@ debugging time and none is obvious from the config alone:
 
 ### DNS
 
-`flowrisedental.ro` is registered through hostico.ro and currently serves a
-static page from cPanel. Moving it to the Hetzner box is a cutover, not a
-deploy: plan it deliberately, with the new host verified and answering on its
-own address before any record changes.
+`flowrisedental.ro` is registered through hostico.ro and its landing page is
+served from cPanel there until the cutover. Moving it to the Hetzner box is a
+DNS change, not a deploy. The step-by-step order, checks and rollback are in
+[deploy/README.md](deploy/README.md#moving-the-landing-page-off-hostico).

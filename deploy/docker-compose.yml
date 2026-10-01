@@ -67,20 +67,21 @@ services:
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_PERSONALIZATION_ENABLED=false
       - N8N_HIRING_BANNER_ENABLED=false
-      # CHANGED, and worth checking against reality: this counts the proxies
-      # between the visitor and n8n, and adding Caddy adds one.
+      # Counts the proxies between the visitor and n8n. Only requests to
+      # app.<domain>/api/ai/ and the n8n hostname ever reach n8n, so it is
+      # THOSE two DNS records that decide the value -- not www or the apex.
       #
-      #   Traefik (coolify-proxy) -> Caddy -> n8n         = 2  <- today
-      #   Cloudflare -> Traefik -> Caddy -> n8n           = 3  <- after the DNS move
+      #   Traefik (coolify-proxy) -> Caddy -> n8n               = 2  default
+      #   Cloudflare (proxied) -> Traefik -> Caddy -> n8n       = 3
       #
-      # It was 1 while Traefik reached n8n directly. Set it to 3 when
-      # Cloudflare goes in front -- in the same change as the DNS move.
+      # Set N8N_PROXY_HOPS=3 on the Coolify resource only if app and n8n are
+      # proxied through Cloudflare (orange cloud). DNS-only records add no hop.
       #
       # Undercount and n8n logs Caddy's address as the client; overcount and
       # a client can spoof its own address with X-Forwarded-For. Nothing here
       # gates on IP today, so this is about honest logs rather than access
       # control -- but it should match the chain that actually exists.
-      - N8N_PROXY_HOPS=2
+      - 'N8N_PROXY_HOPS=${N8N_PROXY_HOPS:-2}'
       - N8N_RUNNERS_ENABLED=true
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all

@@ -7,7 +7,7 @@ compose network and publishes no ports of its own.
 ```
 visitor -> Traefik (coolify-proxy) -> Caddy -> n8n:5678
                                         |
-                                        +-> /srv/site  www.flowrisedental.ro
+                                        +-> /srv/site  flowrisedental.ro (www redirects)
                                         +-> /srv/app   app.flowrisedental.ro
 ```
 
@@ -73,14 +73,18 @@ the editor hostname does nothing. That rule is what makes
 The port is `:80` in both cases — Traefik talks to Caddy, and Caddy decides
 what to do with the hostname.
 
-**Phase 2 — after Cloudflare and Google Workspace.** Add the remaining two,
-once their DNS points here:
+**Phase 2 — the landing page.** Add the remaining two, only once their DNS
+points here. The full order is in [Moving the landing page off
+Hostico](#moving-the-landing-page-off-hostico) below:
 
 ```
-https://www.flowrisedental.ro:80,https://flowrisedental.ro:80
+https://app.flowrisedental.ro:80,https://n8n.flowrisedental.ro:80,https://flowrisedental.ro:80,https://www.flowrisedental.ro:80
 ```
 
-and set `N8N_PROXY_HOPS=3` in the same change, because Cloudflare adds a hop.
+`N8N_PROXY_HOPS` is **not** part of this change. Only the `app` and `n8n`
+hostnames route to n8n, so the value follows those two records: `2` (the
+default) while they point here directly, `3` only if they are proxied through
+Cloudflare. Moving `www` and the apex changes nothing n8n sees.
 
 ## Moving data between Coolify resources
 
@@ -152,7 +156,8 @@ before a single DNS record changes:
 
 ```bash
 curl -sI -H 'Host: app.flowrisedental.ro' http://localhost/     # 200
-curl -sI -H 'Host: www.flowrisedental.ro' http://localhost/     # 200
+curl -sI -H 'Host: flowrisedental.ro' http://localhost/         # 200
+curl -sI -H 'Host: www.flowrisedental.ro' http://localhost/     # 308 to the apex
 curl -s  -H 'Host: app.flowrisedental.ro' http://localhost/ | grep -o '<title>[^<]*'
 ```
 
@@ -175,30 +180,97 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
 being billed for that request. A 500 means it failed for some other reason —
 worth reading the execution in n8n before assuming it is safe.
 
-## The DNS cutover, when you get to it
+## Moving the landing page off Hostico
 
-The landing page in `website/site/index.html` was byte-identical to what
-Hostico serves until this branch replaced its hand-written price rows with a
-container the browser fills from Supabase. So the repository copy and the
-live page **differ until the upload in the next section has happened** — do
-that first, confirm `www` still renders the same prices, and the cutover is
-then the like-for-like move it was meant to be.
+Hostico serves `flowrisedental.ro` and `www` from cPanel. The Caddy image on
+this box already contains the landing page (`/srv/site`) and answers for both
+hostnames; no DNS record points at it yet.
+The move is two DNS records and one Coolify field. The page's canonical URL
+is the apex, so Caddy serves the apex and redirects `www` to it.
 
-Order matters, and MX comes first:
+What it does **not** touch: mail (MX, SPF, DKIM, DMARC), the `app` and `n8n`
+records, and the domain registration, which stays with Hostico as the `.ro`
+registrar. Keep it that way: change the two web records where the zone is
+hosted today, and treat a nameserver move to Cloudflare as a separate job.
+A nameserver move re-hosts every record, MX included; an A-record change
+re-hosts only the website.
 
-1. Add the domain to Cloudflare, and **copy every existing record** from
-   Hostico before changing nameservers — MX above all. Mail breaks the
-   moment nameservers move if MX is missing, and it fails silently for the
-   sender.
-2. Put the Google Workspace MX records in and verify mail delivery **while
-   still on Hostico's nameservers**, if Workspace is replacing the current
-   mailboxes.
-3. Only then repoint `www` and the apex at this box, add both hostnames in
-   Coolify, and set `N8N_PROXY_HOPS=3`.
+### A day before
+
+1. **Snapshot the zone.** Export every record from wherever the zone is
+   hosted (cPanel → Zone Editor, or Hostico's DNS panel) and keep the copy.
+   Write down the current Hostico IP for `@` and `www`: it is the rollback.
+2. **Lower the TTL** on the `@` and `www` records to 300 seconds, so the
+   switch and any rollback take minutes rather than hours.
+3. **Check the zone for three things that break certificate issuance:**
+   - **AAAA records on `@` or `www`.** Delete them at cutover unless this
+     box answers on IPv6. Otherwise IPv6 visitors keep reaching Hostico, and
+     Let's Encrypt may validate over IPv6 and fail.
+   - **A CAA record.** If one exists it must allow `letsencrypt.org`, or
+     Traefik's certificate request is refused.
+   - **`www` as a CNAME** to the apex. That is fine; it follows the apex.
+4. **Confirm the price list is live in Supabase.** From the moment DNS
+   moves, visitors get the repository's `index.html`, which fetches prices
+   from `public.public_price_lists`. With no current row, the page shows
+   only the phone-number line. Run the check from step 3 of
+   [Publishing the landing page before the cutover](#publishing-the-landing-page-before-the-cutover);
+   exactly one row must be current.
+5. **Diff the live page against the repository**, as described in the same
+   section. Outside the price section they should be identical. Anything
+   else is a direct edit on Hostico that would be lost.
+6. **Verify on the box** with the `Host:` header checks in
+   [Verifying before DNS exists](#verifying-before-dns-exists). The apex must
+   return 200 with the landing page title and `www` must return 308.
+
+### The cutover
+
+1. Change the `@` and `www` A records to this box's IP. If the zone is on
+   Cloudflare, leave both **DNS only** (grey cloud) for now, so Traefik's
+   HTTP challenge reaches the box directly.
+2. Wait until a public resolver returns the new IP:
+
+   ```bash
+   dig +short flowrisedental.ro @1.1.1.1
+   dig +short www.flowrisedental.ro @8.8.8.8
+   ```
+
+3. In Coolify, add both hostnames to the **Caddy** service, as listed under
+   Phase 2 above, and redeploy. Traefik requests both certificates now.
+   Until it has them, visitors on the new IP see a certificate warning.
+   This usually lasts under a minute.
+4. Check from outside:
+
+   ```bash
+   curl -sI https://flowrisedental.ro/        # 200, valid certificate
+   curl -sI https://www.flowrisedental.ro/    # 308 -> https://flowrisedental.ro/
+   curl -sI http://flowrisedental.ro/         # redirect to https
+   ```
+
+   Then open the page in a browser and confirm the price list renders.
+
+### Rollback
+
+Point `@` and `www` back at the Hostico IP from the snapshot. With a
+300-second TTL most visitors are back within minutes. Leave the hostnames in
+Coolify; Traefik only retries their certificates, which is harmless for a
+short window.
+
+### After a week without problems
+
+- Raise the TTL back to 3600 or more.
+- Cancel Hostico **hosting** only after confirming in the zone snapshot that
+  no MX, `mail`, `webmail` or `autodiscover` record still points at a
+  Hostico server. Keep the domain registration.
+- `Strict-Transport-Security` on the apex includes `includeSubDomains`, so
+  browsers will force HTTPS on every subdomain. Any subdomain that still
+  needs plain HTTP stops working in browsers once they have seen the header.
+- The [Publishing the landing page before the cutover](#publishing-the-landing-page-before-the-cutover)
+  section stops applying. The page is baked into the Caddy image and
+  publishes with a redeploy.
 
 ## Publishing the landing page before the cutover
 
-`www` and the apex are still served by Hostico from cPanel, so a change to
+Until the move above, `www` and the apex are served by Hostico from cPanel, so a change to
 `website/site/index.html` reaches visitors only when the file is uploaded there.
 The prices are no longer part of that: they live in Supabase and are published
 from https://app.flowrisedental.ro/public-prices/ without touching this file.
