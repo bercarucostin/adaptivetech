@@ -237,7 +237,7 @@ BEGIN
  IF NOT FOUND OR j.confirmed_at IS NULL THEN RAISE EXCEPTION 'Job not confirmed';END IF;
  PERFORM public.cleanup_admin_lab(j.created_by);
  FOR i IN SELECT * FROM admin_cleanup_items WHERE job_id=j.id AND
- (state IN ('pending','failed') OR (state='processing' AND lease_until<now()) OR (state='awaiting_uploads' AND j.reconcile_after<=now())) ORDER BY order_id FOR UPDATE SKIP LOCKED
+ (state IN ('pending','failed') OR (state='processing' AND lease_until<now()) OR (state='awaiting_uploads' AND j.reconcile_after<=now())) ORDER BY CASE WHEN state='failed' THEN 1 ELSE 0 END,order_id FOR UPDATE SKIP LOCKED
  LOOP
   IF NOT i.initial_finished THEN
    SELECT cleanup_revision INTO v_rev FROM lab_work_orders WHERE lab_organization_id=j.lab_organization_id AND id=i.order_id FOR UPDATE;
@@ -351,8 +351,10 @@ DECLARE result jsonb;
 BEGIN
  PERFORM public.cleanup_require_service();
  IF p_limit IS NULL OR p_limit<1 OR p_limit>10 THEN RAISE EXCEPTION 'Invalid limit';END IF;
- SELECT coalesce(jsonb_agg(id),'[]') INTO result FROM (SELECT id FROM admin_cleanup_jobs WHERE confirmed_at IS NOT NULL AND
- (state='running' OR (state='awaiting_uploads' AND reconcile_after<=now())) ORDER BY updated_at LIMIT p_limit) j;
+ SELECT coalesce(jsonb_agg(id),'[]') INTO result FROM (SELECT j.id FROM admin_cleanup_jobs j WHERE j.confirmed_at IS NOT NULL AND
+ EXISTS(SELECT 1 FROM admin_cleanup_items i WHERE i.job_id=j.id AND (i.state IN ('pending','failed') OR (i.state='processing' AND i.lease_until<now()) OR (i.state='awaiting_uploads' AND j.reconcile_after<=now())))
+ AND EXISTS(SELECT 1 FROM organization_memberships m JOIN profiles p ON p.id=m.user_id WHERE m.organization_id=j.lab_organization_id AND m.user_id=j.created_by AND m.status='active' AND lower(m.role)='admin' AND p.active)
+ ORDER BY j.updated_at LIMIT p_limit) j;
  RETURN result;
 END; $$;
 

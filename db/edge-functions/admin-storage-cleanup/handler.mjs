@@ -1,5 +1,5 @@
 import {readDiskUsage,storageQuota} from './metrics.mjs';
-import {rpc,processCleanupJob} from './worker.mjs';
+import {rpc,processCleanupJob,runScheduledCleanup} from './worker.mjs';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:cors});
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -9,11 +9,11 @@ export function createAdminStorageCleanupHandler({createClient,getEnv,fetch=glob
   if(req.method==='OPTIONS')return new Response('ok',{headers:cors});
   if(req.method!=='POST')return json({message:'Method not allowed.',code:'method'},405);
   const authorization=req.headers.get('Authorization')||'';
-  if(!/^bearer\s+\S+/i.test(authorization))return json({message:'Authentication required.',code:'auth'},401);
+  if(!/^bearer\s+\S+/i.test(authorization)&&!req.headers.has('X-Cleanup-Scheduler-Secret'))return json({message:'Authentication required.',code:'auth'},401);
   let body;try{body=await req.json();}catch{return json({message:'Invalid JSON.',code:'input'},400);}
   if(!body||typeof body!=='object'||Array.isArray(body))return json({message:'Invalid request.',code:'input'},400);
   const operation=body.operation;
-  if(!['usage','preview','jobs','status','confirm','process'].includes(operation))return json({message:'Invalid operation.',code:'input'},400);
+  if(!['usage','preview','jobs','status','confirm','process','scheduled'].includes(operation))return json({message:'Invalid operation.',code:'input'},400);
   if(operation==='preview'&&(!['files','clinical','all'].includes(body.action)||!validDate(body.from)||!validDate(body.to)||body.from>body.to))return json({message:'Selectează un interval valid.',code:'input'},400);
   if(['status','confirm','process'].includes(operation)&&!uuid(body.job_id))return json({message:'Invalid job_id.',code:'input'},400);
   if(body.offset!==undefined&&(!Number.isInteger(body.offset)||body.offset<0))return json({message:'Invalid pagination.',code:'input'},400);
@@ -22,6 +22,13 @@ export function createAdminStorageCleanupHandler({createClient,getEnv,fetch=glob
    const url=getEnv('SUPABASE_URL'),anon=getEnv('SUPABASE_ANON_KEY'),service=getEnv('SUPABASE_SERVICE_ROLE_KEY');
    if(!url||!anon||!service)return json({message:'Cleanup service is not configured.',code:'configuration'},503);
    const options={auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(input,init={})=>fetch(input,{...init,signal:init.signal||AbortSignal.timeout(15000)})}};
+   if(operation==='scheduled'){
+    const expected=getEnv('FLOWRISE_CLEANUP_SCHEDULER_SECRET')||'',supplied=req.headers.get('X-Cleanup-Scheduler-Secret')||'';
+    let difference=expected.length^supplied.length;for(let i=0;i<Math.max(expected.length,supplied.length);i++)difference|=(expected.charCodeAt(i)||0)^(supplied.charCodeAt(i)||0);
+    if(expected.length<32||difference!==0)return json({message:'Access denied.',code:'access'},403);
+    return json({ok:true,...await runScheduledCleanup({admin:createClient(url,service,options),now})});
+   }
+   if(!/^bearer\s+\S+/i.test(authorization))return json({message:'Authentication required.',code:'auth'},401);
    const caller=createClient(url,anon,{...options,global:{...options.global,headers:{Authorization:authorization}}});
    const {data:identity,error:authError}=await caller.auth.getUser();if(authError||!identity?.user?.id)return json({message:'Invalid session.',code:'auth'},401);
    const admin=createClient(url,service,options),id=identity.user.id;

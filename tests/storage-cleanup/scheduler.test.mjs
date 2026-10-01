@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {createAdminStorageCleanupHandler} from '../../db/edge-functions/admin-storage-cleanup/handler.mjs';
+import {processCleanupJob} from '../../db/edge-functions/admin-storage-cleanup/worker.mjs';
+function setup(){const calls=[];const env={SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'service',FLOWRISE_CLEANUP_SCHEDULER_SECRET:'a'.repeat(40)};
+ const admin={rpc:async(name,p)=>{calls.push({name,p});return {data:name==='admin_cleanup_due'?['00000000-0000-0000-0000-000000000001']:name==='admin_cleanup_claim'?null:{id:'job',state:'awaiting_uploads'}};}};
+ return {calls,secret:env.FLOWRISE_CLEANUP_SCHEDULER_SECRET,handle:createAdminStorageCleanupHandler({getEnv:n=>env[n],createClient:()=>admin})};}
+const request=headers=>new Request('https://test',{method:'POST',headers,body:JSON.stringify({operation:'scheduled'})});
+test('browser JWT and wrong scheduler secret cannot execute schedule',async()=>{const b=setup();for(const headers of [{Authorization:'Bearer jwt'},{'X-Cleanup-Scheduler-Secret':'wrong'}]){const r=await b.handle(request(headers));assert.equal(r.status,403);}assert.equal(b.calls.length,0);});
+test('valid schedule runs independently of an Auth browser session',async()=>{const b=setup();const r=await b.handle(request({'X-Cleanup-Scheduler-Secret':b.secret}));assert.equal(r.status,200);assert.ok(b.calls.some(c=>c.name==='admin_cleanup_due'));assert.ok(b.calls.some(c=>c.name==='admin_cleanup_claim'));});
+test('reconciliation deletes only remaining recorded paths and uses reconciliation checkpoint',async()=>{const calls=[];let claimed=false;const admin={rpc:async(name,p)=>{calls.push({name,p});return {data:name==='admin_cleanup_claim'?(claimed?null:(claimed=true,{order_id:'1',file_count:2,reconciliation:true})):name==='admin_cleanup_files'?{files:[{bucket:'work-order-files',path:'recorded',reconciled:false},{bucket:'work-order-files',path:'done',reconciled:true}],total:2}:{id:'job'}};},storage:{from:()=>({remove:async paths=>{calls.push({name:'remove',paths});return {data:[]};}})}};
+ await processCleanupJob({admin,jobId:'job',workerId:'worker'});assert.deepEqual(calls.find(c=>c.name==='remove').paths,['recorded']);assert.equal(calls.find(c=>c.name==='admin_cleanup_checkpoint').p.p_reconciliation,true);assert.equal(calls.find(c=>c.name==='admin_cleanup_reconcile_finish').p.p_storage_success,true);
+});

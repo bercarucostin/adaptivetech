@@ -32,3 +32,11 @@ export async function processCleanupJob({admin,jobId,workerId=crypto.randomUUID(
  }
  return rpc(admin,'admin_cleanup_worker_status',{p_job_id:jobId});
 }
+
+export async function runScheduledCleanup({admin,now=Date.now}){
+ const started=now(),jobs=await rpc(admin,'admin_cleanup_due',{p_limit:10});let processed=0,failed=0;
+ for(const jobId of jobs){const remaining=20000-(now()-started);if(remaining<=0)break;
+  try{await processCleanupJob({admin,jobId,deadlineMs:remaining,now});processed++;}catch{failed++;}
+ }
+ return {processed,failed};
+}
