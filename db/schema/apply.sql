@@ -53,6 +53,7 @@ set local check_function_bodies = off;
 \i db/schema/10_tables/29_ai_operation_requests.sql
 \i db/schema/10_tables/30_public_price_lists.sql
 \i db/schema/10_tables/31_lab_partners.sql
+\i db/schema/10_tables/32_admin_cleanup.sql
 \i db/schema/10_tables/login_rate_limits.sql
 
 \echo == 20 functions ==
@@ -60,6 +61,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/adjust_material_quantity.sql
 \i db/schema/20_functions/adjust_work_order_scope_costs.sql
 \i db/schema/20_functions/admin_bulk_config_import.sql
+\i db/schema/20_functions/admin_cleanup.sql
 \i db/schema/20_functions/admin_clear_ai_history_older_than_30_days.sql
 \i db/schema/20_functions/admin_clear_chat_messages_older_than_30_days.sql
 \i db/schema/20_functions/ai_admin_config_operation.sql
@@ -207,6 +209,7 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/30_public_price_lists.sql
 \i db/schema/30_policies/31_lab_partners.sql
 \i db/schema/30_policies/32_work_order_partner_catalog.sql
+\i db/schema/30_policies/33_admin_cleanup.sql
 
 \echo == 40 grants ==
 \i db/schema/40_grants.sql
