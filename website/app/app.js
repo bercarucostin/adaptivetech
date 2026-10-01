@@ -680,7 +680,10 @@ function applyRoleUI(){
   userRole.textContent=nickname?`${auth.user.Role} · @${nickname}`:auth.user.Role;
   userAvatar.textContent=(auth.user.Name||auth.user.User_ID||"?").charAt(0).toUpperCase();
 
-  if(isDoctor()){
+  if(isLabPartner()){
+    aiMode.textContent="Portal partener laborator";
+    chatInput.placeholder="AI-ul nu este disponibil pentru rolul Lab Partner.";
+  }else if(isDoctor()){
     aiMode.textContent=`Portal medic · ${auth.user.Partner_Name||"partener neconfigurat"}`;
     chatInput.placeholder="AI-ul nu este disponibil pentru rolul Doctor.";
   }else if(isTechnician()){
@@ -709,10 +712,10 @@ function applyRoleUI(){
   newOrderBtn.classList.toggle("hidden",!(can("Can_Create_Work_Orders")||isTechnician()));
 
   // Doctor uses the clinic-facing subset: Work Orders, Production and Clinic↔Lab partnerships.
-  appShell.classList.toggle("doctor-role-mode",isDoctor());
-  mobileAiBtn?.classList.toggle("hidden",isDoctor());
-  aiExpandBtn?.classList.toggle("hidden",isDoctor());
-  if(isDoctor()){
+  appShell.classList.toggle("doctor-role-mode",isDoctor()||isLabPartner());
+  mobileAiBtn?.classList.toggle("hidden",isDoctor()||isLabPartner());
+  aiExpandBtn?.classList.toggle("hidden",isDoctor()||isLabPartner());
+  if(isDoctor()||isLabPartner()){
     closeMobileAi();
     aiPanel?.classList.remove("mobile-open");
   }
@@ -1423,7 +1426,8 @@ function wireWorkTableFilters(){
 
 
 function doctorCanModifyOrder(order){
-  return Boolean(order) && !Boolean(order.locked) && String(order.status||"Not Started")==="Not Started";
+  return Boolean(order) && !Boolean(order.locked) && String(order.status||"Not Started")==="Not Started"
+    && (order.orderOrigin!=="doctor"||order.approvalState==="rejected");
 }
 
 function currentModalOrder(){
@@ -1581,6 +1585,7 @@ function renderWorkOrders(){
     const cols=[
       {key:"actions",label:"Acțiuni",type:"none",r:o=>doctorActionButtonsHtml(o.id,false)},
       {key:"deadline",label:"Termen",type:"text",sortType:"date",r:o=>fmtDate(o.deadline)},
+      {key:"approval",label:"Aprobare",type:"text",r:o=>`<strong>${escapeHtml(o.approvalState||"approved")}</strong>${o.approvalReason?`<br>${escapeHtml(o.approvalReason)}`:""}`},
       {key:"status",label:"Status",type:"text",r:o=>`<span class="doctor-status-readonly">${escapeHtml(uiText(o.status))}</span>`},
       {key:"patient",label:"Nume pacient",type:"text",r:o=>escapeHtml(o.patient)},
       {key:"workType",label:"Tip lucrare",type:"text",r:o=>escapeHtml(o.workType)},
@@ -1638,11 +1643,12 @@ function renderWorkOrders(){
       <tbody>${rows.map(o=>`<tr>${cols.map(c=>`<td>${c.r(o)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;
   }else{
     const cols=[
-      {key:"actions",label:"Acțiuni",type:"none",r:o=>`<div class="row-actions management-order-actions"><button class="edit-btn" onclick="editOrder(${o.id})">Editează</button>${can("Can_Edit_All_Work_Orders")?`<button class="lock-btn ${o.locked?"is-locked":""}" onclick="setOrderLock(${o.id},${o.locked?"false":"true"})">${o.locked?"🔓 Deblochează":"🔒 Blochează"}</button><button class="danger-btn" onclick="deleteOrder(${o.id})">Șterge</button>`:""}</div>`},
+      {key:"actions",label:"Acțiuni",type:"none",r:o=>`<div class="row-actions management-order-actions"><button class="edit-btn" onclick="editOrder(${o.id})">${o.orderOrigin==="lab_partner"?"Vezi":"Editează"}</button>${o.approvalState==="pending"?`<button class="edit-btn" onclick="reviewExternalOrder(${o.id},'approve')">Aprobă</button><button class="danger-btn" onclick="reviewExternalOrder(${o.id},'reject')">Refuză</button>`:""}${can("Can_Edit_All_Work_Orders")&&o.approvalState!=="pending"&&o.approvalState!=="rejected"?`<button class="lock-btn ${o.locked?"is-locked":""}" onclick="setOrderLock(${o.id},${o.locked?"false":"true"})">${o.locked?"🔓 Deblochează":"🔒 Blochează"}</button><button class="danger-btn" onclick="deleteOrder(${o.id})">Șterge</button>`:""}</div>`},
       {key:"id",label:"ID",type:"number",r:o=>`#${o.id}`},
       {key:"deadline",label:"Termen",type:"text",sortType:"date",r:o=>fmtDate(o.deadline)},
       {key:"receptionDate",label:"Data recepție",type:"text",sortType:"date",r:o=>fmtDate(o.receptionDate)},
-      {key:"status",label:"Status",type:"text",r:o=>`<select class="status-select" onchange="quickUpdate(${o.id},'Status',this.value)">${orderStatusOptions(o)}</select>`},
+      {key:"status",label:"Status",type:"text",r:o=>o.approvalState&&o.approvalState!=="approved"?escapeHtml(uiText(o.status)):`<select class="status-select" onchange="quickUpdate(${o.id},'Status',this.value)">${orderStatusOptions(o)}</select>`},
+      {key:"approval",label:"Aprobare",type:"text",r:o=>`<strong>${escapeHtml(o.approvalState||"approved")}</strong>${o.approvalReason?`<br>${escapeHtml(o.approvalReason)}`:""}`},
       {key:"patient",label:"Nume pacient",type:"text",r:o=>escapeHtml(o.patient)},
       {key:"partner",label:"Nume partener",type:"text",r:o=>escapeHtml(o.partner)},
       {key:"contract",label:"Contract",type:"text",r:o=>escapeHtml(o.contract)},
@@ -1911,7 +1917,8 @@ function productionStageControls(order){
 function renderProduction(){
   pageTitle.textContent="Producție";
   pageSubtitle.textContent=isTechnician()?"Etapele de producție alocate":"Flux de producție";
-  const baseOrders=applyViewDateRanges(displayedOrders(),"production");
+  const baseOrders=applyViewDateRanges(displayedOrders(),"production")
+    .filter(order=>!order.approvalState||order.approvalState==="approved");
   const dateBar=dateRangeFilterBar("production",[{field:"deadline",label:"Termen"}]);
   updateOldToggle();
 
@@ -3542,6 +3549,7 @@ function renderCaseSheetEditor(order,draft){
       <div><span>Date</span><strong>${fmtDate(order.deadline)}</strong></div>
       <div><span>Work order</span><strong>#${order.id}</strong></div>
       <div><span>Status</span><strong>${escapeHtml(uiText(order.status))||"—"}</strong></div>
+      <div><span>Aprobare</span><strong>${escapeHtml(order.approvalState||"approved")}</strong></div>
     </div>
 
     <div class="case-editor-layout">
@@ -6416,6 +6424,7 @@ async function editOrder(id){
       : "Datele operaționale și fișa clinică sunt gata de editare.";
     orderId.value=o.id;
     dueDate.value=toDateInputValue(o.deadline);
+    $("dueTime").value=o.deadlineAt?bucharestLocalValue(new Date(o.deadlineAt)).slice(11):"17:00";
     receptionDate.value=toDateInputValue(o.receptionDate);
     patient.value=o.patient||"";
     partner.value=o.partner||"";
@@ -6469,6 +6478,7 @@ function technicianCreateFields(){
 function doctorWorkOrderFields(){
   return {
     Deadline:dueDate.value,
+    Deadline_At:dueDate.value&&$("dueTime")?.value?bucharestDeadlineIso(`${dueDate.value}T${$("dueTime").value}`):null,
     Nume_Pacient:patient.value.trim()
   };
 }
@@ -7367,10 +7377,10 @@ loadAll=async function(show=true,{renderUI=true}={}){
       : Promise.resolve({data:[],error:null});
 
     const adminPricesPromise=isAdmin()
-      ? supabaseClient.from("lab_contract_work_prices").select("id,contract,tip_lucrare,pret").eq("lab_organization_id",labId).order("contract").order("tip_lucrare")
+      ? supabaseClient.from("lab_contract_work_prices").select("id,contract,tip_lucrare,pret,urgent_percent_override,processing_amount_override").eq("lab_organization_id",labId).order("contract").order("tip_lucrare")
       : Promise.resolve({data:[],error:null});
     const adminTypesPromise=isAdmin()
-      ? supabaseClient.from("lab_work_types").select("id,tip_lucrare,active,billing_mode").eq("lab_organization_id",labId).order("tip_lucrare")
+      ? supabaseClient.from("lab_work_types").select("id,tip_lucrare,active,billing_mode,processing_enabled").eq("lab_organization_id",labId).order("tip_lucrare")
       : Promise.resolve({data:[],error:null});
     const legacyAdminPromise=loadLegacyAdminUsersSafe();
 
@@ -7422,9 +7432,11 @@ loadAll=async function(show=true,{renderUI=true}={}){
         _supabase_id:String(r.id),
         Contract:r.contract,
         Tip_Lucrare:r.tip_lucrare,
-        Pret:num(r.pret)
+        Pret:num(r.pret),
+        Urgent_Percent_Override:r.urgent_percent_override,
+        Processing_Amount_Override:r.processing_amount_override
       }));
-      const types=(adminTypeRes.data||[]).map(r=>({ID:num(r.id),Tip_Lucrare:r.tip_lucrare,Active:Boolean(r.active),Billing_Mode:normalizeBillingMode(r.billing_mode)}));
+      const types=(adminTypeRes.data||[]).map(r=>({ID:num(r.id),Tip_Lucrare:r.tip_lucrare,Active:Boolean(r.active),Billing_Mode:normalizeBillingMode(r.billing_mode),Processing_Enabled:Boolean(r.processing_enabled)}));
       const costs=technicianCostRules.map(r=>({...r}));
       adminConfigData={
         prices,
@@ -7472,6 +7484,8 @@ function renderToothPriceBreakdown(result={}){
     contract:String(line?.contract||"General"),
     itemPrice:num(line?.unit_price??line?.pret),
     subtotal:num(line?.subtotal??line?.line_total),
+    urgentPercent:num(line?.urgent_percent),
+    urgencySurcharge:num(line?.urgency_surcharge),
     matched:Boolean(line?.matched)
   }));
   const list=num(result.list_price);
@@ -7487,7 +7501,7 @@ function renderToothPriceBreakdown(result={}){
           <thead><tr><th>Tip și unitate</th><th>Unități</th><th>Tarif</th><th>Subtotal</th></tr></thead>
           <tbody>${lines.map(line=>`
             <tr class="${line.matched?"":"price-breakdown-unmatched"}">
-              <td><strong>${escapeHtml(line.workType)}</strong><small>${escapeHtml(billingModeLabel(line.billingMode))} · ${escapeHtml(billingScopeLabel(line.billingScope))}${isManagement()?` · Contract: ${escapeHtml(line.contract)}`:""}</small></td>
+              <td><strong>${escapeHtml(line.workType)}</strong><small>${escapeHtml(billingModeLabel(line.billingMode))} · ${escapeHtml(billingScopeLabel(line.billingScope))}${isManagement()?` · Contract: ${escapeHtml(line.contract)}`:""}${line.urgentPercent?` · Urgență ${line.urgentPercent}% (+${money(line.urgencySurcharge)})`:""}</small></td>
               <td>${line.quantity}</td>
               <td>${money(line.itemPrice)}</td>
               <td><strong>${money(line.subtotal)}</strong></td>
@@ -7550,15 +7564,23 @@ async function loadSavedWorkOrderPriceLines(saved,requestId){
 
 async function requestToothPriceEstimate(requestId,items){
   try{
-    const result=await sbRpc("estimate_work_order_items",{
-      p_lab_organization_id:await resolveLabOrganizationId(),
-      p_partner_name:String(partner?.value||""),
-      p_requested_contract:String(contract?.value||"General"),
-      p_items:items,
-      p_discount:isDoctor()?0:Math.max(0,Math.min(100,num(discount?.value)))
-    });
+    const lab=await resolveLabOrganizationId();
+    const result=isDoctor()
+      ?await sbRpc("estimate_doctor_work_order_v2",{
+        p_lab:lab,p_deadline_at:bucharestDeadlineIso(`${dueDate.value}T${$("dueTime")?.value||"17:00"}`),p_items:items
+      })
+      :await sbRpc("estimate_work_order_items",{
+        p_lab_organization_id:lab,
+        p_partner_name:String(partner?.value||""),
+        p_requested_contract:String(contract?.value||"General"),
+        p_items:items,
+        p_discount:Math.max(0,Math.min(100,num(discount?.value)))
+      });
     if(requestId!==toothPriceEstimateRequest||isTechnician())return;
     renderToothPriceBreakdown(result||{});
+    if(isDoctor()&&result?.urgent){
+      priceHint.textContent+=` · Termen urgent: majorarea este inclusă în total (sub ${result.urgent_window_hours} ore).`;
+    }
   }catch(err){
     if(requestId!==toothPriceEstimateRequest||isTechnician())return;
     listPrice.value=0;
@@ -7768,24 +7790,19 @@ async function handleSupabaseOrderSubmit(e){
       if(id&&doctorModalReadOnly())throw new Error("Lucrarea este read-only pentru medic.");
       const fields=doctorWorkOrderFields();
       if(id){
-        await sbRpc("update_doctor_work_order",{
-          p_lab_organization_id:labId,
-          p_work_order_id:id,
-          p_deadline:fields.Deadline||null,
+        await sbRpc("resubmit_doctor_work_order",{
+          p_lab:labId,
+          p_order:id,
+          p_deadline_at:fields.Deadline_At,
           p_nume_pacient:fields.Nume_Pacient||"",
           p_items:scope.items,
           p_case:casePayload
         });
       }else{
-        savedId=Number(await sbRpc("create_work_order",{
-          p_lab_organization_id:labId,
-          p_deadline:fields.Deadline||null,
+        savedId=Number(await sbRpc("create_doctor_work_order_v2",{
+          p_lab:labId,
+          p_deadline_at:fields.Deadline_At,
           p_nume_pacient:fields.Nume_Pacient||"",
-          p_nume_partener:null,
-          p_contract:contract.value||"General",
-          p_status:"Not Started",
-          p_discount:0,
-          p_data_receptie:null,
           p_items:scope.items,
           p_case:casePayload
         }));
@@ -7799,6 +7816,13 @@ async function handleSupabaseOrderSubmit(e){
       }else{
         savedId=Number(await saveManagementWorkOrderSupabase(null,fields));
       }
+    }
+
+    if(!isDoctor()&&savedId>0&&(!id||!orders.find(o=>o.id===id)?.approvalState||orders.find(o=>o.id===id)?.approvalState==="approved")){
+      const deadlineAt=bucharestDeadlineIso(`${dueDate.value}T${$("dueTime")?.value||"17:00"}`);
+      await sbRpc("set_internal_work_order_deadline_at",{
+        p_lab:labId,p_order:savedId,p_deadline_at:deadlineAt
+      });
     }
 
     if(savedId>0&&!id){

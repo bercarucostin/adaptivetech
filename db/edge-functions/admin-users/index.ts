@@ -30,6 +30,10 @@ function validUsername(value: string) {
   return /^[a-z0-9_]{3,40}$/.test(value);
 }
 
+function isLabPartnerRole(value: unknown) {
+  return ["lab partner", "lab_partner"].includes(clean(value).toLowerCase());
+}
+
 // Server-only: the callback is deployment configuration, never request input.
 async function createAuthAccount(
   authAdmin: ReturnType<typeof createClient>["auth"]["admin"],
@@ -116,6 +120,35 @@ Deno.serve(async (req) => {
       ...("Notify_Stage_Status" in data ? { notify_stage_status: data.Notify_Stage_Status } : {}),
     };
 
+    async function validatedPartnerId(role: string, rawId: unknown): Promise<string | null> {
+      if (!isLabPartnerRole(role)) return null;
+      const partnerId = clean(rawId);
+      if (!partnerId) throw new Error("Select an active partner for the Lab Partner user.");
+      const { data: partner, error } = await admin.from("lab_partners")
+        .select("id")
+        .eq("id", partnerId)
+        .eq("lab_organization_id", lab.id)
+        .eq("active", true)
+        .maybeSingle();
+      if (error) throw error;
+      if (!partner) throw new Error("The selected partner is unavailable.");
+      return partner.id;
+    }
+
+    async function savePartnerLink(userId: string, partnerId: string | null) {
+      if (partnerId) {
+        const { error } = await admin.from("lab_partner_user_links").upsert({
+          lab_organization_id: lab.id, user_id: userId, partner_id: partnerId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "lab_organization_id,user_id" });
+        if (error) throw error;
+      } else {
+        const { error } = await admin.from("lab_partner_user_links").delete()
+          .eq("lab_organization_id", lab.id).eq("user_id", userId);
+        if (error) throw error;
+      }
+    }
+
     if (action === "list") {
       const { data: profiles, error: profilesError } = await admin
         .from("profiles")
@@ -132,6 +165,12 @@ Deno.serve(async (req) => {
         .in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
 
       if (membershipsError) throw membershipsError;
+
+      const { data: partnerLinks, error: linksError } = await admin
+        .from("lab_partner_user_links").select("user_id,partner_id")
+        .eq("lab_organization_id", lab.id);
+      if (linksError) throw linksError;
+      const partnerIdByUser = new Map((partnerLinks || []).map((link: any) => [link.user_id, link.partner_id]));
 
       const authUsers: any[] = [];
       let page = 1;
@@ -164,6 +203,7 @@ Deno.serve(async (req) => {
           Role: selected?.role || "",
           Technician_Name: p.technician_name || "",
           Partner_Name: p.legacy_partner_name || "",
+          Partner_ID: partnerIdByUser.get(p.id) || "",
           Active: Boolean(p.active) && String(selected?.status || "") === "active",
           Supabase_User_ID: p.id,
           Notify_New_Work_Order: Boolean(p.notify_new_work_order),
@@ -228,6 +268,7 @@ Deno.serve(async (req) => {
       if ("Send_Invite" in data && typeof data.Send_Invite !== "boolean") return json({ message: "Send_Invite must be boolean." }, 400);
       const name = clean(data.Name);
       const role = clean(data.Role);
+      const partnerId = await validatedPartnerId(role, data.Partner_ID);
       const active = data.Active !== false;
       const username = clean(data.Username || usernameBase(legacyUserId)).toLowerCase();
 
@@ -282,6 +323,8 @@ Deno.serve(async (req) => {
 
       if (membershipError) throw membershipError;
 
+      await savePartnerLink(created.user.id, partnerId);
+
       await admin.from("legacy_user_directory").upsert({
         legacy_user_id: legacyUserId,
         name,
@@ -300,6 +343,7 @@ Deno.serve(async (req) => {
 
     if (action === "update") {
       const role = clean(data.Role);
+      const partnerId = await validatedPartnerId(role, data.Partner_ID);
       const name = clean(data.Name);
       const active = data.Active !== false;
       const username = clean(data.Username || existingProfile.username).toLowerCase();
@@ -368,6 +412,8 @@ Deno.serve(async (req) => {
         status: active ? "active" : "suspended",
       });
       if (membershipError) throw membershipError;
+
+      await savePartnerLink(existingProfile.id, partnerId);
 
       await admin.from("legacy_user_directory").upsert({
         legacy_user_id: legacyUserId,

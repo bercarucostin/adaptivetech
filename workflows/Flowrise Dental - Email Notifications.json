@@ -2,6 +2,14 @@
   "name": "Flowrise Dental - Email Notifications",
   "nodes": [
     {
+      "id": "hourly-recovery",
+      "name": "Hourly recovery",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -11,76 +19,76 @@
             }
           ]
         }
-      },
-      "id": "9d12225c-a5bd-405a-abcf-00560d747d11",
-      "name": "Hourly recovery",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        1392,
-        448
-      ]
+      }
     },
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "flowrise-email-notifications",
-        "authentication": "headerAuth",
-        "options": {},
-        "responseMode": "onReceived"
-      },
-      "id": "a636b4b4-8e50-4e00-9480-0bcb142845d8",
+      "id": "notification-webhook",
       "name": "Notification webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        1392,
-        240
+        0,
+        -200
       ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "flowrise-email-notifications",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
       "webhookId": "flowrise-email-notifications"
     },
     {
-      "parameters": {},
-      "id": "fb37b1d2-bde0-4f31-996d-2fff4ef75f53",
+      "id": "manual-test",
       "name": "Manual test",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        1392,
-        640
-      ]
+        0,
+        200
+      ],
+      "parameters": {}
     },
     {
+      "id": "claim-notifications",
+      "name": "Claim notifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT * FROM public.claim_email_notifications(10);",
         "options": {}
       },
-      "id": "85a32d9f-4c30-47c1-ae18-4cd86ac173bc",
-      "name": "Claim notifications",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        1632,
-        448
-      ],
       "executeOnce": true
     },
     {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// n8n Code node, Run Once for Each Item. Only vetted queue fields enter the email.\nconst row=$json;\nif(!/^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(row.recipient_email||''))throw new Error('Invalid recipient address');\nif(!/^[a-f0-9-]{36}$/.test(row.id||'')||!/^\\d+$/.test(String(row.work_order_id)))throw new Error('Invalid notification identifiers');\nconst stages={model:'Model',modelare:'Modelare',cer_fin:'Ceramică / Finisare'};\nconst statuses={'Not Started':'Neînceput','Started':'În lucru','Finished':'Finalizat','Shipped':'Expediat','List Sent':'Listă trimisă','Paid':'Plătit'};\nconst escape=value=>String(value??'—').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nlet title,detail;\nif(row.event_kind==='new_work_order'){\n title=`Lucrare nouă #${row.work_order_id}`;detail='O lucrare nouă este disponibilă în aplicație.';\n}else if(row.event_kind==='assignment'&&stages[row.stage_key]){\n title=`Lucrare asignată #${row.work_order_id}`;detail=`Ți-a fost asignată etapa <strong>${stages[row.stage_key]}</strong>.`;\n}else if(row.event_kind==='work_order_status'){\n title=`Lucrare #${row.work_order_id} — Status modificat`;\n detail=`Statusul lucrării s-a modificat: <strong>${escape(statuses[row.old_status]||row.old_status)}</strong> → <strong>${escape(statuses[row.new_status]||row.new_status)}</strong>.`;\n}else throw new Error('Unsupported notification event');\nconst html=`<!doctype html><html lang=\"ro\"><body style=\"font-family:Arial,sans-serif;background:#faf8f4;padding:24px;color:#3c3326\"><div style=\"max-width:560px;margin:auto;background:white;border:1px solid #e3dccf;border-radius:16px;padding:28px\"><p style=\"color:#927027;font-size:13px;letter-spacing:2px\">FLOWRISE DENTAL</p><h2>${escape(title)}</h2><p style=\"line-height:1.7\">${detail}</p><p style=\"margin:28px 0\"><a href=\"https://app.flowrisedental.ro/\" style=\"background:#a57212;color:white;text-decoration:none;padding:12px 18px;border-radius:8px\">Deschide aplicația</a></p><p style=\"font-size:12px;color:#786e60\">Poți modifica aceste notificări din contul tău, la „Notificări email”. Acesta este un mesaj automat.</p></div></body></html>`;\nconst encoded=Buffer.from(html,'utf8').toString('base64').match(/.{1,76}/g).join('\\r\\n');\nconst mime=[\n 'From: Flowrise Dental <app@flowrisedental.ro>',\n `To: ${row.recipient_email}`,\n `Subject: =?UTF-8?B?${Buffer.from(title,'utf8').toString('base64')}?=`,\n `Message-ID: <${row.id}@flowrisedental.ro>`,\n 'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',encoded\n].join('\\r\\n');\nreturn {json:{id:row.id,lease_token:row.lease_token,raw:Buffer.from(mime,'utf8').toString('base64url')}};\n"
-      },
-      "id": "9901e5dd-0188-4e60-8f8b-012fa9c2bb46",
+      "id": "prepare-email",
       "name": "Prepare email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1872,
-        448
-      ]
+        480,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node, Run Once for Each Item. Only vetted queue fields enter the email.\nconst row=$json;\nif(!/^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(row.recipient_email||''))throw new Error('Invalid recipient address');\nif(!/^[a-f0-9-]{36}$/.test(row.id||'')||!/^\\d+$/.test(String(row.work_order_id)))throw new Error('Invalid notification identifiers');\nconst stages={model:'Model',modelare:'Modelare',cer_fin:'Ceramică / Finisare'};\nconst statuses={'Not Started':'Neînceput','Started':'În lucru','Finished':'Finalizat','Shipped':'Expediat','List Sent':'Listă trimisă','Paid':'Plătit'};\nconst escape=value=>String(value??'—').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nlet title,detail;\nif(row.event_kind==='new_work_order'){\n title=`Lucrare nouă #${row.work_order_id}`;detail='O lucrare nouă este disponibilă în aplicație.';\n}else if(row.event_kind==='assignment'&&stages[row.stage_key]){\n title=`Lucrare asignată #${row.work_order_id}`;detail=`Ți-a fost asignată etapa <strong>${stages[row.stage_key]}</strong>.`;\n}else if(row.event_kind==='work_order_status'){\n title=`Lucrare #${row.work_order_id} — Status modificat`;\n detail=`Statusul lucrării s-a modificat: <strong>${escape(statuses[row.old_status]||row.old_status)}</strong> → <strong>${escape(statuses[row.new_status]||row.new_status)}</strong>.`;\n}else if(row.event_kind==='approval_state'){\n const approvals={pending:'în așteptarea aprobării',approved:'aprobată',rejected:'refuzată'};\n title=`Lucrare #${row.work_order_id} — Aprobare`;\n detail=`Starea aprobării: <strong>${escape(approvals[row.new_status]||row.new_status)}</strong>. Deschide aplicația pentru detalii.`;\n}else throw new Error('Unsupported notification event');\nconst html=`<!doctype html><html lang=\"ro\"><body style=\"font-family:Arial,sans-serif;background:#faf8f4;padding:24px;color:#3c3326\"><div style=\"max-width:560px;margin:auto;background:white;border:1px solid #e3dccf;border-radius:16px;padding:28px\"><p style=\"color:#927027;font-size:13px;letter-spacing:2px\">FLOWRISE DENTAL</p><h2>${escape(title)}</h2><p style=\"line-height:1.7\">${detail}</p><p style=\"margin:28px 0\"><a href=\"https://app.flowrisedental.ro/\" style=\"background:#a57212;color:white;text-decoration:none;padding:12px 18px;border-radius:8px\">Deschide aplicația</a></p><p style=\"font-size:12px;color:#786e60\">Poți modifica aceste notificări din contul tău, la „Notificări email”. Acesta este un mesaj automat.</p></div></body></html>`;\nconst encoded=Buffer.from(html,'utf8').toString('base64').match(/.{1,76}/g).join('\\r\\n');\nconst mime=[\n 'From: Flowrise Dental <app@flowrisedental.ro>',\n `To: ${row.recipient_email}`,\n `Subject: =?UTF-8?B?${Buffer.from(title,'utf8').toString('base64')}?=`,\n `Message-ID: <${row.id}@flowrisedental.ro>`,\n 'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',encoded\n].join('\\r\\n');\nreturn {json:{id:row.id,lease_token:row.lease_token,raw:Buffer.from(mime,'utf8').toString('base64url')}};\n"
+      }
     },
     {
+      "id": "send-with-gmail",
+      "name": "Send with Gmail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        720,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
@@ -90,6 +98,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { raw: $json.raw } }}",
         "options": {
+          "timeout": 30000,
           "batching": {
             "batch": {
               "batchSize": 1,
@@ -102,36 +111,35 @@
               "neverError": true,
               "responseFormat": "json"
             }
-          },
-          "timeout": 30000
+          }
         }
       },
-      "id": "874cc277-1fb4-4e3d-8157-95219a5d9d43",
-      "name": "Send with Gmail",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        2112,
-        448
-      ],
       "retryOnFail": false,
       "onError": "continueRegularOutput"
     },
     {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// n8n Code node, Run Once for Each Item; linked item survives HTTP response replacement.\nconst source=$('Prepare email').item.json;\nconst response=$json;\nconst status=Number(response.statusCode||0);\nlet outcome='uncertain',messageId=null;\nif(status>=200&&status<300&&typeof response.body?.id==='string'&&response.body.id){\n outcome='sent';messageId=response.body.id;\n}else if(status===429){\n // Google explicitly rejected the request; retry later, bounded by SQL attempt count.\n outcome='retry';\n}else if(status>=400&&status<500){\n outcome='failed';\n}\n// Network failures and 5xx can occur after acceptance. Keep for manual reconciliation.\nreturn {json:{id:source.id,lease_token:source.lease_token,outcome,message_id:messageId}};\n"
-      },
-      "id": "acf5681f-f94d-422f-8034-6ef5319c999c",
+      "id": "classify-delivery",
       "name": "Classify delivery",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2352,
-        448
-      ]
+        960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node, Run Once for Each Item; linked item survives HTTP response replacement.\nconst source=$('Prepare email').item.json;\nconst response=$json;\nconst status=Number(response.statusCode||0);\nlet outcome='uncertain',messageId=null;\nif(status>=200&&status<300&&typeof response.body?.id==='string'&&response.body.id){\n outcome='sent';messageId=response.body.id;\n}else if(status===429){\n // Google explicitly rejected the request; retry later, bounded by SQL attempt count.\n outcome='retry';\n}else if(status>=400&&status<500){\n outcome='failed';\n}\n// Network failures and 5xx can occur after acceptance. Keep for manual reconciliation.\nreturn {json:{id:source.id,lease_token:source.lease_token,outcome,message_id:messageId}};\n"
+      }
     },
     {
+      "id": "record-delivery",
+      "name": "Record delivery",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        0
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT public.finish_email_notification($1::uuid,$2::uuid,$3::text,$4::text);",
@@ -139,43 +147,36 @@
           "queryBatching": "independently",
           "queryReplacement": "={{ [$json.id, $json.lease_token, $json.outcome, $json.message_id] }}"
         }
-      },
-      "id": "4bbf7c73-a34b-4ec5-9b68-bf7ce90a9e6d",
-      "name": "Record delivery",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        2592,
-        448
-      ]
+      }
     },
     {
-      "parameters": {
-        "jsCode": "// Run Once for All Items: finish recording the batch before claiming more.\n// Bound each execution to 20 batches (200 messages); future triggers resume the queue.\n// Empty claim has no output and stops the loop. Never enable Always Output Data there.\nreturn $runIndex < 19 ? [{ json: {} }] : [];\n"
-      },
-      "id": "e4a34cc9-393d-4541-9c8e-ba0e33c0be84",
+      "id": "next-batch",
       "name": "Next batch",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2832,
-        448
-      ]
+        1440,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Run Once for All Items: finish recording the batch before claiming more.\n// Bound each execution to 20 batches (200 messages); future triggers resume the queue.\n// Empty claim has no output and stops the loop. Never enable Always Output Data there.\nreturn $runIndex < 19 ? [{ json: {} }] : [];\n"
+      }
     },
     {
-      "parameters": {
-        "content": "## Before activation\n1. Apply 20260927_email_notifications.sql, then 20260927_work_order_status_notifications.sql.\n2. Select the Supabase Postgres credential in both SQL nodes.\n3. Enable Gmail API and create Gmail OAuth2 credential for contact@flowrisedental.ro. Select it in Send with Gmail.\n4. Configure app@flowrisedental.ro in Gmail Send mail as.\n5. Enable preferences for a test user; create a test order or change its overall status and run manually.\n6. Select Header Auth in Notification webhook (X-Flowrise-Webhook-Secret).\n7. Activate and configure a Supabase Database Webhook: INSERT only on public.email_notification_queue, POST to https://app.flowrisedental.ro/api/ai/flowrise-email-notifications with the same secret header.\n8. Disable the previous minute-based workflow. See docs/email-notifications.md for testing.\n\nImmediate webhook plus hourly recovery. Batches of 10, at most 20 batches per execution. Empty claim stops processing. Remaining backlog waits for another webhook or hourly run. Only HTTP 429 is retried (max 5 attempts). 5xx/timeouts become uncertain; check Sent mail before replay. Inspect failed/uncertain states in Supabase. Never retry a whole send execution blindly. No patient data in email.",
-        "height": 620,
-        "width": 510
-      },
-      "id": "deb9a818-4eb5-4a3e-b590-ba1bd2eebd1f",
+      "id": "setup",
       "name": "Setup",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1792,
-        704
-      ]
+        400,
+        250
+      ],
+      "parameters": {
+        "content": "## Before activation\n1. Apply 20260927_email_notifications.sql, then 20260927_work_order_status_notifications.sql.\n2. Select the Supabase Postgres credential in both SQL nodes.\n3. Enable Gmail API and create Gmail OAuth2 credential for contact@flowrisedental.ro. Select it in Send with Gmail.\n4. Configure app@flowrisedental.ro in Gmail Send mail as.\n5. Enable preferences for a test user; create a test order or change its overall status and run manually.\n6. Select Header Auth in Notification webhook (X-Flowrise-Webhook-Secret).\n7. Activate and configure a Supabase Database Webhook: INSERT only on public.email_notification_queue, POST to https://app.flowrisedental.ro/api/ai/flowrise-email-notifications with the same secret header.\n8. Disable the previous minute-based workflow. See docs/email-notifications.md for testing.\n\nImmediate webhook plus hourly recovery. Batches of 10, at most 20 batches per execution. Empty claim stops processing. Remaining backlog waits for another webhook or hourly run. Only HTTP 429 is retried (max 5 attempts). 5xx/timeouts become uncertain; check Sent mail before replay. Inspect failed/uncertain states in Supabase. Never retry a whole send execution blindly. No patient data in email.",
+        "height": 620,
+        "width": 510
+      }
     }
   ],
   "connections": {

@@ -22,6 +22,10 @@ begin
         raise exception 'Work Order access denied';
     end if;
 
+    if v_order.order_origin='doctor' and v_order.approval_state<>'rejected' then
+        raise exception 'Only rejected Doctor orders can be edited and resubmitted';
+    end if;
+
     if v_order.locked then
         raise exception 'Work Order is locked';
     end if;

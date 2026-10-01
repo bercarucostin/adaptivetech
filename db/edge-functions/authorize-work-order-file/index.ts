@@ -166,6 +166,16 @@ Deno.serve(async (req) => {
       if (linkError || !link?.partner_id || link.partner_id !== order.partner_id) {
         return json({ message: "Lab Partner can access files only for its assigned partner." }, 403);
       }
+      const { data: activePartner, error: partnerError } = await admin
+        .from("lab_partners")
+        .select("id")
+        .eq("id", link.partner_id)
+        .eq("lab_organization_id", lab.id)
+        .eq("active", true)
+        .maybeSingle();
+      if (partnerError || !activePartner?.id) {
+        return json({ message: "Assigned partner is inactive or unavailable." }, 403);
+      }
       labPartnerOwnsOrder = true;
     }
 

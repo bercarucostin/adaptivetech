@@ -25,7 +25,8 @@ begin
                 'id', wt.id,
                 'tip_lucrare', wt.tip_lucrare,
                 'active', wt.active,
-                'billing_mode', wt.billing_mode
+                'billing_mode', wt.billing_mode,
+                'processing_enabled', wt.processing_enabled
             )
             order by wt.tip_lucrare, wt.id
         ),

@@ -54,7 +54,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
  SELECT EXISTS (
  SELECT 1 FROM public.profiles p JOIN public.lab_work_orders w ON w.lab_organization_id=p_lab AND w.id=p_order
  WHERE p.id=p_user AND p.active AND w.archived_at IS NULL
- AND p_kind IN ('new_work_order','work_order_status','assignment')
+ AND p_kind IN ('new_work_order','work_order_status','assignment','approval_state')
  AND CASE WHEN p_kind='work_order_status' THEN p.notify_stage_status ELSE p.notify_new_work_order END
  AND (
   (p_kind<>'assignment' AND EXISTS(SELECT 1 FROM public.organization_memberships m WHERE m.organization_id=p_lab AND m.user_id=p.id AND m.status='active' AND lower(m.role) IN ('admin','manager')))
@@ -73,6 +73,14 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
     JOIN public.organization_relationships r ON r.clinic_organization_id=m.organization_id AND r.lab_organization_id=p_lab AND r.status='active'
     WHERE m.user_id=p.id AND m.status='active' AND lower(m.role)='doctor')
   )
+  OR (p_kind='approval_state' AND EXISTS(
+   SELECT 1 FROM public.lab_partner_user_links link
+   JOIN public.organization_memberships m ON m.organization_id=link.lab_organization_id
+    AND m.user_id=link.user_id AND m.status='active' AND lower(m.role) IN ('lab partner','lab_partner')
+   JOIN public.lab_partners partner ON partner.id=link.partner_id
+    AND partner.lab_organization_id=link.lab_organization_id AND partner.active
+   WHERE link.lab_organization_id=p_lab AND link.user_id=p.id AND link.partner_id=w.partner_id
+  ))
  ));
 $$;
 REVOKE ALL ON FUNCTION public.email_notification_recipient_allowed(uuid,uuid,bigint,text,text) FROM PUBLIC,anon,authenticated,service_role;

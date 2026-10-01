@@ -13,6 +13,10 @@ if(row.event_kind==='new_work_order'){
 }else if(row.event_kind==='work_order_status'){
  title=`Lucrare #${row.work_order_id} — Status modificat`;
  detail=`Statusul lucrării s-a modificat: <strong>${escape(statuses[row.old_status]||row.old_status)}</strong> → <strong>${escape(statuses[row.new_status]||row.new_status)}</strong>.`;
+}else if(row.event_kind==='approval_state'){
+ const approvals={pending:'în așteptarea aprobării',approved:'aprobată',rejected:'refuzată'};
+ title=`Lucrare #${row.work_order_id} — Aprobare`;
+ detail=`Starea aprobării: <strong>${escape(approvals[row.new_status]||row.new_status)}</strong>. Deschide aplicația pentru detalii.`;
 }else throw new Error('Unsupported notification event');
 const html=`<!doctype html><html lang="ro"><body style="font-family:Arial,sans-serif;background:#faf8f4;padding:24px;color:#3c3326"><div style="max-width:560px;margin:auto;background:white;border:1px solid #e3dccf;border-radius:16px;padding:28px"><p style="color:#927027;font-size:13px;letter-spacing:2px">FLOWRISE DENTAL</p><h2>${escape(title)}</h2><p style="line-height:1.7">${detail}</p><p style="margin:28px 0"><a href="https://app.flowrisedental.ro/" style="background:#a57212;color:white;text-decoration:none;padding:12px 18px;border-radius:8px">Deschide aplicația</a></p><p style="font-size:12px;color:#786e60">Poți modifica aceste notificări din contul tău, la „Notificări email”. Acesta este un mesaj automat.</p></div></body></html>`;
 const encoded=Buffer.from(html,'utf8').toString('base64').match(/.{1,76}/g).join('\r\n');

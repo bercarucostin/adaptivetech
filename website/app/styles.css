@@ -9399,3 +9399,19 @@ body.dashboard-production-maximized .kanban-col{
 .cleanup-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0;font-size:12px}
 .cleanup-counts{margin:16px 0}.cleanup-history,.cleanup-buckets{padding:16px}.cleanup-history button{display:block;margin:12px 0;white-space:normal;text-align:left}
 @media(max-width:800px){.cleanup-usage-grid{grid-template-columns:1fr}.cleanup-donut{width:120px;height:120px;flex-basis:120px}.cleanup-donut strong{width:92px;height:92px}.cleanup-header{align-items:flex-start}.cleanup-date-range label{flex:1;min-width:130px}.cleanup-dialog{padding:16px}.cleanup-pagination{flex-wrap:wrap}.cleanup-usage-card{padding:18px}}
+.lab-partner-dialog{width:min(900px,94vw);max-height:90vh;overflow:auto;border:1px solid #d7c6a8;border-radius:14px;padding:24px;color:#30291f;background:#fff;box-shadow:0 16px 60px #0004}
+.lab-partner-dialog::backdrop{background:#0008}
+.lab-partner-dialog form{display:grid;gap:16px}
+.lab-partner-dialog header,.lab-partner-dialog footer{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.lab-partner-dialog header h2{margin:0}
+.lab-partner-dialog label{display:grid;gap:5px;font-weight:600}
+.lab-partner-dialog input,.lab-partner-dialog select,.lab-partner-dialog textarea{min-height:38px;border:1px solid #cfc5b7;border-radius:7px;padding:7px;font:inherit;max-width:100%}
+.lab-partner-line{display:grid;grid-template-columns:minmax(160px,2fr) minmax(100px,1fr) 100px 130px 38px;align-items:end;gap:9px;padding:12px 0;border-bottom:1px solid #ebe4d9}
+.lab-partner-processing{display:flex!important;align-items:center;gap:6px;min-height:38px}
+.lab-partner-processing input{min-height:auto}
+.lab-partner-dialog #labPartnerQuote{display:grid;gap:5px;padding:12px;border-radius:8px;background:#f8f2e7}
+.lab-partner-urgent{color:#9b3328}
+.lab-pricing-settings{display:flex;flex-wrap:wrap;gap:12px;align-items:end;padding:12px;margin:12px 0}
+.lab-pricing-settings label{display:grid;gap:5px}
+.lab-pricing-settings input,.lab-pricing-settings select{min-width:145px}
+@media(max-width:700px){.lab-partner-line{grid-template-columns:1fr 1fr}.lab-partner-line>label:first-child{grid-column:1/-1}.lab-partner-dialog{padding:14px}}

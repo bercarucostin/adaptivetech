@@ -24,7 +24,9 @@ BEGIN
                 'work_type',line.work_type,'billing_mode',line.billing_mode,
                 'billing_scope',line.billing_scope,'quantity',line.quantity,
                 'contract',line.contract,'unit_price',line.unit_price,
-                'subtotal',line.line_total,'matched',line.unit_price IS NOT NULL,
+                'subtotal',line.line_total,'base_subtotal',line.base_line_total,
+                'urgent_percent',line.urgent_percent,'urgency_surcharge',line.urgency_surcharge,
+                'matched',line.unit_price IS NOT NULL,
                 'price_source',line.price_source,'price_fixed_at',line.price_fixed_at,
                 'price_migrated',line.price_migrated
             ) ORDER BY line.work_type,line.billing_scope)
@@ -40,7 +42,9 @@ BEGIN
             WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_order
         ),0),
         'list_price',wo.snapshot_list_price,'discount',wo.discount,
-        'final_price',wo.snapshot_final_price,'partner_name',wo.nume_partener
+        'final_price',wo.snapshot_final_price,'partner_name',wo.nume_partener,
+        'deadline_at',wo.deadline_at,'approval_state',wo.approval_state,
+        'approval_reason',wo.approval_reason
     ) INTO v_result
     FROM public.lab_work_orders wo
     WHERE wo.lab_organization_id=p_lab AND wo.id=p_order;

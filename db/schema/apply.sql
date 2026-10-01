@@ -223,4 +223,7 @@ set local check_function_bodies = off;
 \echo == 70 email notifications ==
 \i db/schema/70_email_notifications.sql
 
+\echo == 80 Lab Partner orders ==
+\i db/migrations/20261001_lab_partner_orders.sql
+
 commit;
