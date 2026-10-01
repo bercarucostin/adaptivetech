@@ -124,3 +124,9 @@ END $$;
 -- Random stable QR reference for both existing and future work orders.
 ALTER TABLE public.lab_work_orders ADD COLUMN IF NOT EXISTS qr_token uuid NOT NULL DEFAULT gen_random_uuid();
 CREATE UNIQUE INDEX IF NOT EXISTS lab_work_orders_qr_token_key ON public.lab_work_orders(qr_token);
+
+-- Persistent cleanup state is also installed by the cleanup migration.
+ALTER TABLE public.lab_work_orders
+ ADD COLUMN IF NOT EXISTS cleanup_revision bigint NOT NULL DEFAULT 0,
+ ADD COLUMN IF NOT EXISTS clinical_cleanup_generation bigint NOT NULL DEFAULT 0,
+ ADD COLUMN IF NOT EXISTS clinical_cleared_at timestamptz;

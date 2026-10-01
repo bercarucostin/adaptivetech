@@ -8,7 +8,7 @@ const db=new PGlite();
 // Only dependencies of the real clinical writer are stubbed. Financial/role RPCs
 // have their own Supabase integration suite; this harness tests persistence itself.
 await db.exec(`CREATE ROLE authenticated;
-CREATE TABLE lab_work_orders(lab_organization_id uuid,id bigint,nume_pacient text,nume_partener text,deadline date);
+CREATE TABLE lab_work_orders(lab_organization_id uuid,id bigint,nume_pacient text,nume_partener text,deadline date,cleanup_revision bigint DEFAULT 0,clinical_cleanup_generation bigint DEFAULT 0,clinical_cleared_at timestamptz);
 CREATE TABLE lab_work_order_items(lab_organization_id uuid,work_order_id bigint,tooth_number integer,work_type text);
 CREATE TABLE lab_patient_cases(lab_organization_id uuid,id bigint,work_order_id bigint,nume_pacient text,nume_partener text,
  deadline date,selected_teeth text,tooth_details_json text,shade text,method text,clinic_note text,production_notes text,

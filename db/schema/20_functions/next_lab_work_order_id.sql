@@ -13,7 +13,7 @@ declare
 begin
     perform pg_advisory_xact_lock(hashtext('flowrise-work-order-' || p_lab_organization_id::text));
 
-    select coalesce(max(wo.id),0) + 1
+    select greatest(coalesce(max(wo.id),0),coalesce((select maximum_id from public.lab_work_order_id_watermarks where lab_organization_id=p_lab_organization_id),0)) + 1
       into v_next
     from public.lab_work_orders wo
     where wo.lab_organization_id = p_lab_organization_id;

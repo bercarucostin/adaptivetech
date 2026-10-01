@@ -103,7 +103,7 @@ BEGIN
    b.status_modelare,
    b.status_cer_fin,
    b.created_at,
-   b.updated_at,
+   b.updated_at,b.clinical_cleared_at,b.clinical_cleanup_generation,b.cleanup_revision,
    b.model_not_applicable,
    b.modelare_not_applicable,
    b.cer_fin_not_applicable,
@@ -156,7 +156,7 @@ BEGIN
  page AS MATERIALIZED (SELECT * FROM filtered ORDER BY %I %s NULLS LAST,id DESC LIMIT $15 OFFSET $16),
  details AS (
   SELECT to_jsonb(p)-'own_cost_model'-'own_cost_modelare'-'own_cost_cer_fin'-'reception_date'-'unknown_model'-'unknown_modelare'-'unknown_cer_fin'-'unknown_selected'-'own_stages'
-   ||jsonb_build_object('items',scope.items,
+   ||jsonb_build_object('clinical_cleared_at',p.clinical_cleared_at,'clinical_cleanup_generation',p.clinical_cleanup_generation::text,'cleanup_revision',p.cleanup_revision::text,'items',scope.items,
     'paid_model',CASE WHEN $3 THEN public.work_order_stage_payment_status($1,p.id,'model') END,
     'paid_modelare',CASE WHEN $3 THEN public.work_order_stage_payment_status($1,p.id,'modelare') END,
     'paid_cer_fin',CASE WHEN $3 THEN public.work_order_stage_payment_status($1,p.id,'cer_fin') END,

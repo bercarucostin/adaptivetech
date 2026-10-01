@@ -134,6 +134,14 @@ Deno.serve(async (req) => {
       return json({ message: `Work order #${workOrderId} not found.` }, 404);
     }
 
+    if (action === "upload" || action === "delete") {
+      const { data: available, error: cleanupError } = await admin.rpc("cleanup_order_available", {
+        p_lab: lab.id, p_order: workOrderId,
+      });
+      if (cleanupError) throw cleanupError;
+      if (!available) return json({ message: "Lucrarea este în curs de curățare." }, 409);
+    }
+
     // First try direct Lab membership.
     const { data: labMembership } = await admin
       .from("organization_memberships")

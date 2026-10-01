@@ -43,7 +43,7 @@ test('configured partner names are escaped in option values and labels', () => {
 test('Admin tab renders configured partners and activation controls', () => {
   const ctx = setup();
   Object.assign(ctx, {
-    isAdmin:()=>true, pageTitle:{},pageSubtitle:{},content:{},
+    storageCleanupMount:null,isAdmin:()=>true, pageTitle:{},pageSubtitle:{},content:{},
     normalize:value=>String(value||'').toLowerCase(),
     adminConfigData:{prices:[],technicianCosts:[],workTypes:[],users:[],roles:[]},
     adminConfigTab:'partners',adminConfigSearch:'',selectedAdminContract:'',selectedAdminTechnician:'',selectedAdminUser:'',

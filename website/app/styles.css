@@ -9375,3 +9375,27 @@ body.dashboard-production-maximized .kanban-col{
 .spreadsheet-preview input[type=checkbox] { flex:none; width:18px; height:18px; margin:0; accent-color:#28835d; }
 .spreadsheet-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; margin-top:20px; }
 .spreadsheet-actions button:disabled { opacity:.45; cursor:not-allowed; }
+
+/* Admin Storage monitoring and scoped cleanup. */
+.storage-cleanup-root{display:grid;gap:18px;min-width:0}
+.cleanup-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.cleanup-header h3,.cleanup-header p{margin:0 0 6px}
+.cleanup-usage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.cleanup-usage-card{padding:22px;min-width:0}
+.cleanup-usage-content{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.cleanup-donut{width:140px;height:140px;flex:0 0 140px;border-radius:50%;background:conic-gradient(#bd7148 0 var(--cleanup-used),#d9e8dc var(--cleanup-used) var(--cleanup-free-end),#e4e4e4 var(--cleanup-free-end) 100%);display:grid;place-items:center}
+.cleanup-donut strong{background:var(--card-bg,#fff);border-radius:50%;width:108px;height:108px;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:22px;color:#244f40}
+.cleanup-donut small{font-size:12px;font-weight:400;margin-top:5px}
+.cleanup-usage-content dl{flex:1;min-width:150px;margin:0}
+.cleanup-usage-content dl>div,.cleanup-counts>div{padding:7px 0;display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #e5e7e4}
+.cleanup-usage-content dt{font-size:12px}.cleanup-usage-content dd,.cleanup-counts dd{margin:0;font-weight:600;text-align:right}
+.cleanup-measured,.cleanup-note{color:#626b67;font-size:12px;line-height:1.6}.cleanup-measured{margin-bottom:0}
+.cleanup-date-range{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0}.cleanup-date-range label,.cleanup-dialog label{display:grid;gap:8px}
+.cleanup-date-range input,.cleanup-dialog input{padding:10px;border:1px solid #d4dad4;border-radius:8px;background:var(--card-bg,#fff);color:inherit}
+.cleanup-actions{display:flex;gap:10px;flex-wrap:wrap}.cleanup-actions button{white-space:normal;min-height:42px}
+.cleanup-dialog{color:inherit;width:min(720px,calc(100vw - 32px));min-width:0;max-width:calc(100vw - 32px);max-height:85vh;overflow:auto;border:1px solid #dadfd9;border-radius:14px;background:var(--card-bg,#fff);padding:24px;box-sizing:border-box;box-shadow:0 18px 60px #0003}
+.cleanup-dialog .table-wrap{min-width:0;max-width:100%}.cleanup-dialog table{min-width:0}.cleanup-counts dt{min-width:0;overflow-wrap:anywhere}.cleanup-date-range input,.cleanup-dialog input{min-width:0;width:100%}
+.cleanup-dialog::backdrop{background:#192b2466}.cleanup-dialog h3{margin-top:0}.cleanup-dialog .cleanup-actions{margin-top:20px}
+.cleanup-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0;font-size:12px}
+.cleanup-counts{margin:16px 0}.cleanup-history,.cleanup-buckets{padding:16px}.cleanup-history button{display:block;margin:12px 0;white-space:normal;text-align:left}
+@media(max-width:800px){.cleanup-usage-grid{grid-template-columns:1fr}.cleanup-donut{width:120px;height:120px;flex-basis:120px}.cleanup-donut strong{width:92px;height:92px}.cleanup-header{align-items:flex-start}.cleanup-date-range label{flex:1;min-width:130px}.cleanup-dialog{padding:16px}.cleanup-pagination{flex-wrap:wrap}.cleanup-usage-card{padding:18px}}

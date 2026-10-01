@@ -113,6 +113,15 @@ this repository:
 
 ## Edge Functions
 
+### Admin storage monitoring and cleanup (2026-10-01)
+
+The Flowrise Admin tab **Spațiu & curățare** requires the core migration
+`migrations/20261001_storage_cleanup.sql`, the new `admin-storage-cleanup` Edge
+Function and the updated `authorize-work-order-file` function. Apply the separate
+schedule migration only after configuring Edge secrets and Vault. Deployment
+order, metrics configuration and recovery are documented in
+[`docs/storage-cleanup.md`](../docs/storage-cleanup.md).
+
 `edge-functions/` holds the Deno sources deployed to Supabase Functions. They
 are not database objects and `apply.sql` does not touch them.
 
@@ -121,6 +130,7 @@ are not database objects and `apply.sql` does not touch them.
 | `login-with-identifier` | **public** — JWT verification disabled by design; resolves nickname → identity, then delegates the password check to Supabase Auth |
 | `authorize-work-order-file` | validates the caller's JWT, then gates by role before issuing signed storage URLs |
 | `admin-users` | validates the JWT, then requires an active `Admin` membership in the lab org |
+| `admin-storage-cleanup` | gateway JWT verification disabled; handler validates browser JWT and active Flowrise Admin, or the server-only scheduler secret |
 
 `login-with-identifier` sends `Access-Control-Allow-Origin: *` and has no rate
 limiting. Because attempts are proxied through it, Supabase Auth sees the
