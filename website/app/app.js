@@ -92,6 +92,7 @@ let caseFilesSaved=[];
 let caseFilesLoading=false;
 let caseFilesUploading=false;
 
+let storageCleanupMount=null;
 let caseSheetDrafts={};
 let activeCaseSheetOrderId=null;
 let orderCaseDraft=null;
@@ -314,6 +315,7 @@ function abortActiveRequests(){
 }
 
 function resetRuntimeState(){
+  storageCleanupMount?.destroy();storageCleanupMount=null;
   closeScannedWorkOrder();
   clearTimeout(toothPriceEstimateTimer);
   toothPriceEstimateTimer=null;
@@ -1213,6 +1215,7 @@ function updateTopActionsForView(){
 }
 
 function render(){
+  if(currentView!=="adminconfig"){storageCleanupMount?.destroy();storageCleanupMount=null;}
   if(currentView!=="production")document.body.classList.remove("dashboard-production-maximized");
   document.querySelectorAll(".nav-item,.mobile-nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));
   updateTopActionsForView();
@@ -2947,7 +2950,7 @@ function draftFromServerCase(order,serverCase){
   const snapshot=serverCase?.case_snapshot&&typeof serverCase.case_snapshot==="object"
     ? serverCase.case_snapshot
     : {};
-  const canonicalItems=Array.isArray(order?.items)?order.items:[];
+  const canonicalItems=serverCase?.clinical_cleared_at?[]:Array.isArray(order?.items)?order.items:[];
   const canonicalTeeth=canonicalItems.map(item=>Number(item?.tooth_number)).filter(Number.isFinite);
   const selected=canonicalTeeth.length
     ? orderedSelectedTeeth(canonicalTeeth)
@@ -2974,6 +2977,8 @@ function draftFromServerCase(order,serverCase){
     notes:String(serverCase?.production_notes??snapshot.production_notes??""),
     doctorNotes:String(serverCase?.clinic_note??snapshot.clinic_note??""),
     perTooth,
+    expectedCleanupRevision:String(serverCase?.clinical_cleanup_generation??order?.clinicalCleanupGeneration??"0"),
+    clinicalClearedAt:serverCase?.clinical_cleared_at??null,
     createdForUser:String(auth?.user?.User_ID||""),
     orderId:order.id
   };
@@ -2981,6 +2986,7 @@ function draftFromServerCase(order,serverCase){
 
 function caseDraftPayload(draft){
   return {
+    expected_cleanup_revision:String(draft?.expectedCleanupRevision??"0"),
     tooth_details:{...(draft?.perTooth??{}),__case:{...(draft?.caseMetadata??{}),
       tooth_connections:normalizeToothConnections(draft?.connections,draft?.selected??[])}},
     shade:String(draft?.shade??""),
@@ -4577,7 +4583,37 @@ function adminCostTariffHtml(id,value,workType){
   return `${adminInput(id,value,"number",'min="0" step="0.01"')}<small id="${id}Mode">${escapeHtml(adminCostBillingModeLabel(workType))}</small>`;
 }
 
+async function requestStorageCleanup(operation,payload={}){
+  if(!isAdmin())throw new Error("Access denied.");
+  const {data,error}=await supabaseClient.functions.invoke("admin-storage-cleanup",{body:{operation,...payload}});
+  if(error){
+    let message="Serviciul de curățare nu este disponibil. Verifică deploy-ul și migrarea.";
+    try{message=(await error.context.json()).message||message;}catch{}
+    throw new Error(message);
+  }
+  if(!data?.ok)throw new Error(data?.message||"Operația nu a putut fi finalizată.");
+  return data;
+}
+
+async function invalidateCleanupCaseDrafts(job){
+  const epoch=authEpoch;let offset=0,total=1;
+  while(offset<total){
+    const page=await requestStorageCleanup("status",{job_id:job.id,offset,limit:200});
+    if(epoch!==authEpoch)return;
+    total=page.total;
+    for(const item of page.orders||[]){
+      if(!["completed","awaiting_uploads"].includes(item.state))continue;
+      delete caseSheetDrafts[String(item.order_id)];
+      if(String(orderCaseDraft?.orderId)===String(item.order_id)){orderCaseDraft=null;orderCaseLoaded=false;}
+      if(String(activeCaseSheetOrderId)===String(item.order_id))activeCaseSheetOrderId=null;
+    }
+    offset+=200;
+  }
+  if(epoch===authEpoch)await loadAll(false,{renderUI:false});
+}
+
 function renderAdminConfig(){
+  storageCleanupMount?.destroy();storageCleanupMount=null;
   if(!isAdmin()){content.innerHTML="";return;}
   pageTitle.textContent="Configurare admin";
   pageSubtitle.textContent="Configurare pentru parteneri, prețuri, tipuri de lucrări, costuri și utilizatori";
@@ -4607,12 +4643,14 @@ function renderAdminConfig(){
     selectedAdminUser=visibleUsers[0]?.User_ID||allUsers[0]?.User_ID||"";
   }
 
-  const tabs=`<div class="admin-config-tabs"><button class="${adminConfigTab==="partners"?"active":""}" data-admin-tab="partners">Parteneri</button><button class="${adminConfigTab==="prices"?"active":""}" data-admin-tab="prices">Contracte & Prețuri</button><button class="${adminConfigTab==="types"?"active":""}" data-admin-tab="types">Tipuri lucrări</button><button class="${adminConfigTab==="costs"?"active":""}" data-admin-tab="costs">Costuri tehnicieni</button><button class="${adminConfigTab==="users"?"active":""}" data-admin-tab="users">Utilizatori</button></div>`;
+  const tabs=`<div class="admin-config-tabs"><button class="${adminConfigTab==="storage"?"active":""}" data-admin-tab="storage">Spațiu & curățare</button><button class="${adminConfigTab==="partners"?"active":""}" data-admin-tab="partners">Parteneri</button><button class="${adminConfigTab==="prices"?"active":""}" data-admin-tab="prices">Contracte & Prețuri</button><button class="${adminConfigTab==="types"?"active":""}" data-admin-tab="types">Tipuri lucrări</button><button class="${adminConfigTab==="costs"?"active":""}" data-admin-tab="costs">Costuri tehnicieni</button><button class="${adminConfigTab==="users"?"active":""}" data-admin-tab="users">Utilizatori</button></div>`;
   const search=`<div class="admin-config-search"><input id="adminConfigSearch" class="filter-input" value="${escapeHtml(adminConfigSearch)}" placeholder="Caută în secțiunea curentă..."><button id="adminConfigClearSearch" class="secondary-btn" type="button">×</button></div>`;
   const datalist=`<datalist id="adminWorkTypeList">${workTypeNames.map(x=>`<option value="${escapeHtml(x)}"></option>`).join("")}</datalist>`;
 
   let body="";
-  if(adminConfigTab==="partners"){
+  if(adminConfigTab==="storage"){
+    body='<section id="storageCleanupRoot" class="storage-cleanup-root"></section>';
+  }else if(adminConfigTab==="partners"){
     const rows=partnerCatalog.filter(row=>!q||normalize(row.name).includes(q));
     body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Parteneri</h3><p>Numele disponibile în formularul de lucrare. Dezactivarea păstrează istoricul.</p></div><span class="table-count">${rows.length} parteneri</span></div><div class="admin-create-card compact"><div class="admin-add-grid"><label>Nume partener<input id="newPartnerName" maxlength="180" placeholder="Numele partenerului"></label><button class="primary-btn" type="button" onclick="adminCreatePartner()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Nume partener</th><th>Stare</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${row.active?"Activ":"Inactiv"}</td><td><button class="${row.active?"danger-btn":"edit-btn"}" type="button" onclick="adminTogglePartner('${escapeHtml(row.id)}')">${row.active?"Dezactivează":"Activează"}</button></td></tr>`).join(""):'<tr><td colspan="3">Nu există parteneri. Adaugă primul nume pentru a crea lucrări.</td></tr>'}</tbody></table></div></section>`;
   }else if(adminConfigTab==="prices"){
@@ -4776,13 +4814,18 @@ function renderAdminConfig(){
     </div>`;
   }
 
-  content.innerHTML=`<div class="admin-config-shell">${tabs}<div class="admin-config-toolbar">${search}</div>${datalist}${body}</div>`;
+  content.innerHTML=`<div class="admin-config-shell">${tabs}${adminConfigTab==="storage"?"":`<div class="admin-config-toolbar">${search}</div>`}${datalist}${body}</div>`;
   document.querySelectorAll("[data-admin-tab]").forEach(btn=>btn.addEventListener("click",()=>{adminConfigTab=btn.dataset.adminTab;adminConfigSearch="";renderAdminConfig();}));
   $("adminConfigSearch")?.addEventListener("input",e=>{adminConfigSearch=e.target.value;renderAdminConfig();const n=$("adminConfigSearch");if(n){n.focus();n.selectionStart=n.selectionEnd=n.value.length;}});
   $("adminConfigClearSearch")?.addEventListener("click",()=>{adminConfigSearch="";renderAdminConfig();});
   document.querySelectorAll("[data-admin-contract]").forEach(btn=>btn.addEventListener("click",()=>{selectedAdminContract=btn.dataset.adminContract;renderAdminConfig();}));
   document.querySelectorAll("[data-admin-technician]").forEach(btn=>btn.addEventListener("click",()=>{selectedAdminTechnician=btn.dataset.adminTechnician;renderAdminConfig();}));
   document.querySelectorAll("[data-admin-user]").forEach(btn=>btn.addEventListener("click",()=>{selectedAdminUser=btn.dataset.adminUser;renderAdminConfig();}));
+  if(adminConfigTab==="storage"&&window.FlowriseStorageCleanup){
+    storageCleanupMount=FlowriseStorageCleanup.mount($("storageCleanupRoot"),{
+      request:requestStorageCleanup,onClinicalCleared:invalidateCleanupCaseDrafts,onOrdersDeleted:invalidateCleanupCaseDrafts
+    });
+  }
 }
 
 
@@ -5945,6 +5988,9 @@ async function loadOrderCaseForEdit(order){
 
   initializeOrderCaseDraft(draft);
   orderCaseLoaded=true;
+  if(saved?.clinical_cleared_at){
+    setConnection(true,"Fișa clinică a fost eliminată. Poți completa explicit o fișă nouă.");
+  }
 
   return Boolean(saved);
 }
@@ -7229,6 +7275,8 @@ function mapSupabaseOrder(r){
     receptionDate:r.data_receptie??"",
     status:r.status??"Not Started",
     patient:r.nume_pacient??"",
+    clinicalClearedAt:r.clinical_cleared_at??null,
+    clinicalCleanupGeneration:String(r.clinical_cleanup_generation??"0"),
     partner:r.nume_partener??"",
     contract:r.contract??(isDoctor()||isTechnician()?"General":""),
     items,
@@ -7298,7 +7346,7 @@ async function loadLegacyAdminUsersSafe(){
   }
 }
 
-loadAll=async function(show=true){
+loadAll=async function(show=true,{renderUI=true}={}){
   if(!auth)throw new Error("Neautentificat");
   const epoch=authEpoch;
   const userId=auth.user.User_ID;
@@ -7393,7 +7441,7 @@ loadAll=async function(show=true){
     materialsLoaded=false;
     lastRefresh.textContent=`Actualizat ${new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;
     setConnection(true,"Baza de date conectată");
-    render();
+    if(renderUI)render();
   }catch(err){
     if(requestContextValid(epoch,userId)){
       setConnection(false,"Conexiune indisponibilă");
@@ -7564,7 +7612,8 @@ fetchPatientCase=async function(workOrderId){
     p_work_order_id:Number(workOrderId)
   });
   const row=Array.isArray(rows)?rows[0]:rows;
-  if(!row)return null;
+  const cleanup=await sbRpc("get_work_order_cleanup_state",{p_lab_organization_id:labId,p_work_order_id:Number(workOrderId)});
+  if(!row)return {...cleanup,work_order_id:Number(workOrderId),selected_teeth:[],tooth_details:{}};
 
   let parsed={};
   try{parsed=row.tooth_details_json?JSON.parse(row.tooth_details_json):{};}catch{parsed={};}
@@ -7572,6 +7621,7 @@ fetchPatientCase=async function(workOrderId){
   const perTooth={...parsed};delete perTooth.__case;
 
   return {
+    ...cleanup,
     id:row.id,
     work_order_id:row.work_order_id,
     selected_teeth:String(row.selected_teeth||"").split(",").map(x=>Number(x.trim())).filter(Number.isFinite),

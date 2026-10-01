@@ -50,3 +50,9 @@ test('only changes between actively selected teeth affect the connection preview
  assert.deepEqual(run('previewToothConnections([[11,21]], {"46-45":true}, [46,45])'),[[11,21],[46,45]]);
  assert.deepEqual(run('previewToothConnections([[46,45],[45,44]], {"46-45":false}, [46,45])'),[[45,44]]);
 });
+
+test('a cleared case never reconstructs teeth from commercial items',()=>{
+ const draft=run('draftFromServerCase({id:7,items:[{tooth_number:11,work_type:"Crown"}]},{clinical_cleared_at:"2026-10-01",clinical_cleanup_generation:"2",selected_teeth:[],tooth_details:{}})');
+ assert.deepEqual(draft.selected,[]);assert.deepEqual(draft.perTooth,{});assert.equal(draft.expectedCleanupRevision,'2');
+ assert.equal(run('caseDraftPayload({expectedCleanupRevision:"2",selected:[]})').expected_cleanup_revision,'2');
+});
