@@ -13,6 +13,7 @@ declare
     v_work_types jsonb;
     v_technicians jsonb := '[]'::jsonb;
     v_prices jsonb := '[]'::jsonb;
+    v_partners jsonb := '[]'::jsonb;
 begin
     if v_role is null then
         raise exception 'Access denied';
@@ -75,11 +76,23 @@ begin
         where cp.lab_organization_id = p_lab_organization_id;
     end if;
 
+    -- Doctors keep their account partner; do not disclose other clinic names.
+    if v_role in ('admin','manager','technician','dashboard') then
+        select coalesce(jsonb_agg(jsonb_build_object(
+            'id', p.id, 'name', p.name, 'active', p.active
+        ) order by p.name), '[]'::jsonb)
+        into v_partners
+        from public.lab_partners p
+        where p.lab_organization_id = p_lab_organization_id
+          and (p.active or v_role = 'admin');
+    end if;
+
     return jsonb_build_object(
         'role', v_role,
         'work_types', v_work_types,
         'technicians', v_technicians,
-        'contract_prices', v_prices
+        'contract_prices', v_prices,
+        'partners', v_partners
     );
 end;
 $function$

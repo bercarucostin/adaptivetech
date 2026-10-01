@@ -1772,6 +1772,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS public_price_lists_one_current ON public.publi
 CREATE INDEX IF NOT EXISTS public_price_lists_history ON public.public_price_lists USING btree (lab_organization_id, created_at DESC);
 -- END db/schema/10_tables/30_public_price_lists.sql
 
+-- BEGIN db/schema/10_tables/31_lab_partners.sql
+-- Persistent partner catalog, scoped to each laboratory.
+CREATE TABLE IF NOT EXISTS public.lab_partners (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    lab_organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    name text NOT NULL CHECK (name = btrim(name) AND length(name) BETWEEN 1 AND 180),
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS lab_partners_org_name_idx
+    ON public.lab_partners (lab_organization_id, lower(name));
+ALTER TABLE public.lab_partners ENABLE ROW LEVEL SECURITY;
+
+-- Bootstrap the catalog without changing historical values or reactivating names.
+INSERT INTO public.lab_partners (lab_organization_id, name)
+SELECT DISTINCT ON (lab_organization_id, lower(name)) lab_organization_id, name
+FROM (
+    SELECT lab_organization_id, btrim(nume_partener) AS name FROM public.lab_work_orders
+    UNION ALL
+    SELECT lab_organization_id, btrim(nume_partener) AS name FROM public.lab_patient_cases
+    UNION ALL
+    SELECT o.id, btrim(d.partner_name)
+    FROM public.legacy_user_directory d
+    JOIN public.organizations o ON o.slug = 'flowrise-dental-lab' AND o.organization_type = 'lab'
+) existing
+WHERE lab_organization_id IS NOT NULL AND length(name) BETWEEN 1 AND 180
+ORDER BY lab_organization_id, lower(name), name
+ON CONFLICT DO NOTHING;
+-- END db/schema/10_tables/31_lab_partners.sql
+
 -- BEGIN db/schema/10_tables/login_rate_limits.sql
 -- Only HMAC-SHA256 keys are stored; no raw account identifiers or IP addresses.
 CREATE TABLE IF NOT EXISTS public.login_rate_limits (
@@ -5757,6 +5788,39 @@ BEGIN
 END; $$;
 -- END db/schema/20_functions/enforce_calendar_event_edit_rules.sql
 
+-- BEGIN db/schema/20_functions/enforce_work_order_partner_catalog.sql
+-- Reject new arbitrary partner names from management/technician work-order RPCs.
+CREATE OR REPLACE FUNCTION public.enforce_work_order_partner_catalog()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+    v_name text;
+    v_role text;
+BEGIN
+    -- Existing names, including inactive/historical partners, remain editable.
+    IF TG_OP = 'UPDATE' AND NEW.lab_organization_id = OLD.lab_organization_id
+       AND btrim(NEW.nume_partener) IS NOT DISTINCT FROM btrim(OLD.nume_partener) THEN
+        -- The existing management RPCs trim submitted form values.
+        NEW.nume_partener := OLD.nume_partener;
+        RETURN NEW;
+    END IF;
+    v_role := public.effective_lab_role(NEW.lab_organization_id);
+    -- Doctors' own partner is derived by the existing Doctor RPCs.
+    -- Trusted service/import operations without an end-user session are preserved.
+    IF auth.uid() IS NULL OR v_role = 'doctor' THEN RETURN NEW; END IF;
+    SELECT p.name INTO v_name FROM public.lab_partners p
+    WHERE p.lab_organization_id = NEW.lab_organization_id AND p.active
+      AND lower(p.name) = lower(btrim(NEW.nume_partener));
+    IF v_name IS NULL THEN
+        RAISE EXCEPTION 'Selectează un partener activ din lista configurată de Admin.';
+    END IF;
+    NEW.nume_partener := v_name;
+    RETURN NEW;
+END;
+$$;
+-- END db/schema/20_functions/enforce_work_order_partner_catalog.sql
+
 -- BEGIN db/schema/20_functions/enforce_work_order_stage_rules.sql
 -- Flowrise Supabase function: public.enforce_work_order_stage_rules
 -- Sourced from SUPABASE V18.8 Production Guardrails.sql.
@@ -7026,6 +7090,7 @@ declare
     v_work_types jsonb;
     v_technicians jsonb := '[]'::jsonb;
     v_prices jsonb := '[]'::jsonb;
+    v_partners jsonb := '[]'::jsonb;
 begin
     if v_role is null then
         raise exception 'Access denied';
@@ -7088,11 +7153,23 @@ begin
         where cp.lab_organization_id = p_lab_organization_id;
     end if;
 
+    -- Doctors keep their account partner; do not disclose other clinic names.
+    if v_role in ('admin','manager','technician','dashboard') then
+        select coalesce(jsonb_agg(jsonb_build_object(
+            'id', p.id, 'name', p.name, 'active', p.active
+        ) order by p.name), '[]'::jsonb)
+        into v_partners
+        from public.lab_partners p
+        where p.lab_organization_id = p_lab_organization_id
+          and (p.active or v_role = 'admin');
+    end if;
+
     return jsonb_build_object(
         'role', v_role,
         'work_types', v_work_types,
         'technicians', v_technicians,
-        'contract_prices', v_prices
+        'contract_prices', v_prices,
+        'partners', v_partners
     );
 end;
 $function$
@@ -10492,6 +10569,28 @@ BEGIN
 END $$;
 -- END db/schema/30_policies/30_public_price_lists.sql
 
+-- BEGIN db/schema/30_policies/31_lab_partners.sql
+DROP POLICY IF EXISTS lab_partners_read ON public.lab_partners;
+CREATE POLICY lab_partners_read ON public.lab_partners FOR SELECT TO authenticated
+    USING (public.has_org_role(lab_organization_id, ARRAY['Admin','Manager','Technician','Dashboard']));
+
+DROP POLICY IF EXISTS lab_partners_admin_insert ON public.lab_partners;
+CREATE POLICY lab_partners_admin_insert ON public.lab_partners FOR INSERT TO authenticated
+    WITH CHECK (public.has_org_role(lab_organization_id, ARRAY['Admin']));
+
+DROP POLICY IF EXISTS lab_partners_admin_update ON public.lab_partners;
+CREATE POLICY lab_partners_admin_update ON public.lab_partners FOR UPDATE TO authenticated
+    USING (public.has_org_role(lab_organization_id, ARRAY['Admin']))
+    WITH CHECK (public.has_org_role(lab_organization_id, ARRAY['Admin']));
+-- END db/schema/30_policies/31_lab_partners.sql
+
+-- BEGIN db/schema/30_policies/32_work_order_partner_catalog.sql
+DROP TRIGGER IF EXISTS work_order_partner_catalog_guard ON public.lab_work_orders;
+CREATE TRIGGER work_order_partner_catalog_guard
+BEFORE INSERT OR UPDATE OF nume_partener, lab_organization_id ON public.lab_work_orders
+FOR EACH ROW EXECUTE FUNCTION public.enforce_work_order_partner_catalog();
+-- END db/schema/30_policies/32_work_order_partner_catalog.sql
+
 
 -- == 40 grants ==
 
@@ -10506,6 +10605,11 @@ END $$;
 --
 -- Safe to re-run.
 -- ---------------------------------------------------------------------
+
+GRANT SELECT, INSERT, UPDATE ON public.lab_partners TO authenticated;
+REVOKE ALL ON public.lab_partners FROM anon;
+REVOKE DELETE ON public.lab_partners FROM authenticated;
+REVOKE ALL ON FUNCTION public.enforce_work_order_partner_catalog() FROM PUBLIC, anon, authenticated;
 
 
 -- ---------------------------------------------------------------------

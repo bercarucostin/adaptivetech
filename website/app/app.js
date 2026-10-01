@@ -63,6 +63,7 @@ const supabaseClient=(()=>{
 let auth=null;
 let orders=[];
 let technicianSalaryRows=[];
+let partnerCatalog=[];
 let priceRules=[],technicianCostRules=[],contracts=[],workTypes=[],technicians=["Robert","Gabi","Denis"],statuses=["Not Started","Started","Finished","Shipped","List Sent","Paid"],stageStatuses=["Not Started","Started","Finished"],paidStatuses=["Paid","Not Paid"];
 let currentView="workorders",workFilters={},workQuickFilters={status:"",partner:"",workType:""},techFilters={},loadingCount=0;
 let workSort={key:"id",dir:"desc"};
@@ -346,6 +347,7 @@ function resetRuntimeState(){
   };
   adminConfigData={prices:[],technicianCosts:[],workTypes:[],contracts:[],users:[],roles:[]};
   adminConfigTab="prices";adminConfigSearch="";selectedAdminContract="";selectedAdminTechnician="";selectedAdminUser="";
+  partnerCatalog=[];
   calendarEvents=[];calendarLoaded=false;calendarLoading=false;calendarEditor=null;
   calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
   materialsInventory=[];materialsLoaded=false;materialsLoading=false;materialsSearch="";materialEditor=null;materialSaving=false;
@@ -916,7 +918,18 @@ function renderTechnicianAssignmentSummary(o=null){
   technicianAssignmentSummary.classList.remove("hidden");
 }
 
+function partnerOptionsHtml(current=""){
+  const selected=String(current||"");
+  const rows=partnerCatalog.filter(row=>row.active).map(row=>({name:row.name,active:true}));
+  if(selected&&!rows.some(row=>row.name===selected))rows.push({name:selected,active:false});
+  rows.sort((a,b)=>a.name.localeCompare(b.name,"ro",{sensitivity:"base"}));
+  return `<option value="">Selectează un partener...</option>`+rows.map(row=>
+    `<option value="${escapeHtml(row.name)}"${row.name===selected?" selected":""}>${escapeHtml(row.name)}${row.active?"":" (existent)"}</option>`
+  ).join("");
+}
+
 function populateFormOptions(o={}){
+  partner.innerHTML=partnerOptionsHtml(isDoctor()?String(auth?.user?.Partner_Name||""):o.partner||"");
   status.innerHTML=orderStatusOptions(o);
   contract.innerHTML=optionHtml(contracts,o.contract||"",false);
   modelTech.innerHTML=optionHtml(technicians,o.modelTech||"",true);
@@ -4567,7 +4580,7 @@ function adminCostTariffHtml(id,value,workType){
 function renderAdminConfig(){
   if(!isAdmin()){content.innerHTML="";return;}
   pageTitle.textContent="Configurare admin";
-  pageSubtitle.textContent="Configurare pentru prețuri, tipuri de lucrări, costuri și utilizatori";
+  pageSubtitle.textContent="Configurare pentru parteneri, prețuri, tipuri de lucrări, costuri și utilizatori";
 
   const active=v=>!["false","0","no","inactive","disabled"].includes(String(v??"").toLowerCase());
   const q=normalize(adminConfigSearch);
@@ -4594,12 +4607,15 @@ function renderAdminConfig(){
     selectedAdminUser=visibleUsers[0]?.User_ID||allUsers[0]?.User_ID||"";
   }
 
-  const tabs=`<div class="admin-config-tabs"><button class="${adminConfigTab==="prices"?"active":""}" data-admin-tab="prices">Contracte & Prețuri</button><button class="${adminConfigTab==="types"?"active":""}" data-admin-tab="types">Tipuri lucrări</button><button class="${adminConfigTab==="costs"?"active":""}" data-admin-tab="costs">Costuri tehnicieni</button><button class="${adminConfigTab==="users"?"active":""}" data-admin-tab="users">Utilizatori</button></div>`;
+  const tabs=`<div class="admin-config-tabs"><button class="${adminConfigTab==="partners"?"active":""}" data-admin-tab="partners">Parteneri</button><button class="${adminConfigTab==="prices"?"active":""}" data-admin-tab="prices">Contracte & Prețuri</button><button class="${adminConfigTab==="types"?"active":""}" data-admin-tab="types">Tipuri lucrări</button><button class="${adminConfigTab==="costs"?"active":""}" data-admin-tab="costs">Costuri tehnicieni</button><button class="${adminConfigTab==="users"?"active":""}" data-admin-tab="users">Utilizatori</button></div>`;
   const search=`<div class="admin-config-search"><input id="adminConfigSearch" class="filter-input" value="${escapeHtml(adminConfigSearch)}" placeholder="Caută în secțiunea curentă..."><button id="adminConfigClearSearch" class="secondary-btn" type="button">×</button></div>`;
   const datalist=`<datalist id="adminWorkTypeList">${workTypeNames.map(x=>`<option value="${escapeHtml(x)}"></option>`).join("")}</datalist>`;
 
   let body="";
-  if(adminConfigTab==="prices"){
+  if(adminConfigTab==="partners"){
+    const rows=partnerCatalog.filter(row=>!q||normalize(row.name).includes(q));
+    body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Parteneri</h3><p>Numele disponibile în formularul de lucrare. Dezactivarea păstrează istoricul.</p></div><span class="table-count">${rows.length} parteneri</span></div><div class="admin-create-card compact"><div class="admin-add-grid"><label>Nume partener<input id="newPartnerName" maxlength="180" placeholder="Numele partenerului"></label><button class="primary-btn" type="button" onclick="adminCreatePartner()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Nume partener</th><th>Stare</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${row.active?"Activ":"Inactiv"}</td><td><button class="${row.active?"danger-btn":"edit-btn"}" type="button" onclick="adminTogglePartner('${escapeHtml(row.id)}')">${row.active?"Dezactivează":"Activează"}</button></td></tr>`).join(""):'<tr><td colspan="3">Nu există parteneri. Adaugă primul nume pentru a crea lucrări.</td></tr>'}</tbody></table></div></section>`;
+  }else if(adminConfigTab==="prices"){
     const rows=allPrices.filter(r=>String(r.Contract??"")===selectedAdminContract&&(!q||normalize([r.Contract,r.Tip_Lucrare,r.Pret].join(" ")).includes(q)));
     body=`<div class="admin-contract-workspace"><aside class="admin-contract-list"><div class="admin-pane-title"><strong>Contracte</strong><span>${contracts.length}</span></div><div class="admin-contract-items">${visibleContracts.length?visibleContracts.map(c=>`<button type="button" class="${c===selectedAdminContract?"active":""}" data-admin-contract="${escapeHtml(c)}"><span>${escapeHtml(c)}</span><small>${allPrices.filter(r=>String(r.Contract??"")===c).length} prețuri</small></button>`).join(""):'<div class="admin-empty-small">Niciun contract</div>'}</div></aside><section class="admin-contract-detail"><div class="admin-section-head"><div><h3>${escapeHtml(selectedAdminContract||"Contract nou")}</h3><p>Selectează un contract în stânga; modifică doar rândul de care ai nevoie.</p></div>${selectedAdminContract?`<div class="admin-group-actions"><button class="secondary-btn admin-duplicate-group-btn" type="button" onclick="adminDuplicateSelectedContract()">Duplică contractul</button><button class="danger-btn" type="button" onclick="adminDeleteSelectedContract()">Șterge contract</button></div>`:""}</div><div class="admin-create-card compact"><div class="admin-create-title">+ Adaugă preț</div><div class="admin-add-grid"><label>Contract ${adminInput("newPriceContract",selectedAdminContract)}</label><label>Tip lucrare<input id="newPriceWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label><label>Tarif ${adminInput("newPriceValue","0","number",'min="0" step="0.01"')}</label><button class="primary-btn" type="button" onclick="adminCreatePrice()">Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Tarif</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td><input id="priceWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="priceContract${id}" type="hidden" value="${escapeHtml(r.Contract??"")}"></td><td>${adminInput(`priceValue${id}`,r.Pret,"number",'min="0" step="0.01"')}</td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSavePrice(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeletePrice(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="3">Nu există prețuri pentru contractul selectat.</td></tr>'}</tbody></table></div></section></div>`;
   }else if(adminConfigTab==="types"){
@@ -5088,6 +5104,19 @@ async function adminDeleteUser(userId){
   }
 }
 window.adminDeleteUser=adminDeleteUser;
+
+async function adminCreatePartner(){
+  try{
+    await adminConfigRequest("partner","create",{Name:$("newPartnerName")?.value||""});
+  }catch(err){alert(`Nu am putut adăuga partenerul: ${err.message}`);}
+}
+async function adminTogglePartner(id){
+  const row=partnerCatalog.find(item=>item.id===String(id));
+  if(!row)return;
+  try{
+    await adminConfigRequest("partner","update",{ID:row.id,Active:!row.active});
+  }catch(err){alert(`Nu am putut actualiza partenerul: ${err.message}`);}
+}
 
 async function adminCreatePrice(){
   const Contract=$("newPriceContract").value.trim();
@@ -6243,7 +6272,7 @@ function setModalRoleMode(){
   });
 
   if(status)status.disabled=doctor;
-  if(partner)partner.readOnly=doctor;
+  if(partner)partner.disabled=doctor;
 
   // Reset the Doctor-editable controls before applying a possible read-only state.
   [dueDate,patient,orderClinicNote,orderToothType,orderToothShade,orderToothMethod,orderToothNote].forEach(el=>{if(el)el.disabled=false;});
@@ -6565,11 +6594,6 @@ attachPartialAutocomplete(
   patient,
   patientSuggestions,
   ()=>[...new Set(orders.map(o=>String(o.patient||"").trim()).filter(Boolean))]
-);
-attachPartialAutocomplete(
-  partner,
-  partnerSuggestions,
-  ()=>[...new Set(orders.map(o=>String(o.partner||"").trim()).filter(Boolean))]
 );
 
 
@@ -7311,6 +7335,7 @@ loadAll=async function(show=true){
     if(adminTypeRes.error)throw new Error(adminTypeRes.error.message);
 
     const refObj=ref&&typeof ref==="object"?ref:{};
+    partnerCatalog=Array.isArray(refObj.partners)?refObj.partners.map(r=>({id:String(r.id),name:String(r.name||""),active:Boolean(r.active)})):[];
     priceRules=Array.isArray(refObj.contract_prices)
       ? refObj.contract_prices.map(r=>({ID:r.id,Contract:r.contract,Tip_Lucrare:r.tip_lucrare,Pret:num(r.pret)}))
       : [];
@@ -7888,6 +7913,23 @@ function adminPriceByUiId(id){return adminConfigData.prices.find(r=>String(r.ID)
 
 async function supabaseAdminMutation(entity,action,data={}){
   const labId=await resolveLabOrganizationId();
+  if(entity==="partner"){
+    if(!isAdmin())throw new Error("Admin access required");
+    if(action==="create"){
+      const name=String(data.Name||"").trim();
+      if(!name||name.length>180)throw new Error("Numele partenerului trebuie să aibă între 1 și 180 de caractere.");
+      const {error}=await supabaseClient.from("lab_partners").insert({lab_organization_id:labId,name,active:true});
+      if(error)throw new Error(error.code==="23505"?"Acest partener există deja.":error.message);
+      return;
+    }
+    if(action==="update"){
+      const current=partnerCatalog.find(row=>row.id===String(data.ID));
+      if(!current)throw new Error("Partenerul nu a fost găsit.");
+      const {error}=await supabaseClient.from("lab_partners").update({active:Boolean(data.Active),updated_at:new Date().toISOString()}).eq("lab_organization_id",labId).eq("id",current.id).select("id").single();
+      if(error)throw new Error(error.message);
+      return;
+    }
+  }
   if(entity==="price"){
     if(action==="create"){
       const row={lab_organization_id:labId,id:`price_${crypto.randomUUID()}`,contract:String(data.Contract||"").trim(),tip_lucrare:String(data.Tip_Lucrare||"").trim(),pret:Number(data.Pret)||0};

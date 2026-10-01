@@ -9,6 +9,11 @@
 -- Safe to re-run.
 -- ---------------------------------------------------------------------
 
+GRANT SELECT, INSERT, UPDATE ON public.lab_partners TO authenticated;
+REVOKE ALL ON public.lab_partners FROM anon;
+REVOKE DELETE ON public.lab_partners FROM authenticated;
+REVOKE ALL ON FUNCTION public.enforce_work_order_partner_catalog() FROM PUBLIC, anon, authenticated;
+
 
 -- ---------------------------------------------------------------------
 -- 1. profiles must not be self-writable.  [APPLIED IN PRODUCTION 2026-09-09]
