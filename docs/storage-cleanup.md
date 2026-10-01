@@ -26,9 +26,10 @@ orders remain completed when another fails.
    revision guards and clinical readers/writers; running it again preserves jobs.
    It does not execute a cleanup. Existing installations should use this focused
    migration; the generated full schema includes the same definitions for rebuilds.
-2. Deploy `admin-storage-cleanup` with **all four files** from
-   [`db/edge-functions/admin-storage-cleanup`](../db/edge-functions/admin-storage-cleanup):
-   `index.ts`, `handler.mjs`, `metrics.mjs`, `worker.mjs`. Keep their relative paths.
+2. Deploy `admin-storage-cleanup` with the self-contained
+   [`index.ts`](../db/edge-functions/admin-storage-cleanup/index.ts). The helper
+   files in that directory remain only for local automated tests; the Supabase
+   Dashboard deployment needs the single `index.ts` file.
    Disable the function gateway's JWT verification (`verify_jwt = false`, or
    `supabase functions deploy admin-storage-cleanup --no-verify-jwt`). The handler
    validates browser JWTs using Supabase Auth and requires an active Flowrise Admin;
