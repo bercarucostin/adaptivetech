@@ -62,7 +62,8 @@ debugging time and none is obvious from the config alone:
 
 ### DNS
 
-`flowrisedental.ro` is registered through hostico.ro and its landing page is
-served from cPanel there until the cutover. Moving it to the Hetzner box is a
-DNS change, not a deploy. The step-by-step order, checks and rollback are in
+`flowrisedental.ro` is registered through hostico.ro, which remains the `.ro`
+registrar. DNS moved to Cloudflare and the landing page moved to the Hetzner
+box on 2026-10-01; the page is now baked into the Caddy image and publishes
+with a redeploy. The order that was followed, and the rollback, are in
 [deploy/README.md](deploy/README.md#moving-the-landing-page-off-hostico).

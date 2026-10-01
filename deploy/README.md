@@ -182,6 +182,10 @@ worth reading the execution in n8n before assuming it is safe.
 
 ## Moving the landing page off Hostico
 
+**Done on 2026-10-01.** DNS is on Cloudflare (all records DNS only, so
+`N8N_PROXY_HOPS` stays 2) and `flowrisedental.ro` points at this box. Kept
+below as the record of what was done and how to roll back.
+
 Hostico serves `flowrisedental.ro` and `www` from cPanel. The Caddy image on
 this box already contains the landing page (`/srv/site`) and answers for both
 hostnames; no DNS record points at it yet.
@@ -269,6 +273,9 @@ short window.
   publishes with a redeploy.
 
 ## Publishing the landing page before the cutover
+
+**No longer applies** since the move on 2026-10-01: the page publishes with a
+Coolify redeploy. Kept for the price-list seed checks, which still hold.
 
 Until the move above, `www` and the apex are served by Hostico from cPanel, so a change to
 `website/site/index.html` reaches visitors only when the file is uploaded there.
