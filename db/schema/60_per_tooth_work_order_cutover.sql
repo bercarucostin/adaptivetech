@@ -9,7 +9,8 @@ BEGIN
         BEGIN
             WITH per_tooth_removed_orders AS MATERIALIZED (
                 SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-                WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i
+                WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i
                     WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
                 OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid
                     WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
@@ -32,63 +33,72 @@ BEGIN
 END $$;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.work_order_files f USING per_tooth_removed_orders d
 WHERE f.lab_organization_id=d.lab_organization_id AND f.legacy_work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_patient_cases pc USING per_tooth_removed_orders d
 WHERE pc.lab_organization_id=d.lab_organization_id AND pc.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.work_order_financial_audit a USING per_tooth_removed_orders d
 WHERE a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.technician_payments p USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE p.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_work_order_assignment_adjustments l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE l.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_work_order_assignment_cost_lines l USING public.lab_work_order_stage_assignments a,per_tooth_removed_orders d
 WHERE l.assignment_id=a.id AND a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_work_order_stage_assignments a USING per_tooth_removed_orders d
 WHERE a.lab_organization_id=d.lab_organization_id AND a.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_work_order_items i USING per_tooth_removed_orders d
 WHERE i.lab_organization_id=d.lab_organization_id AND i.work_order_id=d.id;
 WITH per_tooth_removed_orders AS MATERIALIZED (
     SELECT wo.lab_organization_id,wo.id FROM public.lab_work_orders wo
-    WHERE NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
+    WHERE coalesce(to_jsonb(wo)->>'order_origin','internal') <> 'lab_partner'
+                AND NOT EXISTS(SELECT 1 FROM public.lab_work_order_items i WHERE i.lab_organization_id=wo.lab_organization_id AND i.work_order_id=wo.id)
        OR EXISTS(SELECT 1 FROM public.lab_work_order_items invalid WHERE invalid.lab_organization_id=wo.lab_organization_id AND invalid.work_order_id=wo.id
            AND (invalid.tooth_number / 10 NOT BETWEEN 1 AND 4 OR invalid.tooth_number % 10 NOT BETWEEN 1 AND 8))
 ) DELETE FROM public.lab_work_orders wo USING per_tooth_removed_orders d
