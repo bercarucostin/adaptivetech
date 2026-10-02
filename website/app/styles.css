@@ -9399,19 +9399,76 @@ body.dashboard-production-maximized .kanban-col{
 .cleanup-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0;font-size:12px}
 .cleanup-counts{margin:16px 0}.cleanup-history,.cleanup-buckets{padding:16px}.cleanup-history button{display:block;margin:12px 0;white-space:normal;text-align:left}
 @media(max-width:800px){.cleanup-usage-grid{grid-template-columns:1fr}.cleanup-donut{width:120px;height:120px;flex-basis:120px}.cleanup-donut strong{width:92px;height:92px}.cleanup-header{align-items:flex-start}.cleanup-date-range label{flex:1;min-width:130px}.cleanup-dialog{padding:16px}.cleanup-pagination{flex-wrap:wrap}.cleanup-usage-card{padding:18px}}
-.lab-partner-dialog{width:min(900px,94vw);max-height:90vh;overflow:auto;border:1px solid #d7c6a8;border-radius:14px;padding:24px;color:#30291f;background:#fff;box-shadow:0 16px 60px #0004}
-.lab-partner-dialog::backdrop{background:#0008}
-.lab-partner-dialog form{display:grid;gap:16px}
+/* Commercial orders and pricing share the application's light theme. */
+.lab-partner-dialog{width:min(940px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:90dvh;overflow:auto;box-sizing:border-box;border:1px solid var(--border);border-radius:18px;padding:24px;color:var(--text);background:#fff;box-shadow:0 24px 80px #30291f30;font:inherit}
+.lab-partner-dialog::backdrop{background:#211a1466;backdrop-filter:blur(3px)}
+.lab-partner-dialog form{display:grid;gap:18px;min-width:0}
 .lab-partner-dialog header,.lab-partner-dialog footer{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.lab-partner-dialog header h2{margin:0}
-.lab-partner-dialog label{display:grid;gap:5px;font-weight:600}
-.lab-partner-dialog input,.lab-partner-dialog select,.lab-partner-dialog textarea{min-height:38px;border:1px solid #cfc5b7;border-radius:7px;padding:7px;font:inherit;max-width:100%}
-.lab-partner-line{display:grid;grid-template-columns:minmax(160px,2fr) minmax(100px,1fr) 100px 130px 38px;align-items:end;gap:9px;padding:12px 0;border-bottom:1px solid #ebe4d9}
-.lab-partner-processing{display:flex!important;align-items:center;gap:6px;min-height:38px}
-.lab-partner-processing input{min-height:auto}
-.lab-partner-dialog #labPartnerQuote{display:grid;gap:5px;padding:12px;border-radius:8px;background:#f8f2e7}
+.lab-partner-dialog header h2{margin:0;font-size:22px;color:var(--text);letter-spacing:normal}
+.lab-partner-eyebrow{margin:0 0 5px;color:var(--muted);font-size:11px;font-weight:700}
+.lab-partner-dialog-actions,.lab-partner-order-state{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lab-partner-section{display:grid;gap:14px;padding:18px;border:1px solid var(--border);border-radius:12px;min-width:0;background:#fff}
+.lab-partner-section h3{margin:0;color:var(--text);font-size:14px;font-weight:700;letter-spacing:normal}
+.lab-partner-dialog label,.lab-pricing-settings label{display:grid;gap:7px;font-size:12px;font-weight:600;color:var(--muted);min-width:0}
+.lab-partner-dialog input,.lab-partner-dialog select,.lab-partner-dialog textarea,.lab-pricing-settings input,.lab-pricing-settings select{box-sizing:border-box;width:100%;min-width:0;min-height:44px;border:1px solid var(--border);border-radius:9px;padding:10px 12px;font:inherit;font-size:14px;color:var(--text);background:#fff;max-width:100%;box-shadow:none}
+.lab-partner-dialog textarea{resize:vertical;line-height:1.5}
+.lab-partner-dialog input:focus-visible,.lab-partner-dialog select:focus-visible,.lab-partner-dialog textarea:focus-visible,.lab-pricing-settings input:focus-visible,.lab-pricing-settings select:focus-visible{outline:2px solid #b88a37;outline-offset:2px}
+.lab-partner-dialog :disabled{color:#655e54;background:#f7f5f1;opacity:1;cursor:default}
+.lab-partner-dialog button,.lab-pricing-settings button,.lab-partner-orders button{font:inherit;font-size:13px;min-height:44px}
+.lab-partner-dialog footer{padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.lab-partner-line{display:grid;grid-template-columns:minmax(160px,2fr) minmax(90px,1fr) 90px 112px 44px;align-items:end;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}
+.lab-partner-line:first-child{padding-top:0}.lab-partner-line:last-child{border-bottom:0}
+.lab-partner-processing{display:flex!important;align-items:center;gap:8px;min-height:44px}
+.lab-partner-processing input{width:18px;min-height:18px;height:18px;padding:0;flex:0 0 18px;accent-color:#a87514}
+.lab-partner-dialog #labPartnerQuote{display:grid;gap:8px;line-height:1.6;font-size:13px;overflow-wrap:anywhere}
+.lab-partner-price-section{background:#fffbf1;border-color:#e8d6ad}
 .lab-partner-urgent{color:#9b3328}
-.lab-pricing-settings{display:flex;flex-wrap:wrap;gap:12px;align-items:end;padding:12px;margin:12px 0}
-.lab-pricing-settings label{display:grid;gap:5px}
-.lab-pricing-settings input,.lab-pricing-settings select{min-width:145px}
-@media(max-width:700px){.lab-partner-line{grid-template-columns:1fr 1fr}.lab-partner-line>label:first-child{grid-column:1/-1}.lab-partner-dialog{padding:14px}}
+.lab-partner-notice{margin:0;padding:12px 14px;border-radius:9px;background:#f7f5f0;color:#625847;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.lab-partner-status,.lab-partner-approval{display:inline-flex;align-items:center;width:fit-content;border-radius:7px;padding:5px 8px;font-size:11px;font-weight:600;line-height:1.4;background:#f2eee6;color:#625640}
+.lab-partner-approval.approved{background:#eaf3ed;color:#315d3c}.lab-partner-approval.pending{background:#fff2ce;color:#795712}.lab-partner-approval.rejected{background:#faeaea;color:#963b38}
+.lab-partner-lock{display:inline-block;font-size:11px;color:#8f4b2d;margin:4px 0}
+.lab-partner-file{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.lab-partner-file>span{flex:1;min-width:120px;overflow-wrap:anywhere}
+.lab-partner-dashboard-summary{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:18px;font-size:13px}.lab-partner-dashboard-summary>span{color:var(--muted)}
+.lab-partner-kanban{display:grid;grid-template-columns:repeat(6,minmax(210px,1fr));gap:14px;overflow-x:auto;padding:2px 2px 16px;align-items:start}
+.lab-partner-kanban-column{min-width:0;background:#f7f5f0;border:1px solid var(--border);border-radius:12px;padding:12px}
+.lab-partner-kanban-column>header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.lab-partner-kanban-column h3{margin:0;font-size:13px;color:var(--text);letter-spacing:normal}.lab-partner-kanban-column>header>span{font-size:11px;color:var(--muted);background:#fff;padding:3px 7px;border-radius:6px}
+.lab-partner-kanban-cards{display:grid;gap:10px}.lab-partner-kanban-card{display:grid;gap:10px;width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);font:inherit;font-size:12px;text-align:left;cursor:pointer;overflow-wrap:anywhere;box-shadow:0 3px 12px #30291f08}
+.lab-partner-kanban-card:hover{border-color:#c19a52;box-shadow:0 4px 14px #30291f14}.lab-partner-kanban-card:focus-visible{outline:2px solid #b88a37;outline-offset:2px}.lab-partner-card-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}.lab-partner-card-deadline{font-size:11px;color:#72685a}.lab-partner-column-empty{margin:12px 0;color:var(--muted);font-size:12px;text-align:center}
+.lab-pricing-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:16px;align-items:end;padding:18px;margin:0 0 16px!important;box-shadow:none!important}
+.lab-pricing-settings button{white-space:normal;min-width:140px}
+.admin-config-shell :is(input,select,textarea,button){font-family:inherit}
+.admin-contract-detail .admin-section-head h3,.admin-contract-detail>h3{color:var(--text)!important;letter-spacing:normal}
+.admin-config-shell :is(.admin-add-grid,.admin-user-create-grid,.admin-user-editor-grid,.lab-pricing-settings) label{font-size:12px;color:var(--muted);font-weight:600}
+@media(max-width:900px){.lab-pricing-settings{grid-template-columns:1fr 1fr}.lab-pricing-settings button{grid-column:1/-1;justify-self:start}.lab-partner-line{grid-template-columns:minmax(140px,2fr) minmax(80px,1fr) 76px}.lab-partner-processing{grid-column:1/3}.lab-partner-line>[data-remove-line]{justify-self:end}}
+@media(max-width:700px){.lab-partner-dialog{padding:16px;width:calc(100vw - 24px);max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);border-radius:14px}.lab-partner-dialog form{gap:14px}.lab-partner-section{padding:14px}.lab-partner-line{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.lab-partner-line>label:first-child{grid-column:1/-1}.lab-partner-processing{grid-column:auto}.lab-partner-line>[data-remove-line]{grid-column:2}.lab-partner-dialog header h2{font-size:19px}.lab-partner-dialog footer{align-items:stretch}.lab-partner-dialog-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.lab-partner-dialog-actions>button:only-child{grid-column:1/-1}.lab-partner-dialog-actions button{white-space:normal}.lab-partner-kanban{grid-template-columns:minmax(0,1fr);overflow:visible}.lab-partner-dashboard-summary{gap:8px}.lab-pricing-settings{grid-template-columns:minmax(0,1fr);gap:14px;padding:14px}.lab-pricing-settings button{width:100%;justify-self:stretch}.lab-partner-orders th,.lab-partner-orders td{font-size:12px}}
+
+.lab-partner-order-cards{display:none}
+.lab-partner-order-card{display:grid;gap:12px;padding:16px;border:1px solid var(--border);border-radius:12px;background:#fff;min-width:0}
+.lab-partner-order-card header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.lab-partner-order-card header>strong{font-size:14px}.lab-partner-order-card>p{margin:0;line-height:1.5;font-size:13px;overflow-wrap:anywhere}
+.lab-partner-order-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;font-size:12px}.lab-partner-order-meta>span{color:var(--muted)}.lab-partner-order-meta>strong{text-align:right;overflow-wrap:anywhere}
+@media(max-width:860px){.lab-partner-role-mode .app-shell.doctor-role-mode .mobile-bottom-nav{grid-template-columns:repeat(2,minmax(0,1fr))!important}.admin-configuration-view .ai-panel:not(.mobile-open){display:none!important}.admin-configuration-view .main{padding-bottom:80px}}
+@media(max-width:700px){.lab-partner-orders>.table-wrap{display:none}.lab-partner-order-cards{display:grid;gap:14px}.lab-partner-orders{padding:16px!important}.lab-partner-order-card>button{width:100%;min-height:44px}.lab-partner-role-mode .content{padding-bottom:90px}.lab-partner-kanban{padding-bottom:24px}}
+
+.admin-config-shell button{min-height:44px}
+@media(max-width:700px){
+ .lab-partner-dialog :is(input,select,textarea),.lab-pricing-settings :is(input,select){font-size:16px}
+ .lab-partner-pricing-table{overflow:visible!important;max-height:none!important}
+ .lab-partner-pricing-table table{display:block!important;width:100%!important;min-width:0!important}
+ .lab-partner-pricing-table thead{display:none}
+ .lab-partner-pricing-table tbody{display:grid;gap:14px}
+ .lab-partner-pricing-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px;border:1px solid var(--border);border-radius:10px;min-width:0}
+ .lab-partner-pricing-table td{display:grid;gap:7px;border:0!important;padding:0!important;min-width:0;white-space:normal}
+ .lab-partner-pricing-table td:first-child,.lab-partner-pricing-table td:last-child{grid-column:1/-1}
+ .lab-partner-pricing-table td[data-label]::before{content:attr(data-label);font-size:12px;color:var(--muted);font-weight:600}
+ .lab-partner-pricing-table td:last-child{display:flex;flex-wrap:wrap;gap:8px}.lab-partner-pricing-table td:last-child::before{display:none}
+ .lab-partner-pricing-table input{width:100%;min-width:0!important;min-height:44px;font-size:16px}
+ .lab-partner-pricing-table td:last-child button{flex:1;min-height:44px}
+}
+.admin-config-shell .admin-section-head h3{color:var(--text)!important;font-size:16px;letter-spacing:normal}
+.admin-config-shell input[type="checkbox"]{width:18px!important;min-width:18px!important;height:18px!important;min-height:18px!important;padding:0!important;accent-color:#a87514}
+.admin-config-shell button:focus-visible{outline:2px solid #b88a37;outline-offset:2px}
+@media(max-width:700px){
+ .lab-partner-pricing-table td.admin-row-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));white-space:normal!important;gap:8px!important}
+ .lab-partner-pricing-table td.admin-row-actions>button{width:100%!important;min-width:0!important;max-width:none!important;height:44px!important;min-height:44px!important;margin:0!important;white-space:normal!important;font-size:12px!important}
+}

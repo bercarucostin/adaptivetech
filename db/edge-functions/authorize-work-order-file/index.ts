@@ -123,6 +123,10 @@ Deno.serve(async (req) => {
         partner_id,
         status,
         locked,
+        archived_at,
+        status_model,
+        status_modelare,
+        status_cer_fin,
         tehnician_model,
         tehnician1_modelare,
         tehnician2_cer_fin
@@ -283,11 +287,13 @@ Deno.serve(async (req) => {
       if (!labPartnerOwnsOrder) {
         return json({ message: "Lab Partner can access files only for its assigned partner." }, 403);
       }
-      if (action === "list" || action === "download" || action === "upload") {
+      if (action === "list" || action === "download") {
         allowed = true;
         message = "Allowed";
-      } else if (orderLocked || orderStatus !== "notstarted") {
-        return json({ message: "Lab Partner file deletion is allowed only while Status = Not Started." }, 403);
+      } else if (orderLocked || orderStatus !== "notstarted" || order.archived_at ||
+        [order.status_model, order.status_modelare, order.status_cer_fin]
+          .some((value) => norm(value ?? "Not Started") !== "notstarted")) {
+        return json({ message: "Lab Partner can change files only before production starts and while the work order is unlocked." }, 403);
       } else {
         allowed = true;
         message = "Allowed";

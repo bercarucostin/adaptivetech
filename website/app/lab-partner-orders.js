@@ -1,5 +1,12 @@
 /* Commercial Lab Partner orders use dedicated RPCs; no clinical fields are sent. */
-const labPartnerUi={types:[],rows:[],editing:0,quote:null,timer:null,request:0,files:[]};
+const labPartnerUi={types:[],rows:[],editing:0,editable:false,quote:null,timer:null,request:0,openRequest:0,files:[]};
+
+function labPartnerApprovalLabel(state){
+  return {pending:'În așteptarea aprobării',approved:'Aprobată',rejected:'Refuzată'}[state]||state||'—';
+}
+function labPartnerCanEdit(order){
+  return (order.can_edit===true||order.canEdit===true)&&!order.locked&&order.status==='Not Started';
+}
 
 function bucharestParts(date){
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Bucharest',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date);
@@ -33,7 +40,7 @@ function labPartnerRowsHtml(){
       <label>Culoare<input data-field="color" maxlength="120" value="${escapeHtml(row.color||'')}" placeholder="Opțional"></label>
       <label>Cantitate<input data-field="quantity" type="number" min="1" max="99999" step="1" required value="${escapeHtml(row.quantity||1)}"></label>
       <label class="lab-partner-processing ${selected?.processing_enabled?'':'hidden'}"><input data-field="processing_requested" type="checkbox" ${row.processing_requested?'checked':''}> Prelucrare</label>
-      <button class="secondary-btn" type="button" data-remove-line="${index}" aria-label="Elimină rândul">×</button>
+      ${labPartnerUi.editable?`<button class="secondary-btn" type="button" data-remove-line="${index}" aria-label="Elimină rândul">×</button>`:''}
     </div>`;
   }).join('');
 }
@@ -78,8 +85,9 @@ async function labPartnerRefreshQuote(){
   try{
     const deadline=bucharestDeadlineIso(document.getElementById('labPartnerDeadline').value);
     labPartnerReadRows();
+    const items=labPartnerUi.rows.map(row=>({...row}));
     const quote=await sbRpc('estimate_lab_partner_work_order_price',{
-      p_lab:await resolveLabOrganizationId(),p_items:labPartnerUi.rows,p_deadline_at:deadline
+      p_lab:await resolveLabOrganizationId(),p_items:items,p_deadline_at:deadline
     });
     if(request!==labPartnerUi.request)return;
     labPartnerUi.quote=quote;
@@ -91,25 +99,25 @@ async function labPartnerRefreshQuote(){
     if(request===labPartnerUi.request)box.textContent=error.message;
   }
 }
-async function labPartnerLoadFiles(orderId){
+async function labPartnerLoadFiles(orderId,openRequest=labPartnerUi.openRequest){
   const host=document.getElementById('labPartnerSavedFiles');
   if(!host||!orderId)return;
   try{
     const result=await callFileAuthorization('list',orderId);
-    host.innerHTML=(result.files||[]).map(file=>`<div>${escapeHtml(file.original_file_name)} <button type="button" data-file-id="${escapeHtml(file.id)}">Descarcă</button>${isLabPartner()?` <button type="button" data-delete-file-id="${escapeHtml(file.id)}">Șterge</button>`:''}</div>`).join('')||'Niciun fișier atașat.';
+    if(openRequest!==labPartnerUi.openRequest)return;
+    host.innerHTML=(result.files||[]).map(file=>`<div class="lab-partner-file"><span>${escapeHtml(file.original_file_name)}</span><button class="secondary-btn" type="button" data-file-id="${escapeHtml(file.id)}">Descarcă</button>${isLabPartner()&&labPartnerUi.editable?` <button class="danger-btn" type="button" data-delete-file-id="${escapeHtml(file.id)}">Șterge</button>`:''}</div>`).join('')||'Niciun fișier atașat.';
     host.querySelectorAll('[data-file-id]').forEach(button=>button.addEventListener('click',async()=>{
       try{const result=await callFileAuthorization('download',orderId,{file_id:button.dataset.fileId});window.open(result.signed_url,'_blank','noopener');}
       catch(error){alert(error.message);}
     }));
     host.querySelectorAll('[data-delete-file-id]').forEach(button=>button.addEventListener('click',async()=>{
       if(!confirm('Ștergi acest fișier?'))return;
-      try{await callFileAuthorization('delete',orderId,{file_id:button.dataset.deleteFileId});await labPartnerLoadFiles(orderId);}
+      try{await callFileAuthorization('delete',orderId,{file_id:button.dataset.deleteFileId});await labPartnerLoadFiles(orderId,openRequest);}
       catch(error){alert(error.message);}
     }));
-  }catch(error){host.textContent=error.message;}
+  }catch(error){if(openRequest===labPartnerUi.openRequest)host.textContent=error.message;}
 }
-async function labPartnerUploadFiles(orderId){
-  const files=[...document.getElementById('labPartnerFiles').files];
+async function labPartnerUploadFiles(orderId,files=[...(document.getElementById('labPartnerFiles')?.files||[])]){
   const failures=[];
   for(const file of files){
     try{
@@ -122,28 +130,33 @@ async function labPartnerUploadFiles(orderId){
   if(failures.length)throw new Error(`Lucrarea #${orderId} a fost salvată, dar unele fișiere nu s-au încărcat:\n${failures.join('\n')}`);
 }
 async function openLabPartnerOrder(orderId=0){
+  const openRequest=++labPartnerUi.openRequest;
+  clearTimeout(labPartnerUi.timer);labPartnerUi.request++;
   labPartnerUi.editing=Number(orderId)||0;
   labPartnerUi.rows=[{work_type:'',color:'',quantity:1,processing_requested:false}];
   let detail=null;
   if(orderId){
     detail=await sbRpc('get_lab_partner_work_order',{p_lab:await resolveLabOrganizationId(),p_order:Number(orderId)});
+    if(openRequest!==labPartnerUi.openRequest)return;
     if(!detail)throw new Error('Lucrarea nu mai este disponibilă.');
     labPartnerUi.rows=detail.items||[];
   }
-  const editable=isLabPartner()&&(!orderId||detail.approval_state==='rejected');
+  const editable=isLabPartner()&&(!orderId||labPartnerCanEdit(detail));
+  labPartnerUi.editable=editable;
   let dialog=document.getElementById('labPartnerOrderDialog');
-  if(!dialog){dialog=document.createElement('dialog');dialog.id='labPartnerOrderDialog';dialog.className='lab-partner-dialog';document.body.appendChild(dialog);}
+  if(!dialog){dialog=document.createElement('dialog');dialog.id='labPartnerOrderDialog';dialog.className='lab-partner-dialog';dialog.setAttribute('aria-labelledby','labPartnerOrderTitle');document.body.appendChild(dialog);dialog.addEventListener('close',()=>{clearTimeout(labPartnerUi.timer);labPartnerUi.request++;});}
   dialog.innerHTML=`<form id="labPartnerForm">
-    <header><h2>${orderId?`Lucrarea #${Number(orderId)}`:'Lucrare nouă'}</h2><button type="button" id="labPartnerClose" aria-label="Închide">×</button></header>
-    ${detail?`<p>Stare aprobare: <strong>${escapeHtml(detail.approval_state)}</strong>${detail.approval_reason?` · motiv: ${escapeHtml(detail.approval_reason)}`:''}</p>`:''}
-    <label>Termen (Europe/Bucharest)<input id="labPartnerDeadline" type="datetime-local" required value="${detail?.deadline_at?bucharestLocalValue(new Date(detail.deadline_at)):bucharestLocalValue(new Date(Date.now()+2*86400000))}"></label>
+    <header><div><p class="lab-partner-eyebrow">Comandă laborator</p><h2 id="labPartnerOrderTitle">${orderId?`Lucrarea #${Number(orderId)}`:'Lucrare nouă'}</h2></div><button class="secondary-btn" type="button" id="labPartnerClose" aria-label="Închide">×</button></header>
+    ${detail?`<div class="lab-partner-order-state"><span class="lab-partner-status">${escapeHtml(uiText(detail.status))}</span><span class="lab-partner-approval ${escapeHtml(detail.approval_state)}">${escapeHtml(labPartnerApprovalLabel(detail.approval_state))}</span>${detail.locked?'<span class="lab-partner-lock">Blocată de laborator</span>':''}</div>${detail.approval_reason?`<p class="lab-partner-notice">Motivul refuzului: ${escapeHtml(detail.approval_reason)}</p>`:''}${isLabPartner()&&!editable?'<p class="lab-partner-notice">Lucrarea poate fi consultată. Editarea este disponibilă doar înainte de începerea producției și cât timp lucrarea este deblocată.</p>':''}`:''}
+    <section class="lab-partner-section"><h3>Detalii comandă</h3><label>Termen de livrare · ora României<input id="labPartnerDeadline" type="datetime-local" required value="${detail?.deadline_at?bucharestLocalValue(new Date(detail.deadline_at)):bucharestLocalValue(new Date(Date.now()+2*86400000))}"></label></section>
+    <section class="lab-partner-section"><h3>Lucrări comandate</h3>
     <div id="labPartnerLineList"></div>
     ${editable?'<button type="button" id="labPartnerAddLine" class="secondary-btn">+ Adaugă lucrare</button>':''}
-    <label>Note<textarea id="labPartnerNote" maxlength="2000" rows="3">${escapeHtml(detail?.items?.[0]?.note||'')}</textarea></label>
-    <section id="labPartnerQuote" aria-live="polite"></section>
-    <label>Fișiere atașate<input id="labPartnerFiles" type="file" multiple accept=".zip,.rar,.stl,.ply,.obj,.pdf,.jpg,.jpeg,.png"></label>
-    <div id="labPartnerSavedFiles"></div>
-    <footer><button type="button" id="labPartnerCancel" class="secondary-btn">Închide</button>${orderId?'<button type="button" id="labPartnerUploadFiles" class="secondary-btn">Încarcă fișiere</button>':''}${editable?`<button type="submit" class="primary-btn">${orderId?'Retrimite spre aprobare':'Trimite spre aprobare'}</button>`:''}</footer>
+    <label>Note<textarea id="labPartnerNote" maxlength="2000" rows="3" placeholder="Instrucțiuni pentru laborator">${escapeHtml(detail?.items?.[0]?.note||'')}</textarea></label></section>
+    <section class="lab-partner-section lab-partner-price-section"><h3>Costul comenzii</h3><div id="labPartnerQuote" aria-live="polite"></div></section>
+    <section class="lab-partner-section"><h3>Fișiere atașate</h3>${editable?'<label>Adaugă fișiere<input id="labPartnerFiles" type="file" multiple accept=".zip,.rar,.stl,.ply,.obj,.pdf,.jpg,.jpeg,.png"></label>':''}<div id="labPartnerSavedFiles"></div></section>
+    ${editable&&detail?.approval_state==='approved'?'<p class="lab-partner-notice">Salvarea modificărilor retrimite comanda spre aprobare.</p>':''}
+    <footer><button type="button" id="labPartnerCancel" class="secondary-btn">Închide</button><div class="lab-partner-dialog-actions">${isManagement()&&detail?.approval_state==='pending'?'<button type="button" class="danger-btn" data-review-decision="reject">Refuză</button><button type="button" class="primary-btn" data-review-decision="approve">Aprobă lucrarea</button>':''}${orderId&&editable?'<button type="button" id="labPartnerUploadFiles" class="secondary-btn">Încarcă fișiere</button>':''}${editable?`<button type="submit" class="primary-btn">${orderId?'Salvează și retrimite':'Trimite spre aprobare'}</button>`:''}</div></footer>
   </form>`;
   labPartnerPaintRows();
   if(!editable)dialog.querySelectorAll('#labPartnerLineList input,#labPartnerLineList select,#labPartnerDeadline,#labPartnerNote').forEach(el=>el.disabled=true);
@@ -153,27 +166,35 @@ async function openLabPartnerOrder(orderId=0){
   document.getElementById('labPartnerDeadline').addEventListener('change',labPartnerScheduleQuote);
   document.getElementById('labPartnerUploadFiles')?.addEventListener('click',async event=>{
     const button=event.currentTarget;button.disabled=true;
-    try{await labPartnerUploadFiles(Number(orderId));document.getElementById('labPartnerFiles').value='';await labPartnerLoadFiles(Number(orderId));}
+    try{await labPartnerUploadFiles(Number(orderId));if(openRequest!==labPartnerUi.openRequest)return;document.getElementById('labPartnerFiles').value='';await labPartnerLoadFiles(Number(orderId),openRequest);}
     catch(error){alert(error.message);}finally{button.disabled=false;}
   });
   for(const id of ['labPartnerClose','labPartnerCancel'])document.getElementById(id).addEventListener('click',()=>dialog.close());
+  dialog.querySelectorAll('[data-review-decision]').forEach(button=>button.addEventListener('click',async()=>{
+    const buttons=[...dialog.querySelectorAll('[data-review-decision]')];buttons.forEach(item=>item.disabled=true);
+    try{if(await reviewExternalOrder(orderId,button.dataset.reviewDecision,detail.submission_revision)&&openRequest===labPartnerUi.openRequest)await openLabPartnerOrder(orderId);}
+    finally{buttons.forEach(item=>item.disabled=false);}
+  }));
   dialog.querySelector('form').addEventListener('submit',async event=>{
     event.preventDefault();
+    if(!editable||openRequest!==labPartnerUi.openRequest)return;
     const button=dialog.querySelector('[type="submit"]');button.disabled=true;
     let savedOrderId=0;
+    const files=[...(document.getElementById('labPartnerFiles')?.files||[])];
     try{
       labPartnerReadRows();
-      const payload={p_lab:await resolveLabOrganizationId(),p_deadline_at:bucharestDeadlineIso(document.getElementById('labPartnerDeadline').value),p_items:labPartnerUi.rows,p_note:document.getElementById('labPartnerNote').value};
-      const id=labPartnerUi.editing
-        ? (await sbRpc('resubmit_lab_partner_work_order',{...payload,p_order:labPartnerUi.editing}),labPartnerUi.editing)
+      const payload={p_deadline_at:bucharestDeadlineIso(document.getElementById('labPartnerDeadline').value),p_items:labPartnerUi.rows.map(row=>({...row})),p_note:document.getElementById('labPartnerNote').value};
+      payload.p_lab=await resolveLabOrganizationId();
+      if(openRequest!==labPartnerUi.openRequest)return;
+      const id=orderId
+        ? (await sbRpc('resubmit_lab_partner_work_order',{...payload,p_order:Number(orderId)}),Number(orderId))
         : Number(await sbRpc('create_lab_partner_work_order',payload));
       savedOrderId=id;
-      labPartnerUi.editing=id;
-      await labPartnerUploadFiles(id);
-      dialog.close();await loadAll(false);
+      await labPartnerUploadFiles(id,files);
+      if(openRequest===labPartnerUi.openRequest)dialog.close();await loadAll(false);
     }catch(error){
       alert(error.message);
-      if(savedOrderId){dialog.close();await loadAll(false);}
+      if(savedOrderId){if(openRequest===labPartnerUi.openRequest)dialog.close();await loadAll(false);}
     }finally{button.disabled=false;}
   });
   dialog.showModal();
@@ -181,17 +202,29 @@ async function openLabPartnerOrder(orderId=0){
   else{
     document.getElementById('labPartnerQuote').innerHTML=`${(detail.price_lines||[]).map(line=>`<div>${escapeHtml(line.contract)} · bază ${money(line.base_subtotal)} · urgență ${line.urgent_percent}% (${money(line.urgency_surcharge)}) · total ${money(line.line_total)}</div>`).join('')}<strong>Total salvat: ${money(detail.final_price)}</strong>`;
   }
-  if(orderId)await labPartnerLoadFiles(orderId);
+  if(orderId)await labPartnerLoadFiles(orderId,openRequest);
 }
 
 function renderLabPartnerOrders(){
   pageTitle.textContent='Lucrările mele';pageSubtitle.textContent='Comenzi comerciale pentru partenerul tău';
   const rows=orders;
-  content.innerHTML=`<div class="card panel"><h3>Lucrări</h3><div class="table-wrap"><table><thead><tr><th>Lucrare</th><th>Termen</th><th>Tipuri</th><th>Stare aprobare</th><th>Total</th><th>Acțiuni</th></tr></thead><tbody>
-  ${rows.map(o=>`<tr><td>#${o.id}</td><td>${escapeHtml(o.deadlineAt?new Date(o.deadlineAt).toLocaleString('ro-RO',{timeZone:'Europe/Bucharest'}):o.deadline)}</td><td>${escapeHtml(o.workType)}</td><td><strong>${escapeHtml(o.approvalState)}</strong>${o.approvalReason?`<br>${escapeHtml(o.approvalReason)}`:''}</td><td>${money(o.finalPrice)}</td><td><button type="button" data-partner-order="${o.id}">${o.approvalState==='rejected'?'Editează și retrimite':'Vezi'}</button></td></tr>`).join('')||'<tr><td colspan="6">Nu ai încă lucrări.</td></tr>'}
-  </tbody></table></div></div>`;
+  content.innerHTML=`<div class="card panel lab-partner-orders"><h3>Lucrări</h3><div class="table-wrap"><table><thead><tr><th>Lucrare</th><th>Termen</th><th>Tipuri</th><th>Status curent</th><th>Aprobare</th><th>Total</th><th>Acțiuni</th></tr></thead><tbody>
+  ${rows.map(o=>`<tr><td>#${o.id}</td><td>${escapeHtml(o.deadlineAt?new Date(o.deadlineAt).toLocaleString('ro-RO',{timeZone:'Europe/Bucharest'}):o.deadline)}</td><td>${escapeHtml(o.workType)}</td><td><span class="lab-partner-status">${escapeHtml(uiText(o.status))}</span>${o.locked?'<small class="lab-partner-lock">Blocată</small>':''}</td><td><span class="lab-partner-approval ${escapeHtml(o.approvalState)}">${escapeHtml(labPartnerApprovalLabel(o.approvalState))}</span>${o.approvalReason?`<br>${escapeHtml(o.approvalReason)}`:''}</td><td>${money(o.finalPrice)}</td><td><button class="secondary-btn" type="button" data-partner-order="${o.id}">${labPartnerCanEdit(o)?'Vezi / Editează':'Vezi'}</button></td></tr>`).join('')||'<tr><td colspan="7">Nu ai încă lucrări.</td></tr>'}
+  </tbody></table></div><div class="lab-partner-order-cards">${rows.map(o=>`<article class="lab-partner-order-card"><header><strong>Lucrarea #${o.id}</strong><span class="lab-partner-status">${escapeHtml(uiText(o.status))}</span></header><p>${escapeHtml(o.workType)}</p><div class="lab-partner-order-meta"><span>Termen</span><strong>${escapeHtml(o.deadlineAt?new Date(o.deadlineAt).toLocaleString('ro-RO',{timeZone:'Europe/Bucharest',dateStyle:'short',timeStyle:'short'}):o.deadline)}</strong><span>Total</span><strong>${money(o.finalPrice)}</strong></div><div class="lab-partner-order-state"><span class="lab-partner-approval ${escapeHtml(o.approvalState)}">${escapeHtml(labPartnerApprovalLabel(o.approvalState))}</span>${o.locked?'<span class="lab-partner-lock">Blocată de laborator</span>':''}</div>${o.approvalReason?`<p class="lab-partner-notice">${escapeHtml(o.approvalReason)}</p>`:''}<button class="secondary-btn" type="button" data-partner-order="${o.id}">${labPartnerCanEdit(o)?'Vezi / Editează':'Vezi lucrarea'}</button></article>`).join('')||'<p class="lab-partner-column-empty">Nu ai încă lucrări.</p>'}</div></div>`;
   content.querySelectorAll('[data-partner-order]').forEach(button=>button.addEventListener('click',()=>openLabPartnerOrder(Number(button.dataset.partnerOrder)).catch(error=>alert(error.message))));
 }
+
+function renderLabPartnerProduction(){
+  pageTitle.textContent='Dashboard lucrări';pageSubtitle.textContent='Urmărește stadiul comenzilor trimise laboratorului';
+  const stages=[...new Set([...statuses,...orders.map(order=>order.status)])];
+  content.innerHTML=`<div class="lab-partner-dashboard-summary"><strong>${orders.length} lucrări</strong><span>Statusurile sunt actualizate de laborator.</span></div><div class="lab-partner-kanban">${stages.map(stage=>{
+    const rows=orders.filter(order=>order.status===stage).sort((a,b)=>String(a.deadlineAt||a.deadline).localeCompare(String(b.deadlineAt||b.deadline)));
+    return `<section class="lab-partner-kanban-column" data-partner-status="${escapeHtml(stage)}"><header><h3>${escapeHtml(uiText(stage))}</h3><span>${rows.length}</span></header><div class="lab-partner-kanban-cards">${rows.map(order=>`<button type="button" class="lab-partner-kanban-card" data-partner-order="${order.id}"><span class="lab-partner-card-heading"><strong>#${order.id}</strong>${order.locked?'<small class="lab-partner-lock">Blocată</small>':''}</span><span>${escapeHtml(order.workType)}</span><span class="lab-partner-card-deadline">Termen: ${escapeHtml(order.deadlineAt?new Date(order.deadlineAt).toLocaleString('ro-RO',{timeZone:'Europe/Bucharest'}):order.deadline)}</span><span class="lab-partner-approval ${escapeHtml(order.approvalState)}">${escapeHtml(labPartnerApprovalLabel(order.approvalState))}</span><strong>${money(order.finalPrice)}</strong></button>`).join('')||'<p class="lab-partner-column-empty">Nicio lucrare</p>'}</div></section>`;
+  }).join('')}</div>`;
+  content.querySelectorAll('[data-partner-order]').forEach(button=>button.addEventListener('click',()=>openLabPartnerOrder(Number(button.dataset.partnerOrder)).catch(error=>alert(error.message))));
+}
+const previousLabRenderProduction=renderProduction;
+renderProduction=function(...args){return isLabPartner()?renderLabPartnerProduction():previousLabRenderProduction(...args);};
 
 const previousLabLoadAll=loadAll;
 loadAll=async function(show=true,options={}){
@@ -207,9 +240,9 @@ loadAll=async function(show=true,options={}){
       labPartnerUi.types=(reference.work_types||[]).filter(type=>type.active);
       orders=(rows||[]).map(row=>({id:Number(row.id),deadline:row.deadline,deadlineAt:row.deadline_at,
         workType:(row.items||[]).map(item=>item.work_type).join(' / '),approvalState:row.approval_state,
-        approvalReason:row.approval_reason,finalPrice:Number(row.final_price),status:row.status}));
+        approvalReason:row.approval_reason,submissionRevision:row.submission_revision,finalPrice:Number(row.final_price),status:row.status,locked:Boolean(row.locked),canEdit:row.can_edit===true}));
       workTypes=labPartnerUi.types.map(type=>type.tip_lucrare);
-      currentView='workorders';
+      if(!['workorders','production'].includes(currentView))currentView='workorders';
       if(renderRequested)render();
       return;
     }finally{if(show)hideLoading();}
@@ -217,7 +250,7 @@ loadAll=async function(show=true,options={}){
   const result=await previousLabLoadAll(show,{...options,renderUI:false});
   if((isManagement()||isDoctor())&&orders.length){
     const summary=await sbRpc('get_work_order_approval_summary',{p_lab:await resolveLabOrganizationId(),p_orders:orders.map(order=>order.id)});
-    for(const order of orders){const row=summary?.[String(order.id)];if(row){order.approvalState=row.state;order.approvalReason=row.reason;order.approvalReviewedAt=row.reviewed_at;order.deadlineAt=row.deadline_at;order.orderOrigin=row.origin;}}
+    for(const order of orders){const row=summary?.[String(order.id)];if(row){order.approvalState=row.state;order.approvalReason=row.reason;order.approvalReviewedAt=row.reviewed_at;order.deadlineAt=row.deadline_at;order.orderOrigin=row.origin;order.submissionRevision=row.submission_revision;}}
   }
   if(renderRequested)render();
   return result;
@@ -236,15 +269,17 @@ editOrder=function(id){
 };
 window.editOrder=editOrder;
 
-async function reviewExternalOrder(orderId,decision){
+async function reviewExternalOrder(orderId,decision,expectedRevision=null){
   if(!isManagement())return;
   const reason=decision==='reject'?window.prompt('Motivul refuzului (opțional):',''):null;
   if(decision==='reject'&&reason===null)return;
   try{
     await sbRpc('review_external_work_order',{p_lab:await resolveLabOrganizationId(),
-      p_order:Number(orderId),p_decision:decision,p_reason:reason});
+      p_order:Number(orderId),p_decision:decision,p_reason:reason,
+      p_expected_revision:expectedRevision??orders.find(order=>Number(order.id)===Number(orderId))?.submissionRevision??null});
     await loadAll(false);
-  }catch(error){alert(`Revizuirea a eșuat: ${error.message}`);}
+    return true;
+  }catch(error){alert(`Revizuirea a eșuat: ${error.message}`);return false;}
 }
 window.reviewExternalOrder=reviewExternalOrder;
 
@@ -374,18 +409,19 @@ renderAdminConfig=function(...args){
   }
   if(adminConfigTab==='types'){
     const create=document.querySelector('.admin-worktype-add');
-    create?.insertAdjacentHTML('beforeend','<label><input id="newWorkTypeProcessing" type="checkbox"> Prelucrare disponibilă</label>');
+    create?.insertAdjacentHTML('beforeend','<label class="admin-checkbox-label"><input id="newWorkTypeProcessing" type="checkbox"> Prelucrare disponibilă</label>');
     const rows=[...document.querySelectorAll('.admin-config-table tbody tr')];
     rows.forEach((tr,index)=>{
       const record=adminConfigData.workTypes.filter(row=>!adminConfigSearch||normalize([row.Tip_Lucrare,row.Active].join(' ')).includes(normalize(adminConfigSearch)))
         .sort((a,b)=>String(a.Tip_Lucrare).localeCompare(String(b.Tip_Lucrare)))[index];
-      if(record)tr.lastElementChild?.insertAdjacentHTML('beforebegin',`<td><label><input id="workTypeProcessing${record.ID}" type="checkbox" ${record.Processing_Enabled?'checked':''}> Prelucrare</label></td>`);
+      if(record)tr.lastElementChild?.insertAdjacentHTML('beforebegin',`<td><label class="admin-checkbox-label"><input id="workTypeProcessing${record.ID}" type="checkbox" ${record.Processing_Enabled?'checked':''}> Prelucrare</label></td>`);
     });
     document.querySelector('.admin-config-table thead tr')?.lastElementChild?.insertAdjacentHTML('beforebegin','<th>Prelucrare</th>');
   }
   if(adminConfigTab==='prices'){
     const detail=document.querySelector('.admin-contract-detail');
     if(!detail)return result;
+    detail.querySelector('.admin-config-table')?.classList.add('lab-partner-pricing-table');
     const contracts=adminConfigData.contracts||[];
     detail.insertAdjacentHTML('afterbegin',`<div class="lab-pricing-settings card">
       <label>Contract implicit<select id="pricingDefaultContract">${optionHtml(contracts,labPricingAdmin.settings?.default_contract||'General',false)}</select></label>
@@ -404,7 +440,9 @@ renderAdminConfig=function(...args){
     const visible=adminConfigData.prices.filter(row=>row.Contract===selectedAdminContract&&(!adminConfigSearch||normalize([row.Contract,row.Tip_Lucrare,row.Pret].join(' ')).includes(normalize(adminConfigSearch)))).sort((a,b)=>String(a.Tip_Lucrare).localeCompare(String(b.Tip_Lucrare)));
     detail.querySelectorAll('tbody tr').forEach((tr,index)=>{
       const row=visible[index];if(!row)return;
-      tr.lastElementChild?.insertAdjacentHTML('beforebegin',`<td><input id="priceUrgent${row.ID}" type="number" min="0" step="0.01" value="${row.Urgent_Percent_Override??''}" placeholder="Contract"></td><td><input id="priceProcessing${row.ID}" type="number" min="0" step="0.01" value="${row.Processing_Amount_Override??''}" placeholder="Contract"></td>`);
+      tr.children[0]?.setAttribute('data-label','Tip lucrare');tr.children[1]?.setAttribute('data-label','Tarif');
+      tr.lastElementChild?.setAttribute('data-label','Acțiuni');
+      tr.lastElementChild?.insertAdjacentHTML('beforebegin',`<td data-label="Urgență (%)"><input id="priceUrgent${row.ID}" type="number" min="0" step="0.01" value="${row.Urgent_Percent_Override??''}" placeholder="Contract"></td><td data-label="Prelucrare"><input id="priceProcessing${row.ID}" type="number" min="0" step="0.01" value="${row.Processing_Amount_Override??''}" placeholder="Contract"></td>`);
     });
     detail.querySelector('thead tr')?.lastElementChild?.insertAdjacentHTML('beforebegin','<th>Urgență %</th><th>Prelucrare</th>');
   }

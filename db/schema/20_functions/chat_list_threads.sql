@@ -60,7 +60,7 @@ AS $function$
         join public.organizations o on o.id=m.organization_id
         where m.user_id=other_p.user_id
           and m.status='active'
-          and lower(m.role) in ('admin','manager','technician','doctor')
+          and lower(m.role) in ('admin','manager','technician','doctor','lab partner','lab_partner')
         order by
             case lower(m.role)
                 when 'admin' then 1

@@ -675,6 +675,7 @@ async function login(identifier,password){
 }
 
 function applyRoleUI(){
+  document.body.classList.toggle('lab-partner-role-mode',isLabPartner());
   userName.textContent=auth.user.Name||auth.user.User_ID;
   const nickname=String(auth?.supabaseProfile?.username||"").trim();
   userRole.textContent=nickname?`${auth.user.Role} · @${nickname}`:auth.user.Role;
@@ -720,6 +721,11 @@ function applyRoleUI(){
     aiPanel?.classList.remove("mobile-open");
   }
 
+  if(isLabPartner()){
+    document.querySelectorAll('.nav-item,.mobile-nav-item[data-view]').forEach(el=>{
+      el.classList.toggle('hidden',!['workorders','production'].includes(el.dataset.view));
+    });
+  }
   const visibleNav=[...document.querySelectorAll(".nav-item:not(.hidden)")];
   if(!visibleNav.some(x=>x.dataset.view===currentView)){
     currentView=visibleNav[0]?.dataset.view||"workorders";
@@ -1213,12 +1219,14 @@ function updateTopActionsForView(){
   const orderView=["workorders","production","patients"].includes(currentView);
   newOrderBtn?.classList.toggle("hidden",!orderView||!(can("Can_Create_Work_Orders")||isTechnician()));
   const usesOrders=["workorders","production","partners","patients","technicians"].includes(currentView);
-  loadOlderBtn?.classList.toggle("hidden",!usesOrders);
-  toggleOldBtn?.classList.toggle("hidden",!usesOrders);
+  loadOlderBtn?.classList.toggle("hidden",!usesOrders||isLabPartner());
+  toggleOldBtn?.classList.toggle("hidden",!usesOrders||isLabPartner());
   datasetScope?.classList.toggle("hidden",!["partners","technicians"].includes(currentView));
 }
 
 function render(){
+  if(isLabPartner()&&!['workorders','production'].includes(currentView))currentView='workorders';
+  document.body.classList.toggle('admin-configuration-view',isAdmin()&&currentView==='adminconfig');
   if(currentView!=="adminconfig"){storageCleanupMount?.destroy();storageCleanupMount=null;}
   if(currentView!=="production")document.body.classList.remove("dashboard-production-maximized");
   document.querySelectorAll(".nav-item,.mobile-nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));

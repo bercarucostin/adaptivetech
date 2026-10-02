@@ -57,7 +57,7 @@ begin
             from public.organization_memberships m
             where m.user_id=v_member
               and m.status='active'
-              and lower(m.role) in ('admin','manager','technician','doctor')
+              and lower(m.role) in ('admin','manager','technician','doctor','lab partner','lab_partner')
         ) then
             raise exception 'One selected account is not eligible for chat';
         end if;

@@ -25,6 +25,26 @@ begin
         return false;
     end if;
 
+    -- Lab Partner: only active management of the laboratory that owns its link.
+    if exists (
+        select 1 from public.organization_memberships m
+        where m.user_id=p_from_user and m.status='active'
+          and lower(trim(m.role)) in ('lab partner','lab_partner')
+    ) then
+        return exists (
+            select 1 from public.organization_memberships me
+            join public.lab_partner_user_links link
+              on link.lab_organization_id=me.organization_id and link.user_id=me.user_id
+            join public.lab_partners partner
+              on partner.id=link.partner_id and partner.lab_organization_id=link.lab_organization_id and partner.active
+            join public.organization_memberships other_m
+              on other_m.organization_id=me.organization_id and other_m.user_id=p_other_user
+            where me.user_id=p_from_user and me.status='active'
+              and lower(trim(me.role)) in ('lab partner','lab_partner')
+              and other_m.status='active' and lower(trim(other_m.role)) in ('admin','manager')
+        );
+    end if;
+
     -- Admin / Manager can initiate broadly. Pairwise compatibility below still
     -- protects the stricter rules of the recipient.
     if exists (
@@ -39,7 +59,7 @@ begin
             from public.organization_memberships m
             where m.user_id=p_other_user
               and m.status='active'
-              and lower(m.role) in ('admin','manager','technician','doctor')
+              and lower(m.role) in ('admin','manager','technician','doctor','lab partner','lab_partner')
         );
     end if;
 

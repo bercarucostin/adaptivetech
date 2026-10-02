@@ -54,6 +54,7 @@ lines.push('', '\\echo == 50 storage buckets ==', '\\i db/schema/50_storage.sql'
 lines.push('', '\\echo == 60 per-tooth work order cutover ==', '\\i db/schema/60_per_tooth_work_order_cutover.sql');
 lines.push('', '\\echo == 70 email notifications ==', '\\i db/schema/70_email_notifications.sql');
 lines.push('', '\\echo == 80 Lab Partner orders ==', '\\i db/migrations/20261001_lab_partner_orders.sql');
+lines.push('', '\\echo == 81 Lab Partner portal ==', '\\i db/migrations/20261002_lab_partner_portal.sql');
 lines.push('', 'commit;', '');
 
 const content = lines.join('\n');

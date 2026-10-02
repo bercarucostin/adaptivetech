@@ -21,6 +21,10 @@ begin
         raise exception 'Conversation access denied';
     end if;
 
+    if not public.chat_can_send_in_thread(p_thread_id) then
+        raise exception 'Conversation is no longer permitted under the current communication rules';
+    end if;
+
     if jsonb_typeof(coalesce(p_attachments,'[]'::jsonb)) <> 'array' then
         raise exception 'Invalid attachments payload';
     end if;

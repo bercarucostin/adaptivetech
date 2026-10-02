@@ -87,6 +87,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/can_access_work_order.sql
 \i db/schema/20_functions/chat_can_message.sql
 \i db/schema/20_functions/chat_can_message_as.sql
+\i db/schema/20_functions/chat_can_send_in_thread.sql
 \i db/schema/20_functions/chat_cleanup_preview.sql
 \i db/schema/20_functions/chat_clear_older_than_30_days.sql
 \i db/schema/20_functions/chat_create_group.sql
@@ -210,6 +211,7 @@ set local check_function_bodies = off;
 \i db/schema/30_policies/31_lab_partners.sql
 \i db/schema/30_policies/32_work_order_partner_catalog.sql
 \i db/schema/30_policies/33_admin_cleanup.sql
+\i db/schema/30_policies/34_chat_current_communication.sql
 
 \echo == 40 grants ==
 \i db/schema/40_grants.sql
@@ -225,5 +227,8 @@ set local check_function_bodies = off;
 
 \echo == 80 Lab Partner orders ==
 \i db/migrations/20261001_lab_partner_orders.sql
+
+\echo == 81 Lab Partner portal ==
+\i db/migrations/20261002_lab_partner_portal.sql
 
 commit;
