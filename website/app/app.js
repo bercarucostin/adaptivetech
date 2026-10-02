@@ -3706,6 +3706,7 @@ function buildCaseReportFromOrderForm(){
     partner:String(partner.value||"").trim(),
     workType:scope.work_type_summary,
     deadline:String(dueDate.value||"").trim(),
+    deadlineAt:dueDate.value&&$("dueTime")?.value?bucharestDeadlineIso(`${dueDate.value}T${$("dueTime").value}`):null,
     receptionDate:String(receptionDate.value||"").trim(),
     status:String(status.value||"Not Started"),
     elements:scope.element_count,
@@ -3836,7 +3837,7 @@ function renderPhysicalCaseSheet(order,draft,qrMarkup="",reportWindow=null){
       <div class="case-meta">
         <div class="meta-item"><span>Pacient</span><strong>${escapeHtml(order.patient)||"—"}</strong></div>
         <div class="meta-item"><span>Partener</span><strong>${escapeHtml(order.partner)||"—"}</strong></div>
-        <div class="meta-item"><span>Dată</span><strong>${fmtDate(order.deadline)}</strong></div>
+        <div class="meta-item"><span>Termen de livrare</span><strong>${order.deadlineAt&&!Number.isNaN(new Date(order.deadlineAt).getTime())?escapeHtml(new Date(order.deadlineAt).toLocaleString("ro-RO",{timeZone:"Europe/Bucharest",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})):fmtDate(order.deadline)}</strong></div>
       </div>
       ${qrMarkup}
     </div>
@@ -4669,7 +4670,7 @@ function renderAdminConfig(){
     body='<section id="storageCleanupRoot" class="storage-cleanup-root"></section>';
   }else if(adminConfigTab==="partners"){
     const rows=partnerCatalog.filter(row=>!q||normalize(row.name).includes(q));
-    body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Parteneri</h3><p>Numele disponibile în formularul de lucrare. Dezactivarea păstrează istoricul.</p></div><span class="table-count">${rows.length} parteneri</span></div><div class="admin-create-card compact"><div class="admin-add-grid"><label>Nume partener<input id="newPartnerName" maxlength="180" placeholder="Numele partenerului"></label><button class="primary-btn" type="button" onclick="adminCreatePartner()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Nume partener</th><th>Stare</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${row.active?"Activ":"Inactiv"}</td><td><button class="${row.active?"danger-btn":"edit-btn"}" type="button" onclick="adminTogglePartner('${escapeHtml(row.id)}')">${row.active?"Dezactivează":"Activează"}</button></td></tr>`).join(""):'<tr><td colspan="3">Nu există parteneri. Adaugă primul nume pentru a crea lucrări.</td></tr>'}</tbody></table></div></section>`;
+    body=`<section class="card panel admin-config-section"><div class="admin-section-head"><div><h3>Parteneri</h3><p>Numele disponibile în formularul de lucrare. Lucrările existente se păstrează la dezactivare sau ștergere.</p></div><span class="table-count">${rows.length} parteneri</span></div><div class="admin-create-card compact"><div class="admin-add-grid"><label>Nume partener<input id="newPartnerName" maxlength="180" placeholder="Numele partenerului"></label><button class="primary-btn" type="button" onclick="adminCreatePartner()">+ Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Nume partener</th><th>Stare</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${row.active?"Activ":"Inactiv"}</td><td><button class="${row.active?"danger-btn":"edit-btn"}" type="button" onclick="adminTogglePartner('${escapeHtml(row.id)}')">${row.active?"Dezactivează":"Activează"}</button><button class="danger-btn" type="button" onclick="adminDeletePartner('${escapeHtml(row.id)}')">Șterge</button></td></tr>`).join(""):'<tr><td colspan="3">Nu există parteneri. Adaugă primul nume pentru a crea lucrări.</td></tr>'}</tbody></table></div></section>`;
   }else if(adminConfigTab==="prices"){
     const rows=allPrices.filter(r=>String(r.Contract??"")===selectedAdminContract&&(!q||normalize([r.Contract,r.Tip_Lucrare,r.Pret].join(" ")).includes(q)));
     body=`<div class="admin-contract-workspace"><aside class="admin-contract-list"><div class="admin-pane-title"><strong>Contracte</strong><span>${contracts.length}</span></div><div class="admin-contract-items">${visibleContracts.length?visibleContracts.map(c=>`<button type="button" class="${c===selectedAdminContract?"active":""}" data-admin-contract="${escapeHtml(c)}"><span>${escapeHtml(c)}</span><small>${allPrices.filter(r=>String(r.Contract??"")===c).length} prețuri</small></button>`).join(""):'<div class="admin-empty-small">Niciun contract</div>'}</div></aside><section class="admin-contract-detail"><div class="admin-section-head"><div><h3>${escapeHtml(selectedAdminContract||"Contract nou")}</h3><p>Selectează un contract în stânga; modifică doar rândul de care ai nevoie.</p></div>${selectedAdminContract?`<div class="admin-group-actions"><button class="secondary-btn admin-duplicate-group-btn" type="button" onclick="adminDuplicateSelectedContract()">Duplică contractul</button><button class="danger-btn" type="button" onclick="adminDeleteSelectedContract()">Șterge contract</button></div>`:""}</div><div class="admin-create-card compact"><div class="admin-create-title">+ Adaugă preț</div><div class="admin-add-grid"><label>Contract ${adminInput("newPriceContract",selectedAdminContract)}</label><label>Tip lucrare<input id="newPriceWorkType" list="adminWorkTypeList" placeholder="Tip lucrare"></label><label>Tarif ${adminInput("newPriceValue","0","number",'min="0" step="0.01"')}</label><button class="primary-btn" type="button" onclick="adminCreatePrice()">Adaugă</button></div></div><div class="table-wrap admin-config-table"><table><thead><tr><th>Tip lucrare</th><th>Tarif</th><th>Acțiuni</th></tr></thead><tbody>${rows.length?rows.map(r=>{const id=Number(r.ID);return `<tr><td><input id="priceWorkType${id}" list="adminWorkTypeList" value="${escapeHtml(r.Tip_Lucrare??"")}"><input id="priceContract${id}" type="hidden" value="${escapeHtml(r.Contract??"")}"></td><td>${adminInput(`priceValue${id}`,r.Pret,"number",'min="0" step="0.01"')}</td><td class="admin-row-actions"><button class="edit-btn" type="button" onclick="adminSavePrice(${id})">Salvează</button><button class="danger-btn" type="button" onclick="adminDeletePrice(${id})">Șterge</button></td></tr>`;}).join(""):'<tr><td colspan="3">Nu există prețuri pentru contractul selectat.</td></tr>'}</tbody></table></div></section></div>`;
@@ -5176,6 +5177,14 @@ async function adminTogglePartner(id){
   try{
     await adminConfigRequest("partner","update",{ID:row.id,Active:!row.active});
   }catch(err){alert(`Nu am putut actualiza partenerul: ${err.message}`);}
+}
+
+async function adminDeletePartner(id){
+  const row=partnerCatalog.find(item=>item.id===String(id));
+  if(!row)return;
+  if(!confirm(`Ștergi partenerul/laboratorul "${row.name}"?\n\nLucrările existente și istoricul lor se păstrează. Conturile Lab Partner asociate pierd accesul la aceste lucrări. Acțiunea este permanentă.`))return;
+  try{await adminConfigRequest("partner","delete",{ID:row.id});}
+  catch(err){alert(`Nu am putut șterge partenerul: ${err.message}`);}
 }
 
 async function adminCreatePrice(){
@@ -6334,6 +6343,7 @@ function setModalRoleMode(){
     if(doctor)el.classList.remove("hidden");
   });
 
+  $("manualSupplementFields")?.classList.toggle("hidden",!isManagement()||Number(orderId.value)<=0);
   if(status)status.disabled=doctor;
   if(partner)partner.disabled=doctor;
 
@@ -6381,6 +6391,9 @@ function setModalRoleMode(){
 }
 
 function resetForm(){
+  manualSupplementDirty=false;lastToothPriceResult=null;
+  if($("manualSupplementAmount"))$("manualSupplementAmount").value="0";
+  if($("manualSupplementReason"))$("manualSupplementReason").value="";
   if(!orderForm) throw new Error("Work order form is missing.");
   orderForm.reset();
   // V18.5: fully reset role-specific modal state. V18.4 left the
@@ -7482,7 +7495,29 @@ loadAll=async function(show=true,{renderUI=true}={}){
 let toothPriceEstimateTimer=null;
 let toothPriceEstimateRequest=0;
 
+let manualSupplementDirty=false;
+let lastToothPriceResult=null;
+function readManualSupplementFields(amountId="manualSupplementAmount",reasonId="manualSupplementReason"){
+  const amount=Number($(amountId)?.value||0);
+  const reason=String($(reasonId)?.value||"").trim();
+  if(!Number.isFinite(amount)||amount<0||amount>9999999999.99)throw new Error("Suplimentul trebuie să fie o sumă validă, mai mare sau egală cu zero.");
+  if(amount>0&&!reason)throw new Error("Justificarea suplimentului este obligatorie.");
+  if(reason.length>1000)throw new Error("Justificarea poate avea cel mult 1000 de caractere.");
+  return {amount:Math.round((amount+Number.EPSILON)*100)/100,reason:amount>0?reason:""};
+}
+function manualSupplementChanged(){
+  manualSupplementDirty=true;
+  if(lastToothPriceResult)renderToothPriceBreakdown(lastToothPriceResult);
+}
 function renderToothPriceBreakdown(result={}){
+  lastToothPriceResult=result;
+  if(isManagement()&&result.saved&&!manualSupplementDirty){
+    if($("manualSupplementAmount"))$("manualSupplementAmount").value=num(result.manual_supplement);
+    if($("manualSupplementReason"))$("manualSupplementReason").value=result.manual_supplement_reason||"";
+  }
+  const savedSupplement=num(result.manual_supplement??0);
+  const supplement=isManagement()?Math.max(0,num($("manualSupplementAmount")?.value||0)):savedSupplement;
+  const supplementReason=isManagement()?String($("manualSupplementReason")?.value||""):String(result.manual_supplement_reason||"");
   const box=$("priceBreakdown");
   const lines=(Array.isArray(result.lines)?result.lines:[]).map(line=>({
     workType:String(line?.work_type??line?.workType??"—"),
@@ -7497,7 +7532,7 @@ function renderToothPriceBreakdown(result={}){
     matched:Boolean(line?.matched)
   }));
   const list=num(result.list_price);
-  const total=num(result.final_price);
+  const total=Math.round((num(result.final_price)-savedSupplement+supplement)*100)/100;
   const appliedDiscount=Math.max(0,Math.min(100,num(result.discount)));
   if(box){
     box.innerHTML=lines.length?`
@@ -7517,6 +7552,7 @@ function renderToothPriceBreakdown(result={}){
           <tfoot>
             ${result.saved||appliedDiscount?`<tr><td colspan="3">Total înainte de discount</td><td>${money(list)}</td></tr>`:""}
             ${appliedDiscount?`<tr><td colspan="3">Discount</td><td>${appliedDiscount}%</td></tr>`:""}
+            ${supplement?`<tr><td colspan="3">Supliment manual · ${escapeHtml(supplementReason)}</td><td>+${money(supplement)}</td></tr>`:""}
             <tr class="price-breakdown-total"><td colspan="3">Total</td><td>${money(total)}</td></tr>
           </tfoot>
         </table>
@@ -7746,7 +7782,11 @@ async function saveManagementWorkOrderSupabase(id,fields,settlements={}){
         p_case:caseDraftPayload(orderCaseDraft),
         p_requested_contract:String(fields.Contract||"General")
       };
-      if(id)return await sbRpc("update_management_work_order_v188",{...payload,p_work_order_id:Number(id)});
+      if(id){
+        const supplement=manualSupplementDirty?readManualSupplementFields():{amount:null,reason:null};
+        return await sbRpc("update_management_work_order_with_supplement",{...payload,p_work_order_id:Number(id),
+          p_manual_supplement:supplement.amount,p_manual_supplement_reason:supplement.reason||null});
+      }
       delete payload.p_model_settlement;
       delete payload.p_modelare_settlement;
       delete payload.p_cer_fin_settlement;
@@ -8004,6 +8044,9 @@ async function supabaseAdminMutation(entity,action,data={}){
       const {error}=await supabaseClient.from("lab_partners").insert({lab_organization_id:labId,name,active:true});
       if(error)throw new Error(error.code==="23505"?"Acest partener există deja.":error.message);
       return;
+    }
+    if(action==="delete"){
+      return await sbRpc("delete_lab_partner",{p_lab:labId,p_partner:String(data.ID)});
     }
     if(action==="update"){
       const current=partnerCatalog.find(row=>row.id===String(data.ID));

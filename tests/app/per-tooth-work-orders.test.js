@@ -94,7 +94,7 @@ test('management create and update share the complete item-aware payload',()=>{
   const helper=source.slice(source.indexOf('async function saveManagementWorkOrderSupabase'),source.indexOf('async function handleSupabaseOrderSubmit'));
   for(const key of ['p_items','p_case','p_status_model','p_paid_model','p_model_not_applicable','p_locked'])assert.match(helper,new RegExp(key+':'));
   assert.match(helper,/sbRpc\("create_management_work_order",payload\)/);
-  assert.match(helper,/sbRpc\("update_management_work_order_v188",\{\.\.\.payload,p_work_order_id:/);
+  assert.match(helper,/sbRpc\("update_management_work_order_with_supplement",\{\.\.\.payload,p_work_order_id:/);
 });
 
 test('read models use server-derived scope fields and frozen aggregate totals',()=>{
@@ -178,7 +178,7 @@ test('saved prices render billing units, frozen aggregate totals, and a separate
   const labels={per_tooth:'Per dinte',per_arch:'Per arcadă',per_piece:'Per piesă'};
   const normalizeMode=value=>String(value||'per_tooth');
   const renderer=Function('$','num','money','escapeHtml','isManagement','listPrice','finalPrice','priceHint','setFormContractValue','normalizeBillingMode','billingModeLabel','billingScopeLabel',
-    `return (${namedFunction('renderToothPriceBreakdown')})`)(()=>box,Number,v=>String(v),String,()=>true,list,final,hint,()=>{},normalizeMode,value=>labels[normalizeMode(value)],scope=>({'arch:upper':'Arcada superioară','arch:lower':'Arcada inferioară',piece:'Piesă'}[scope]||`Dinte ${String(scope).slice(6)}`));
+    `let manualSupplementDirty=false,lastToothPriceResult=null;return (${namedFunction('renderToothPriceBreakdown')})`)(id=>id==='priceBreakdown'?box:null,Number,v=>String(v),String,()=>true,list,final,hint,()=>{},normalizeMode,value=>labels[normalizeMode(value)],scope=>({'arch:upper':'Arcada superioară','arch:lower':'Arcada inferioară',piece:'Piesă'}[scope]||`Dinte ${String(scope).slice(6)}`));
   renderer({saved:true,lines:[
     {work_type:'Crown',billing_mode:'per_arch',billing_scope:'arch:upper',quantity:1,unit_price:100,subtotal:100,contract:'Frozen',matched:true},
     {work_type:'Bridge',billing_mode:'per_piece',billing_scope:'piece',quantity:1,unit_price:250,subtotal:250,contract:'Frozen',matched:true}

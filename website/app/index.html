@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flowrise Dental Studio</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="assets/flowrise-tooth.svg?v=2" />
-  <link rel="stylesheet" href="styles.css?v=18.54" />
+  <link rel="stylesheet" href="styles.css?v=18.55" />
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -448,6 +448,12 @@
                 <input id="listPrice" readonly tabindex="-1" />
                 <input id="finalPrice" readonly tabindex="-1" />
               </div>
+              <div id="manualSupplementFields" class="manual-supplement-fields management-field hidden">
+                <h4>Supliment manual</h4>
+                <label>Sumă suplimentară (RON)<input id="manualSupplementAmount" type="number" min="0" max="9999999999.99" step="0.01" value="0" oninput="manualSupplementChanged()"></label>
+                <label>Justificare<textarea id="manualSupplementReason" maxlength="1000" rows="2" placeholder="Ex.: transport" oninput="manualSupplementChanged()"></textarea></label>
+                <small>Se adaugă după discount. Pentru eliminare, setează suma la 0.</small>
+              </div>
               <div id="priceHint" class="price-hint"></div>
             </div>
           </section>
@@ -525,8 +531,8 @@
   <script src="spreadsheet-import.js?v=1"></script>
   <script src="spreadsheet-ui.js?v=1"></script>
   <script src="storage-cleanup.js?v=1"></script>
-  <script src="app.js?v=18.54"></script>
-  <script src="lab-partner-orders.js?v=2"></script>
+  <script src="app.js?v=18.55"></script>
+  <script src="lab-partner-orders.js?v=3"></script>
   <script src="email-notifications.js?v=18.47"></script>
 </body>
 </html>

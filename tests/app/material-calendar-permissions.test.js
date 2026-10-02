@@ -25,7 +25,7 @@ test('AI preview state is persisted and submitted with a stable client request i
 });
 
 test('management Work Order writes use snapshot-aware RPCs',()=>{
-  assert.match(source,/sbRpc\("update_management_work_order_v188"/);
+  assert.match(source,/sbRpc\("update_management_work_order_with_supplement"/);
   assert.match(source,/sbRpc\("update_management_work_order_stage_field"/);
   assert.doesNotMatch(source,/\.from\("lab_work_orders"\)\.update/);
   assert.match(source,/create_management_work_order/);
@@ -33,4 +33,7 @@ test('management Work Order writes use snapshot-aware RPCs',()=>{
   assert.match(source,/p_items:currentOrderScope\(\{validate:true\}\)\.items/);
   assert.match(source,/OUTSTANDING_ASSIGNMENT/);
   assert.match(source,/p_model_settlement/);
+  const wrapper=fs.readFileSync('db/schema/20_functions/update_management_work_order_with_supplement.sql','utf8');
+  assert.match(wrapper,/public\.update_management_work_order_v188\(/);
+  assert.match(wrapper,/public\.set_work_order_manual_supplement\(/);
 });

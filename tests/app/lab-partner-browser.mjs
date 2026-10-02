@@ -45,6 +45,13 @@ try{
         if(name==='estimate_lab_partner_work_order_price')return {urgent:false,urgent_window_hours:24,final_price:450,lines:[{work_type:'Coroană zirconiu',quantity:2,contract:'General',base_subtotal:400,processing_requested:true,processing_subtotal:50,urgent_percent:0,line_total:450}]};
         if(name==='resubmit_lab_partner_work_order'){const order=fixtureOrders.find(order=>order.id===args.p_order);order.approval_state='pending';order.submission_revision++;return true;}
         if(name==='review_external_work_order'){const order=fixtureOrders.find(order=>order.id===args.p_order);if(args.p_expected_revision!==order.submission_revision)throw new Error('Unseen submission');order.approval_state=args.p_decision==='approve'?'approved':'rejected';order.approval_reason=args.p_reason;return true;}
+        if(name==='set_work_order_manual_supplement'){
+          const order=fixtureOrders.find(order=>order.id===args.p_order);
+          order.final_price=Number(order.final_price)-Number(order.manual_supplement||0)+args.p_amount;
+          order.manual_supplement=args.p_amount;order.manual_supplement_reason=args.p_reason;return true;
+        }
+        if(name==='update_management_work_order_with_supplement')return true;
+        if(name==='delete_lab_partner'){partnerCatalog=partnerCatalog.filter(row=>row.id!==args.p_partner);return true;}
         if(name==='chat_search_users')return [{user_id:'admin',display_name:'Administrator Flowrise',username:'admin',role:'Admin',organization_name:'Flowrise Dental'},{user_id:'manager',display_name:'Manager laborator',username:'manager',role:'Manager',organization_name:'Flowrise Dental'}];
         if(name==='chat_list_threads')return [];
         if(name==='chat_open_direct_thread'){if(!['admin','manager'].includes(args.p_other_user))throw new Error('Unexpected recipient');return 'thread';}
@@ -100,6 +107,12 @@ try{
       loadAll=async()=>{};await openLabPartnerOrder(1);
     });
     await assertDialogFits(page,label);
+    await page.locator('#partnerSupplementAmount').fill('50');
+    await page.locator('#partnerSupplementReason').fill('Transport');
+    assert.match(await page.locator('#partnerSupplementPreview').innerText(),/500/);
+    await page.locator('#partnerSupplementSave').click();
+    await page.waitForFunction(()=>document.getElementById('partnerSupplementAmount')?.value==='50'&&document.querySelector('#labPartnerQuote')?.textContent.includes('Transport'));
+    await assertDialogFits(page,label);
     await page.screenshot({path:resolve(output,`admin-approval-${label}.png`),fullPage:true});
     await page.locator('[data-review-decision="approve"]').click();
     await page.waitForFunction(()=>document.querySelector('#labPartnerForm')?.textContent.includes('Aprobată'));
@@ -110,6 +123,40 @@ try{
     await page.waitForFunction(()=>document.querySelector('#labPartnerForm')?.textContent.includes('Refuzată'));
     assert.match(await page.locator('#labPartnerForm').innerText(),/Termen de livrare neconfirmat/);
     await page.locator('#labPartnerClose').click();
+    await page.evaluate(()=>{
+      auth.user.Role='Admin';applyRoleUI();resetForm();orderId.value='77';
+      orderCaseDraft={...newOrderCaseDraft(),selected:[16],perTooth:{16:{type:'Coroană zirconiu'}}};
+      setModalRoleMode();orderForm.classList.add('edit-mode');modalTitle.textContent='Editează lucrarea #77';openModal();
+      renderToothPriceBreakdown({saved:true,list_price:200,final_price:180,discount:10,element_count:1,manual_supplement:0,lines:[{work_type:'Coroană zirconiu',unit_price:200,subtotal:200,quantity:1,matched:true}]});
+    });
+    await page.locator('#manualSupplementAmount').fill('50');await page.locator('#manualSupplementReason').fill('Transport');
+    assert.equal(await page.locator('#finalPrice').inputValue(),'230');
+    for(const id of ['manualSupplementAmount','manualSupplementReason']){
+      const rect=await page.locator('#'+id).boundingBox();assert.ok(rect.x>=0&&rect.x+rect.width<=viewport.width,`${id} exceeds ${label}`);
+    }
+    if(viewport.width<=600){
+      const amount=await page.locator('#manualSupplementAmount').boundingBox(),reason=await page.locator('#manualSupplementReason').boundingBox();
+      assert.ok(reason.y>=amount.y+amount.height,'mobile manual supplement fields must stack');
+      assert.ok(reason.width>=viewport.width*.6,'mobile reason must be readable');
+    }
+    assert.notEqual(await page.locator('#manualSupplementAmount').evaluate(el=>getComputedStyle(el).color),'rgb(224, 226, 228)');
+    await page.locator('#manualSupplementFields').scrollIntoViewIfNeeded();
+    await page.screenshot({path:resolve(output,`management-supplement-${label}.png`),fullPage:true});
+    await page.evaluate(async()=>{
+      await saveManagementWorkOrderSupabase(77,{Deadline:'2030-10-05',Nume_Pacient:'Pacient',Nume_Partener:'Laborator partener',Discount:10});
+      closeModal();
+    });
+    const savedSupplement=await page.evaluate(()=>fixtureCalls.find(call=>call.name==='update_management_work_order_with_supplement').args);
+    assert.equal(savedSupplement.p_manual_supplement,50);assert.equal(savedSupplement.p_manual_supplement_reason,'Transport');
+    await page.evaluate(async()=>{
+      manualSupplementDirty=false;document.getElementById('manualSupplementAmount').value='0';
+      await saveManagementWorkOrderSupabase(77,{Deadline:'2030-10-05',Nume_Pacient:'Pacient',Nume_Partener:'Laborator partener',Discount:10});
+      auth.user.Role='Doctor';setModalRoleMode();
+    });
+    assert.equal(await page.locator('#manualSupplementFields').isVisible(),false);
+    const unchanged=await page.evaluate(()=>fixtureCalls.filter(call=>call.name==='update_management_work_order_with_supplement').at(-1).args);
+    assert.equal(unchanged.p_manual_supplement,null,'a save without a fee edit preserves an existing server supplement');
+
     await page.evaluate(()=>{
       auth.user.Role='Admin';applyRoleUI();
       currentView='adminconfig';adminConfigTab='prices';selectedAdminContract='LUXURY SMILES by Dr.S';
@@ -132,6 +179,12 @@ try{
       }
     }
     await page.screenshot({path:resolve(output,`admin-pricing-${label}.png`),fullPage:true});
+    await page.evaluate(()=>{adminConfigTab='partners';render();window.confirm=()=>true;});
+    assert.equal(await page.getByRole('button',{name:'Șterge',exact:true}).count(),1);
+    await assertPageFits(page,label);await page.screenshot({path:resolve(output,`admin-partners-${label}.png`),fullPage:true});
+    await page.getByRole('button',{name:'Șterge',exact:true}).click();
+    await page.waitForFunction(()=>partnerCatalog.length===0);
+    assert.equal(await page.evaluate(()=>fixtureCalls.some(call=>call.name==='delete_lab_partner'&&call.args.p_partner==='partner-lab')),true);
     for(const tab of ['types','costs','users']){
       await page.evaluate(tab=>{adminConfigTab=tab;render();},tab);await assertPageFits(page,label);
       if(tab==='types'){

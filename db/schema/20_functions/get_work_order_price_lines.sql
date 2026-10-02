@@ -42,6 +42,7 @@ BEGIN
             WHERE line.lab_organization_id=p_lab AND line.work_order_id=p_order
         ),0),
         'list_price',wo.snapshot_list_price,'discount',wo.discount,
+        'manual_supplement',wo.manual_supplement,'manual_supplement_reason',wo.manual_supplement_reason,
         'final_price',wo.snapshot_final_price,'partner_name',wo.nume_partener,
         'deadline_at',wo.deadline_at,'approval_state',wo.approval_state,
         'approval_reason',wo.approval_reason

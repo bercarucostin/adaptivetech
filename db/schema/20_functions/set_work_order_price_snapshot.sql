@@ -64,7 +64,8 @@ BEGIN
     SET snapshot_list_price=v_list,snapshot_final_price=v_final,
         discount=p_discount,price_source='admin_override',price_fixed_at=now(),
         price_migrated=false,updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
-    WHERE lab_organization_id=p_lab AND id=p_work_order_id;
+    WHERE lab_organization_id=p_lab AND id=p_work_order_id
+    RETURNING snapshot_final_price INTO v_final;
 
     SELECT coalesce(jsonb_agg(jsonb_build_object(
         'work_type',line.work_type,'billing_mode',line.billing_mode,

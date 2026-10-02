@@ -91,3 +91,13 @@ test('saving snapshots the selected order and note before asynchronous lab looku
   c.document.getElementById('labPartnerNote').value='Later change';resolveLab('lab');await new Promise(setImmediate);
   assert.equal(submitted.p_order,7);assert.equal(submitted.p_note,'Note at save');assert.equal(submitted.p_items[0].work_type,'Coroană');
 });
+
+
+test('editable Partner estimate retains the saved management supplement and explanation',async()=>{
+ const c=setup('partner',{manual_supplement:50,manual_supplement_reason:'Transport',final_price:150});
+ await c.openLabPartnerOrder(7);
+ c.sbRpc=async()=>({final_price:100,lines:[],urgent_window_hours:24});
+ await c.labPartnerRefreshQuote();
+ const text=c.document.getElementById('labPartnerQuote').textContent;
+ assert.match(text,/Transport/);assert.match(text,/Total: 150/);
+});

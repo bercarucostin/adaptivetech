@@ -170,6 +170,7 @@ set local check_function_bodies = off;
 \i db/schema/20_functions/update_management_work_order.sql
 \i db/schema/20_functions/update_management_work_order_stage_field.sql
 \i db/schema/20_functions/update_management_work_order_v188.sql
+\i db/schema/20_functions/update_management_work_order_with_supplement.sql
 \i db/schema/20_functions/update_material_quantity.sql
 \i db/schema/20_functions/update_my_stage_status.sql
 \i db/schema/20_functions/upsert_patient_case.sql
@@ -230,5 +231,8 @@ set local check_function_bodies = off;
 
 \echo == 81 Lab Partner portal ==
 \i db/migrations/20261002_lab_partner_portal.sql
+
+\echo == 82 Order supplements and partner deletion ==
+\i db/migrations/20261002_order_supplements_partner_delete.sql
 
 commit;

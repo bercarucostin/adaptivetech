@@ -252,7 +252,8 @@ BEGIN
         price_source=v_order_price_source,
         price_fixed_at=coalesce(v_order_price_fixed_at,now()),price_migrated=false,
         updated_by_user_id=public.current_legacy_user_id(),updated_at=now()
-    WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id;
+    WHERE lab_organization_id=p_lab_organization_id AND id=p_work_order_id
+    RETURNING snapshot_final_price INTO v_final;
 
     IF (v_order.snapshot_list_price,v_order.snapshot_final_price,v_before_price_lines)
        IS DISTINCT FROM (v_list,v_final,v_after_price_lines) THEN

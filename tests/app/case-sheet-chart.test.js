@@ -44,3 +44,17 @@ test('case sheet places QR beside work metadata with a physical print size',()=>
  assert.match(report,/width:32mm;height:32mm/);
  assert.ok(report.indexOf('data-test="work-order-qr"')<report.indexOf('<div class="chart-wrap">'));
 });
+
+
+test('exported case sheet shows the deadline time in Bucharest, including winter and summer',()=>{
+ for(const [deadlineAt,time] of [['2026-10-02T14:30:00Z','17:30'],['2026-12-02T14:30:00Z','16:30']]){
+  context.order={...order,deadlineAt};
+  vm.runInContext('renderPhysicalCaseSheet(order,draft)',context);
+  assert.match(report,new RegExp(time));
+  assert.match(report,/Termen de livrare/);
+ }
+ context.order=order;
+ vm.runInContext('renderPhysicalCaseSheet(order,draft)',context);
+ assert.match(report,/2026-09-24/);
+ assert.doesNotMatch(report,/Invalid Date/);
+});

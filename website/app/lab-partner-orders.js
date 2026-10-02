@@ -1,5 +1,5 @@
 /* Commercial Lab Partner orders use dedicated RPCs; no clinical fields are sent. */
-const labPartnerUi={types:[],rows:[],editing:0,editable:false,quote:null,timer:null,request:0,openRequest:0,files:[]};
+const labPartnerUi={types:[],rows:[],editing:0,editable:false,quote:null,timer:null,request:0,openRequest:0,files:[],supplement:0,supplementReason:''};
 
 function labPartnerApprovalLabel(state){
   return {pending:'În așteptarea aprobării',approved:'Aprobată',rejected:'Refuzată'}[state]||state||'—';
@@ -94,7 +94,8 @@ async function labPartnerRefreshQuote(){
     box.innerHTML=`${quote.urgent?'<strong class="lab-partner-urgent">Termen urgent: se aplică majorarea configurată.</strong>':'<span>Termen standard</span>'}
       <div>Interval urgență: ${Number(quote.urgent_window_hours)} ore</div>
       ${(quote.lines||[]).map(line=>`<div>${escapeHtml(line.work_type)} × ${line.quantity} · contract ${escapeHtml(line.contract)} · bază ${money(line.base_subtotal)}${line.processing_requested?` · prelucrare ${money(line.processing_subtotal)}`:''}${line.urgent_percent?` · urgență ${line.urgent_percent}% (${money(line.urgency_surcharge)})`:''} = <strong>${money(line.line_total)}</strong></div>`).join('')}
-      <strong>Total: ${money(quote.final_price)}</strong>`;
+      ${labPartnerUi.supplement?`<div>Supliment manual: +${money(labPartnerUi.supplement)} · ${escapeHtml(labPartnerUi.supplementReason)}</div>`:''}
+      <strong>Total: ${money(Number(quote.final_price)+labPartnerUi.supplement)}</strong>`;
   }catch(error){
     if(request===labPartnerUi.request)box.textContent=error.message;
   }
@@ -141,6 +142,8 @@ async function openLabPartnerOrder(orderId=0){
     if(!detail)throw new Error('Lucrarea nu mai este disponibilă.');
     labPartnerUi.rows=detail.items||[];
   }
+  labPartnerUi.supplement=Number(detail?.manual_supplement||0);
+  labPartnerUi.supplementReason=detail?.manual_supplement_reason||'';
   const editable=isLabPartner()&&(!orderId||labPartnerCanEdit(detail));
   labPartnerUi.editable=editable;
   let dialog=document.getElementById('labPartnerOrderDialog');
@@ -153,7 +156,8 @@ async function openLabPartnerOrder(orderId=0){
     <div id="labPartnerLineList"></div>
     ${editable?'<button type="button" id="labPartnerAddLine" class="secondary-btn">+ Adaugă lucrare</button>':''}
     <label>Note<textarea id="labPartnerNote" maxlength="2000" rows="3" placeholder="Instrucțiuni pentru laborator">${escapeHtml(detail?.items?.[0]?.note||'')}</textarea></label></section>
-    <section class="lab-partner-section lab-partner-price-section"><h3>Costul comenzii</h3><div id="labPartnerQuote" aria-live="polite"></div></section>
+    <section class="lab-partner-section lab-partner-price-section"><h3>Costul comenzii</h3><div id="labPartnerQuote" aria-live="polite"></div>
+    ${isManagement()&&orderId?`<div class="manual-supplement-fields"><h4>Supliment manual</h4><label>Sumă suplimentară (RON)<input id="partnerSupplementAmount" type="number" min="0" max="9999999999.99" step="0.01" value="${Number(detail.manual_supplement||0)}"></label><label>Justificare<textarea id="partnerSupplementReason" maxlength="1000" rows="2" placeholder="Ex.: transport">${escapeHtml(detail.manual_supplement_reason||'')}</textarea></label><small>Se adaugă după discount. Pentru eliminare, setează suma la 0.</small><p id="partnerSupplementPreview" aria-live="polite"></p><button id="partnerSupplementSave" type="button" class="secondary-btn">Salvează suplimentul</button></div>`:''}</section>
     <section class="lab-partner-section"><h3>Fișiere atașate</h3>${editable?'<label>Adaugă fișiere<input id="labPartnerFiles" type="file" multiple accept=".zip,.rar,.stl,.ply,.obj,.pdf,.jpg,.jpeg,.png"></label>':''}<div id="labPartnerSavedFiles"></div></section>
     ${editable&&detail?.approval_state==='approved'?'<p class="lab-partner-notice">Salvarea modificărilor retrimite comanda spre aprobare.</p>':''}
     <footer><button type="button" id="labPartnerCancel" class="secondary-btn">Închide</button><div class="lab-partner-dialog-actions">${isManagement()&&detail?.approval_state==='pending'?'<button type="button" class="danger-btn" data-review-decision="reject">Refuză</button><button type="button" class="primary-btn" data-review-decision="approve">Aprobă lucrarea</button>':''}${orderId&&editable?'<button type="button" id="labPartnerUploadFiles" class="secondary-btn">Încarcă fișiere</button>':''}${editable?`<button type="submit" class="primary-btn">${orderId?'Salvează și retrimite':'Trimite spre aprobare'}</button>`:''}</div></footer>
@@ -175,6 +179,27 @@ async function openLabPartnerOrder(orderId=0){
     try{if(await reviewExternalOrder(orderId,button.dataset.reviewDecision,detail.submission_revision)&&openRequest===labPartnerUi.openRequest)await openLabPartnerOrder(orderId);}
     finally{buttons.forEach(item=>item.disabled=false);}
   }));
+  const supplementSave=document.getElementById('partnerSupplementSave');
+  if(supplementSave){
+    const preview=()=>{
+      const amount=Number(document.getElementById('partnerSupplementAmount').value||0);
+      document.getElementById('partnerSupplementPreview').textContent=`Total cu supliment: ${money(Number(detail.final_price||0)-Number(detail.manual_supplement||0)+(Number.isFinite(amount)&&amount>=0?amount:0))}`;
+    };
+    for(const id of ['partnerSupplementAmount','partnerSupplementReason'])document.getElementById(id).addEventListener('input',preview);
+    preview();
+    supplementSave.addEventListener('click',async()=>{
+      if(openRequest!==labPartnerUi.openRequest)return;
+      supplementSave.disabled=true;
+      try{
+        const supplement=readManualSupplementFields('partnerSupplementAmount','partnerSupplementReason');
+        const lab=await resolveLabOrganizationId();
+        if(openRequest!==labPartnerUi.openRequest)return;
+        await sbRpc('set_work_order_manual_supplement',{p_lab:lab,p_order:Number(orderId),p_amount:supplement.amount,p_reason:supplement.reason||null});
+        await loadAll(false);
+        if(openRequest===labPartnerUi.openRequest)await openLabPartnerOrder(orderId);
+      }catch(error){alert(error.message);}finally{supplementSave.disabled=false;}
+    });
+  }
   dialog.querySelector('form').addEventListener('submit',async event=>{
     event.preventDefault();
     if(!editable||openRequest!==labPartnerUi.openRequest)return;
@@ -200,7 +225,7 @@ async function openLabPartnerOrder(orderId=0){
   dialog.showModal();
   if(editable)labPartnerScheduleQuote();
   else{
-    document.getElementById('labPartnerQuote').innerHTML=`${(detail.price_lines||[]).map(line=>`<div>${escapeHtml(line.contract)} · bază ${money(line.base_subtotal)} · urgență ${line.urgent_percent}% (${money(line.urgency_surcharge)}) · total ${money(line.line_total)}</div>`).join('')}<strong>Total salvat: ${money(detail.final_price)}</strong>`;
+    document.getElementById('labPartnerQuote').innerHTML=`${(detail.price_lines||[]).map(line=>`<div>${escapeHtml(line.contract)} · bază ${money(line.base_subtotal)} · urgență ${line.urgent_percent}% (${money(line.urgency_surcharge)}) · total ${money(line.line_total)}</div>`).join('')}${detail.manual_supplement?`<div>Supliment manual: +${money(detail.manual_supplement)} · ${escapeHtml(detail.manual_supplement_reason)}</div>`:''}<strong>Total salvat: ${money(detail.final_price)}</strong>`;
   }
   if(orderId)await labPartnerLoadFiles(orderId,openRequest);
 }

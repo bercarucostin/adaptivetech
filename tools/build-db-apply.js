@@ -55,6 +55,7 @@ lines.push('', '\\echo == 60 per-tooth work order cutover ==', '\\i db/schema/60
 lines.push('', '\\echo == 70 email notifications ==', '\\i db/schema/70_email_notifications.sql');
 lines.push('', '\\echo == 80 Lab Partner orders ==', '\\i db/migrations/20261001_lab_partner_orders.sql');
 lines.push('', '\\echo == 81 Lab Partner portal ==', '\\i db/migrations/20261002_lab_partner_portal.sql');
+lines.push('', '\\echo == 82 Order supplements and partner deletion ==', '\\i db/migrations/20261002_order_supplements_partner_delete.sql');
 lines.push('', 'commit;', '');
 
 const content = lines.join('\n');
