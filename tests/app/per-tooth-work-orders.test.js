@@ -77,9 +77,9 @@ test('the work-order editor contains no scalar scope or clinical material contro
 test('technicians may open a new work order and every writer sends item-aware scope',()=>{
   assert.match(source,/function openNewOrder\(\)\{[\s\S]*isTechnician\(\)/);
   for(const rpc of [
-    'create_work_order',
+    'create_doctor_work_order_v2',
     'create_technician_work_order',
-    'update_doctor_work_order',
+    'resubmit_doctor_work_order',
     'save_my_work_order_case'
   ]){
     const callStart=source.indexOf(`sbRpc("${rpc}"`);

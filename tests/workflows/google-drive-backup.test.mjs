@@ -7,19 +7,44 @@ const raw = readFileSync(workflowPath, 'utf8');
 const workflow = JSON.parse(raw);
 const nodes = Object.fromEntries(workflow.nodes.map((node) => [node.name, node]));
 
-test('workflow is inactive, scheduled in Bucharest and does not retain successful backup payloads', () => {
-  assert.equal(workflow.active, false);
+test('operational workflow export remains active', () => {
+  assert.equal(workflow.active, true);
+});
+
+test('workflow is scheduled in Bucharest and does not retain successful backup payloads', () => {
   assert.equal(workflow.settings.timezone, 'Europe/Bucharest');
   assert.equal(workflow.settings.saveDataSuccessExecution, 'none');
   assert.equal(workflow.settings.saveManualExecutions, false);
-  assert.ok(nodes['Daily 02:00']);
+  assert.equal(nodes['Daily 02:00'].parameters.rule.interval[0].triggerAtHour,2);
   assert.ok(nodes['Manual test']);
 });
 
 test('workflow is n8n-only and contains no server runner or embedded secret', () => {
   assert.doesNotMatch(raw, /http:\/\/backup:8080|BACKUP_API_TOKEN|N8N_ENCRYPTION_KEY|pg_dump|readWriteFile/);
   assert.doesNotMatch(raw, /service_role\s*=|client_secret|sbp_[A-Za-z0-9]/i);
-  for (const node of workflow.nodes) assert.equal(Object.hasOwn(node, 'credentials'), false);
+  for (const node of workflow.nodes) assertCredentialReferences(node);
+});
+
+function assertCredentialReferences(node){
+  const allowedTypes=new Set(['postgres','supabaseApi','googleDriveOAuth2Api']);
+  for(const [type,reference] of Object.entries(node.credentials||{})){
+    assert.ok(allowedTypes.has(type),`Unexpected credential type on ${node.name}: ${type}`);
+    assert.ok(reference&&typeof reference==='object'&&!Array.isArray(reference));
+    assert.deepEqual(Object.keys(reference).sort(),['id','name'],`Only credential references may be exported: ${node.name}`);
+    for(const key of ['id','name'])assert.ok(typeof reference[key]==='string'&&reference[key].trim()!=='');
+  }
+}
+
+test('credential validation rejects embedded values and unexpected reference shapes',()=>{
+  assert.doesNotThrow(()=>assertCredentialReferences({name:'DB',credentials:{postgres:{id:'credential-id',name:'DB connection'}}}));
+  for(const reference of [
+    {id:'credential-id',name:'DB connection',password:'fake-secret'},
+    {id:'credential-id',name:'DB connection',apiKey:'fake-secret'},
+    {id:'credential-id',name:'DB connection',data:{password:'fake-secret'}},
+    {id:'credential-id'},
+    {id:'',name:'DB connection'}
+  ])assert.throws(()=>assertCredentialReferences({name:'DB',credentials:{postgres:reference}}));
+  assert.throws(()=>assertCredentialReferences({name:'DB',credentials:{unknown:{id:'id',name:'name'}}}));
 });
 
 test('workflow targets the configured nonsecret Supabase project URL', () => {

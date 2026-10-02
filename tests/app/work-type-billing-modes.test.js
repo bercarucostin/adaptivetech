@@ -48,7 +48,12 @@ test('work-type CSV rows default blank mode and reject unknown modes',()=>{
 });
 
 test('Admin work-type CRUD and CSV carry billing_mode',()=>{
-  assert.match(source,/select\("id,tip_lucrare,active,billing_mode"\)/);
+  const selection=source.match(/\.from\("lab_work_types"\)\.select\("([^"\n]+)"\)/);
+  assert.ok(selection,'Admin must load configured work types.');
+  const columns=new Set(selection[1].split(',').map(column=>column.trim()));
+  for(const column of ['id','tip_lucrare','active','billing_mode']){
+    assert.ok(columns.has(column),`Missing required work-type column: ${column}`);
+  }
   assert.match(source,/headers:\["ID","Tip_Lucrare","Active","Billing_Mode"\]/);
   assert.match(source,/adminCreateWorkType[\s\S]*Billing_Mode:/);
   assert.match(source,/adminSaveWorkType[\s\S]*Billing_Mode:/);

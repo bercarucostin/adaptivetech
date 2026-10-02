@@ -38,6 +38,13 @@ workflow export, Git, or chat.
 
 ## Activation
 
+The file is an operational export marked active and contains only credential
+references (`id` and `name`), not credential values. Re-select credentials when
+importing it into another instance. The export sets `Europe/Bucharest`, disables
+saving successful execution payloads, and disables saving manual executions.
+For an existing workflow, apply these three settings in its Settings dialog and
+save/publish the change. A Git push alone does not update the workflow in n8n.
+
 1. Import `workflows/Flowrise Dental - Complete Backup to Google Drive.json`.
 2. The workflow already contains the nonsecret project URL
    `https://qlynvfltjgjgeipndior.supabase.co`.
